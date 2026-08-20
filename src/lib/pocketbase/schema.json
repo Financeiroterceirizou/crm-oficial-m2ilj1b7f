@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-20T14:14:59.952Z",
+  "generatedAt": "2026-08-20T14:44:40.125Z",
   "collections": [
     {
       "name": "users",
@@ -29,14 +29,31 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
+        },
+        {
+          "name": "role",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": [
+            "admin",
+            "comercial",
+            "marketing",
+            "integracao"
+          ]
         }
       ],
       "indexes": [
@@ -48,9 +65,9 @@
       "name": "leads",
       "type": "base",
       "apiRules": {
-        "list": "responsavel = @request.auth.id || @request.auth.role = 'admin' || @request.auth.role = 'marketing'",
-        "view": "responsavel = @request.auth.id || @request.auth.role = 'admin' || @request.auth.role = 'marketing'",
-        "create": "@request.auth.role = 'admin' || @request.auth.role = 'integracao'",
+        "list": "",
+        "view": "",
+        "create": "",
         "update": "responsavel = @request.auth.id || @request.auth.role = 'admin'",
         "delete": "@request.auth.role = 'admin'"
       },
@@ -90,7 +107,12 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["meta_ads", "cora", "indicacao", "manual"]
+          "selectValues": [
+            "meta_ads",
+            "cora",
+            "indicacao",
+            "manual"
+          ]
         },
         {
           "name": "campanha",
@@ -115,7 +137,11 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["capturado", "aguardando_dados", "encerrado_entrada_invalida"]
+          "selectValues": [
+            "capturado",
+            "aguardando_dados",
+            "encerrado_entrada_invalida"
+          ]
         },
         {
           "name": "responsavel",
@@ -146,14 +172,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
