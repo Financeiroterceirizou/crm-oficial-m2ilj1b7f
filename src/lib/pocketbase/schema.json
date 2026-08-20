@@ -43,6 +43,134 @@
         "CREATE UNIQUE INDEX `idx_tokenKey__pb_users_auth_` ON `users` (`tokenKey`)",
         "CREATE UNIQUE INDEX `idx_email__pb_users_auth_` ON `users` (`email`) WHERE `email` != ''"
       ]
+    },
+    {
+      "name": "leads",
+      "type": "base",
+      "apiRules": {
+        "list": "responsavel = @request.auth.id OR @request.auth.role = 'admin' OR @request.auth.role = 'marketing'",
+        "view": "responsavel = @request.auth.id OR @request.auth.role = 'admin' OR @request.auth.role = 'marketing'",
+        "create": "@request.auth.role = 'admin' OR @request.auth.role = 'integracao'",
+        "update": "responsavel = @request.auth.id OR @request.auth.role = 'admin'",
+        "delete": "@request.auth.role = 'admin'"
+      },
+      "fields": [
+        {
+          "name": "lead_id",
+          "type": "text",
+          "required": true,
+          "system": false,
+          "unique": true
+        },
+        {
+          "name": "opportunity_id",
+          "type": "text",
+          "required": true,
+          "system": false,
+          "unique": true
+        },
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "telefone",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "origem",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "options": {
+            "values": ["meta_ads", "cora", "indicacao", "manual"]
+          }
+        },
+        {
+          "name": "campanha",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "anuncio_criativo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "respostas",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "estagio",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "options": {
+            "values": ["capturado", "aguardando_dados", "encerrado_entrada_invalida"]
+          },
+          "defaultValue": "capturado"
+        },
+        {
+          "name": "responsavel",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "dedup_key",
+          "type": "text",
+          "required": true,
+          "system": false,
+          "unique": true
+        },
+        {
+          "name": "source_event_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "historico",
+          "type": "json",
+          "required": false,
+          "system": false,
+          "defaultValue": []
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX `idx_dedup_key_leads` ON `leads` (`dedup_key`)",
+        "CREATE INDEX `idx_email_leads` ON `leads` (`email`)",
+        "CREATE INDEX `idx_estagio_leads` ON `leads` (`estagio`)",
+        "CREATE INDEX `idx_responsavel_leads` ON `leads` (`responsavel`)"
+      ]
     }
   ]
 }
