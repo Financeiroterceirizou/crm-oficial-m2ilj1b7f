@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-19T19:57:39.926Z",
+  "generatedAt": "2026-08-20T14:14:22.548Z",
   "collections": [
     {
       "name": "users",
@@ -29,14 +29,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -48,10 +53,10 @@
       "name": "leads",
       "type": "base",
       "apiRules": {
-        "list": "responsavel = @request.auth.id OR @request.auth.role = 'admin' OR @request.auth.role = 'marketing'",
-        "view": "responsavel = @request.auth.id OR @request.auth.role = 'admin' OR @request.auth.role = 'marketing'",
-        "create": "@request.auth.role = 'admin' OR @request.auth.role = 'integracao'",
-        "update": "responsavel = @request.auth.id OR @request.auth.role = 'admin'",
+        "list": "responsavel = @request.auth.id || @request.auth.role = 'admin' || @request.auth.role = 'marketing'",
+        "view": "responsavel = @request.auth.id || @request.auth.role = 'admin' || @request.auth.role = 'marketing'",
+        "create": "@request.auth.role = 'admin' || @request.auth.role = 'integracao'",
+        "update": "responsavel = @request.auth.id || @request.auth.role = 'admin'",
         "delete": "@request.auth.role = 'admin'"
       },
       "fields": [
@@ -59,15 +64,13 @@
           "name": "lead_id",
           "type": "text",
           "required": true,
-          "system": false,
-          "unique": true
+          "system": false
         },
         {
           "name": "opportunity_id",
           "type": "text",
           "required": true,
-          "system": false,
-          "unique": true
+          "system": false
         },
         {
           "name": "nome",
@@ -92,9 +95,12 @@
           "type": "select",
           "required": true,
           "system": false,
-          "options": {
-            "values": ["meta_ads", "cora", "indicacao", "manual"]
-          }
+          "selectValues": [
+            "meta_ads",
+            "cora",
+            "indicacao",
+            "manual"
+          ]
         },
         {
           "name": "campanha",
@@ -119,10 +125,11 @@
           "type": "select",
           "required": true,
           "system": false,
-          "options": {
-            "values": ["capturado", "aguardando_dados", "encerrado_entrada_invalida"]
-          },
-          "defaultValue": "capturado"
+          "selectValues": [
+            "capturado",
+            "aguardando_dados",
+            "encerrado_entrada_invalida"
+          ]
         },
         {
           "name": "responsavel",
@@ -134,8 +141,7 @@
           "name": "dedup_key",
           "type": "text",
           "required": true,
-          "system": false,
-          "unique": true
+          "system": false
         },
         {
           "name": "source_event_id",
@@ -147,29 +153,33 @@
           "name": "historico",
           "type": "json",
           "required": false,
-          "system": false,
-          "defaultValue": []
+          "system": false
         },
         {
           "name": "created",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
-        "CREATE UNIQUE INDEX `idx_dedup_key_leads` ON `leads` (`dedup_key`)",
-        "CREATE INDEX `idx_email_leads` ON `leads` (`email`)",
-        "CREATE INDEX `idx_estagio_leads` ON `leads` (`estagio`)",
-        "CREATE INDEX `idx_responsavel_leads` ON `leads` (`responsavel`)"
+        "CREATE UNIQUE INDEX idx_dedup_key_leads ON leads (dedup_key)",
+        "CREATE INDEX idx_email_leads ON leads (email)",
+        "CREATE INDEX idx_estagio_leads ON leads (estagio)",
+        "CREATE INDEX idx_responsavel_leads ON leads (responsavel)"
       ]
     }
   ]
