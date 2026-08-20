@@ -29,19 +29,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
       "indexes": [
@@ -95,12 +90,7 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": [
-            "meta_ads",
-            "cora",
-            "indicacao",
-            "manual"
-          ]
+          "selectValues": ["meta_ads", "cora", "indicacao", "manual"]
         },
         {
           "name": "campanha",
@@ -125,11 +115,7 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": [
-            "capturado",
-            "aguardando_dados",
-            "encerrado_entrada_invalida"
-          ]
+          "selectValues": ["capturado", "aguardando_dados", "encerrado_entrada_invalida"]
         },
         {
           "name": "responsavel",
@@ -160,19 +146,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
       "indexes": [
