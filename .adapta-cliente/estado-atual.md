@@ -6,7 +6,7 @@
 - etapa: aguardando_teste_humano
 - autorizacao_implementacao: pendente
 - teste_humano: pendente
-- verificacao_automatica: passou — script processar.py funcional, cron configurado (_/10 _ \* \* \*), teste manual OK (70 linhas processadas)
+- verificacao*automatica: passou — script processar.py funcional, cron configurado (*/10 \_ \* \* \*), teste manual OK (70 linhas processadas)
 - aprendizado: pendente
 - ultima_acao: F1-T05 implementada — script de polling configurado e testado
 - proxima_acao: Aguardar teste humano do Vinícius — verificar se novos leads aparecem no CRM
