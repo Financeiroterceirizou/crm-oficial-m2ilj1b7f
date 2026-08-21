@@ -22,38 +22,40 @@ routerAdd('POST', '/backend/v1/webhook/lead', (e) => {
   const dataRef = body.data_envio || body.data_hora || new Date().toISOString()
   const dedupKey = $security.sha256(email + dataRef)
 
-  // Verificar se já existe lead com esta dedup_key (idempotência)
-  try {
-    const existing = $app.findFirstRecordByData('leads', 'dedup_key', dedupKey)
+  // Verificar idempotência via findRecordsByFilter
+  const existing = $app.findRecordsByFilter('leads', 'dedup_key = {:dk}', '-created', 1, 0, {
+    dk: dedupKey,
+  })
+
+  if (existing && existing.length > 0) {
     // Lead já existe — atualizar campos permitidos
-    existing.set('nome', body.nome)
-    existing.set('email', email)
-    existing.set('telefone', body.telefone || '')
-    existing.set('campanha', body.campanha || body.conjunto_anuncio || '')
-    existing.set('anuncio_criativo', body.anuncio_criativo || body.nome_anuncio || '')
+    const record = existing[0]
+    record.set('nome', body.nome)
+    record.set('email', email)
+    record.set('telefone', body.telefone || '')
+    record.set('campanha', body.campanha || body.conjunto_anuncio || '')
+    record.set('anuncio_criativo', body.anuncio_criativo || body.nome_anuncio || '')
 
     // Adicionar entrada no histórico
-    const historico = existing.get('historico') || []
+    var historico = record.get('historico') || []
     historico.push({
       acao: 'atualizacao',
       ator: 'webhook',
       data: new Date().toISOString(),
       detalhes: 'Lead atualizado via replay idempotente',
     })
-    existing.set('historico', historico)
+    record.set('historico', historico)
 
-    $app.save(existing)
+    $app.save(record)
     console.log('Lead atualizado (idempotente): ' + dedupKey)
     return e.json(200, {
       status: 'updated',
-      lead_id: existing.get('lead_id'),
+      lead_id: record.get('lead_id'),
       dedup_key: dedupKey,
     })
-  } catch (_) {
-    // Lead não existe — criar novo
   }
 
-  // Criar novo lead via API do PocketBase
+  // Criar novo lead
   const col = $app.findCollectionByNameOrId('leads')
   const record = new Record(col)
   record.set('lead_id', $security.randomString(12))
