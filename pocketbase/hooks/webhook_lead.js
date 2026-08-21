@@ -22,13 +22,13 @@ routerAdd('POST', '/backend/v1/webhook/lead', (e) => {
   const dataRef = body.data_envio || body.data_hora || new Date().toISOString()
   const dedupKey = $security.sha256(email + dataRef)
 
-  // Verificar idempotência via findRecordsByFilter
+  // Verificar idempotência
   const existing = $app.findRecordsByFilter('leads', 'dedup_key = {:dk}', '-created', 1, 0, {
     dk: dedupKey,
   })
 
   if (existing && existing.length > 0) {
-    // Lead já existe — atualizar campos permitidos
+    // Lead já existe — atualizar
     const record = existing[0]
     record.set('nome', body.nome)
     record.set('email', email)
@@ -36,18 +36,16 @@ routerAdd('POST', '/backend/v1/webhook/lead', (e) => {
     record.set('campanha', body.campanha || body.conjunto_anuncio || '')
     record.set('anuncio_criativo', body.anuncio_criativo || body.nome_anuncio || '')
 
-    // Atualizar histórico
+    // Histórico: ler, parsear, adicionar, re-serializar
     var hist = []
-    var histRaw = record.get('historico')
-    if (histRaw) {
-      if (Array.isArray(histRaw)) {
-        hist = histRaw
-      } else if (typeof histRaw === 'string') {
+    var raw = record.get('historico')
+    if (raw) {
+      if (typeof raw === 'string') {
         try {
-          hist = JSON.parse(histRaw)
-        } catch (_) {
-          hist = []
-        }
+          hist = JSON.parse(raw)
+        } catch (_) {}
+      } else if (Array.isArray(raw)) {
+        hist = raw
       }
     }
     hist.push({
@@ -56,8 +54,7 @@ routerAdd('POST', '/backend/v1/webhook/lead', (e) => {
       data: new Date().toISOString(),
       detalhes: 'Lead atualizado via replay idempotente',
     })
-    // PocketBase JSON fields aceitam objetos JS diretamente
-    record.set('historico', hist)
+    record.set('historico', JSON.stringify(hist))
 
     $app.save(record)
     console.log('Lead atualizado (idempotente): ' + dedupKey)
@@ -79,33 +76,39 @@ routerAdd('POST', '/backend/v1/webhook/lead', (e) => {
   record.set('origem', origem)
   record.set('campanha', body.campanha || body.conjunto_anuncio || '')
   record.set('anuncio_criativo', body.anuncio_criativo || body.nome_anuncio || '')
-  record.set('respostas', {
-    prestador: body.prestador || body['e_prestador'] || '',
-    segmento: body.segmento || body.segmento_atuacao || '',
-    cargo: body.cargo || '',
-    gestao_financeira: body.gestao_financeira || '',
-    maior_problema: body.maior_problema || '',
-    motivacao: body.motivacao || body.motivacao_busca || '',
-    cnpj_cpf: body.cnpj_cpf || '',
-    tipo_empresa: body.tipo_empresa || '',
-    servico_desejado: body.servico_desejado || '',
-    ramo_atividade: body.ramo_atividade || '',
-    estado: body.estado || '',
-    cidade: body.cidade || '',
-    preferencia: body.preferencia_atendimento || '',
-  })
+  record.set(
+    'respostas',
+    JSON.stringify({
+      prestador: body.prestador || '',
+      segmento: body.segmento || '',
+      cargo: body.cargo || '',
+      gestao_financeira: body.gestao_financeira || '',
+      maior_problema: body.maior_problema || '',
+      motivacao: body.motivacao || '',
+      cnpj_cpf: body.cnpj_cpf || '',
+      tipo_empresa: body.tipo_empresa || '',
+      servico_desejado: body.servico_desejado || '',
+      ramo_atividade: body.ramo_atividade || '',
+      estado: body.estado || '',
+      cidade: body.cidade || '',
+      preferencia: body.preferencia_atendimento || '',
+    }),
+  )
   record.set('estagio', 'capturado')
   record.set('responsavel', body.responsavel || 'Henrique Tavano')
   record.set('dedup_key', dedupKey)
   record.set('source_event_id', body.source_event_id || $security.randomString(16))
-  record.set('historico', [
-    {
-      acao: 'criacao',
-      ator: 'webhook',
-      data: new Date().toISOString(),
-      detalhes: 'Lead recebido via webhook de ' + origem,
-    },
-  ])
+  record.set(
+    'historico',
+    JSON.stringify([
+      {
+        acao: 'criacao',
+        ator: 'webhook',
+        data: new Date().toISOString(),
+        detalhes: 'Lead recebido via webhook de ' + origem,
+      },
+    ]),
+  )
 
   $app.save(record)
   console.log('Lead criado via webhook: ' + body.nome + ' (' + dedupKey + ')')
