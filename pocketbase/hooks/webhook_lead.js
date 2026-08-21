@@ -36,15 +36,28 @@ routerAdd('POST', '/backend/v1/webhook/lead', (e) => {
     record.set('campanha', body.campanha || body.conjunto_anuncio || '')
     record.set('anuncio_criativo', body.anuncio_criativo || body.nome_anuncio || '')
 
-    // Adicionar entrada no histórico
-    var historico = record.get('historico') || []
-    historico.push({
+    // Atualizar histórico
+    var hist = []
+    var histRaw = record.get('historico')
+    if (histRaw) {
+      if (Array.isArray(histRaw)) {
+        hist = histRaw
+      } else if (typeof histRaw === 'string') {
+        try {
+          hist = JSON.parse(histRaw)
+        } catch (_) {
+          hist = []
+        }
+      }
+    }
+    hist.push({
       acao: 'atualizacao',
       ator: 'webhook',
       data: new Date().toISOString(),
       detalhes: 'Lead atualizado via replay idempotente',
     })
-    record.set('historico', historico)
+    // PocketBase JSON fields aceitam objetos JS diretamente
+    record.set('historico', hist)
 
     $app.save(record)
     console.log('Lead atualizado (idempotente): ' + dedupKey)
