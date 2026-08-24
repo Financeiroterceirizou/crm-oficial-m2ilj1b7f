@@ -29,31 +29,21 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         },
         {
           "name": "role",
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": [
-            "admin",
-            "comercial",
-            "marketing",
-            "integracao"
-          ]
+          "selectValues": ["admin", "comercial", "marketing", "integracao"]
         }
       ],
       "indexes": [
@@ -107,12 +97,7 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": [
-            "meta_ads",
-            "cora",
-            "indicacao",
-            "manual"
-          ]
+          "selectValues": ["meta_ads", "cora", "indicacao", "manual"]
         },
         {
           "name": "campanha",
@@ -137,11 +122,7 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": [
-            "capturado",
-            "aguardando_dados",
-            "encerrado_entrada_invalida"
-          ]
+          "selectValues": ["capturado", "aguardando_dados", "encerrado_entrada_invalida"]
         },
         {
           "name": "responsavel",
@@ -172,19 +153,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
       "indexes": [
@@ -216,9 +192,7 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "source_event_id",
@@ -263,12 +237,7 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": [
-            "pendente",
-            "em_analise",
-            "resolvido",
-            "encerrado"
-          ]
+          "selectValues": ["pendente", "em_analise", "resolvido", "encerrado"]
         },
         {
           "name": "dono",
@@ -311,19 +280,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
       "indexes": [
