@@ -5,17 +5,15 @@
 routerAdd('POST', '/backend/v1/replay/lead', (e) => {
   const body = e.requestInfo().body
 
-  // Validar campos obrigatórios
   if (!body || !body.dedup_key || !body.motivo || !body.operador) {
     return e.json(400, { error: 'Campos obrigatórios: dedup_key, motivo, operador' })
   }
 
-  const dedupKey = body.dedup_key
-  const motivo = body.motivo
-  const operador = body.operador
+  var dedupKey = body.dedup_key
+  var motivo = body.motivo
+  var operador = body.operador
 
-  // Buscar lead existente pela dedup_key
-  const leads = $app.findRecordsByFilter('leads', 'dedup_key = {:dk}', '-created', 1, 0, {
+  var leads = $app.findRecordsByFilter('leads', 'dedup_key = {:dk}', '-created', 1, 0, {
     dk: dedupKey,
   })
 
@@ -23,10 +21,9 @@ routerAdd('POST', '/backend/v1/replay/lead', (e) => {
     return e.json(404, { error: 'Lead não encontrado para dedup_key: ' + dedupKey })
   }
 
-  const record = leads[0]
-  const leadId = record.get('lead_id')
+  var record = leads[0]
+  var leadId = record.get('lead_id')
 
-  // Atualizar histórico com entrada de replay
   var hist = []
   var raw = record.get('historico')
   if (raw) {
@@ -42,13 +39,11 @@ routerAdd('POST', '/backend/v1/replay/lead', (e) => {
     acao: 'replay_manual',
     ator: operador,
     data: new Date().toISOString(),
-    detalhes: 'Replay manual executado. Motivo: ' + motivo,
+    detalhes: 'Replay manual. Motivo: ' + motivo,
   })
   record.set('historico', JSON.stringify(hist))
-
   $app.save(record)
 
-  // Tentar registrar no error_log se houver erro_id
   if (body.error_id) {
     try {
       var errLogs = $app.findRecordsByFilter('error_log', 'error_id = {:eid}', '-created', 1, 0, {
