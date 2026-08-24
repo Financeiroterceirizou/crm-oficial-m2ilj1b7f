@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-20T14:44:40.125Z",
+  "generatedAt": "2026-08-24T14:08:40.389Z",
   "collections": [
     {
       "name": "users",
@@ -29,21 +29,31 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "role",
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["admin", "comercial", "marketing", "integracao"]
+          "selectValues": [
+            "admin",
+            "comercial",
+            "marketing",
+            "integracao"
+          ]
         }
       ],
       "indexes": [
@@ -97,7 +107,12 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["meta_ads", "cora", "indicacao", "manual"]
+          "selectValues": [
+            "meta_ads",
+            "cora",
+            "indicacao",
+            "manual"
+          ]
         },
         {
           "name": "campanha",
@@ -122,7 +137,11 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["capturado", "aguardando_dados", "encerrado_entrada_invalida"]
+          "selectValues": [
+            "capturado",
+            "aguardando_dados",
+            "encerrado_entrada_invalida"
+          ]
         },
         {
           "name": "responsavel",
@@ -153,14 +172,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -168,6 +192,143 @@
         "CREATE INDEX idx_email_leads ON leads (email)",
         "CREATE INDEX idx_estagio_leads ON leads (estagio)",
         "CREATE INDEX idx_responsavel_leads ON leads (responsavel)"
+      ]
+    },
+    {
+      "name": "error_log",
+      "type": "base",
+      "apiRules": {
+        "list": "",
+        "view": "",
+        "create": "",
+        "update": "@request.auth.role = 'admin'",
+        "delete": "@request.auth.role = 'admin'"
+      },
+      "fields": [
+        {
+          "name": "error_id",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "received_at",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate"
+          ]
+        },
+        {
+          "name": "source_event_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "categoria",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "validacao",
+            "permissao",
+            "timeout",
+            "duplicidade",
+            "schema_invalido",
+            "desconhecido"
+          ]
+        },
+        {
+          "name": "resumo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "payload_resumido",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "tentativa",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "estado",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "pendente",
+            "em_analise",
+            "resolvido",
+            "encerrado"
+          ]
+        },
+        {
+          "name": "dono",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "proxima_acao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "resolvido_em",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "resolvido_por",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "resultado",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "historico",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate"
+          ]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_estado_error_log ON error_log (estado)",
+        "CREATE INDEX idx_categoria_error_log ON error_log (categoria)"
       ]
     }
   ]

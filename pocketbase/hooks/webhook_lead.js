@@ -1,42 +1,77 @@
 // pocketbase/hooks/webhook_lead.js
-// F1-T05: Webhook para receber leads do Google Apps Script
+// F1-T05+F1-T08: Webhook com logging de erros
 // POST /backend/v1/webhook/lead
 
 routerAdd('POST', '/backend/v1/webhook/lead', (e) => {
   const body = e.requestInfo().body
 
-  // Validar campos obrigatórios
-  if (!body || !body.nome) {
-    return e.json(400, { error: 'Campo obrigatório ausente: nome' })
+  function logError(categoria, resumo, payloadResumido, sourceEventId) {
+    try {
+      var errCol = $app.findCollectionByNameOrId('error_log')
+      var errRec = new Record(errCol)
+      errRec.set('error_id', $security.randomString(12))
+      errRec.set('source_event_id', sourceEventId || '')
+      errRec.set('categoria', categoria)
+      errRec.set('resumo', resumo)
+      errRec.set('payload_resumido', payloadResumido || '')
+      errRec.set('tentativa', 1)
+      errRec.set('estado', 'pendente')
+      errRec.set('dono', 'Henrique Tavano')
+      errRec.set('proxima_acao', 'Verificar origem do erro e corrigir')
+      errRec.set(
+        'historico',
+        JSON.stringify([
+          { acao: 'criacao', ator: 'webhook', data: new Date().toISOString(), detalhes: resumo },
+        ]),
+      )
+      $app.save(errRec)
+    } catch (err) {
+      console.log('Falha ao registrar erro: ' + err.message)
+    }
   }
 
-  // Determinar origem
-  const origem = body.origem || 'manual'
-  const origensValidas = ['meta_ads', 'cora', 'indicacao', 'manual']
+  if (!body || typeof body !== 'object') {
+    logError('schema_invalido', 'Body nao e JSON valido', '', '')
+    return e.json(400, { error: 'Body invalido' })
+  }
+
+  if (!body.nome) {
+    logError(
+      'validacao',
+      'Campo obrigatorio ausente: nome',
+      body.email || '',
+      body.source_event_id || '',
+    )
+    return e.json(400, { error: 'Campo obrigatorio ausente: nome' })
+  }
+
+  var origem = body.origem || 'manual'
+  var origensValidas = ['meta_ads', 'cora', 'indicacao', 'manual']
   if (!origensValidas.includes(origem)) {
-    return e.json(400, { error: 'Origem inválida: ' + origem })
+    logError(
+      'validacao',
+      'Origem invalida: ' + origem,
+      body.email || '',
+      body.source_event_id || '',
+    )
+    return e.json(400, { error: 'Origem invalida: ' + origem })
   }
 
-  // Gerar dedup_key: SHA-256(email + data_envio ou timestamp)
-  const email = body.email || ''
-  const dataRef = body.data_envio || body.data_hora || new Date().toISOString()
-  const dedupKey = $security.sha256(email + dataRef)
+  var email = body.email || ''
+  var dataRef = body.data_envio || body.data_hora || new Date().toISOString()
+  var dedupKey = $security.sha256(email + dataRef)
 
-  // Verificar idempotência
-  const existing = $app.findRecordsByFilter('leads', 'dedup_key = {:dk}', '-created', 1, 0, {
+  var existing = $app.findRecordsByFilter('leads', 'dedup_key = {:dk}', '-created', 1, 0, {
     dk: dedupKey,
   })
 
   if (existing && existing.length > 0) {
-    // Lead já existe — atualizar
-    const record = existing[0]
+    var record = existing[0]
     record.set('nome', body.nome)
     record.set('email', email)
     record.set('telefone', body.telefone || '')
     record.set('campanha', body.campanha || body.conjunto_anuncio || '')
     record.set('anuncio_criativo', body.anuncio_criativo || body.nome_anuncio || '')
-
-    // Histórico: ler, parsear, adicionar, re-serializar
     var hist = []
     var raw = record.get('historico')
     if (raw) {
@@ -55,19 +90,12 @@ routerAdd('POST', '/backend/v1/webhook/lead', (e) => {
       detalhes: 'Lead atualizado via replay idempotente',
     })
     record.set('historico', JSON.stringify(hist))
-
     $app.save(record)
-    console.log('Lead atualizado (idempotente): ' + dedupKey)
-    return e.json(200, {
-      status: 'updated',
-      lead_id: record.get('lead_id'),
-      dedup_key: dedupKey,
-    })
+    return e.json(200, { status: 'updated', lead_id: record.get('lead_id'), dedup_key: dedupKey })
   }
 
-  // Criar novo lead
-  const col = $app.findCollectionByNameOrId('leads')
-  const record = new Record(col)
+  var col = $app.findCollectionByNameOrId('leads')
+  var record = new Record(col)
   record.set('lead_id', $security.randomString(12))
   record.set('opportunity_id', $security.randomString(12))
   record.set('nome', body.nome)
@@ -109,10 +137,7 @@ routerAdd('POST', '/backend/v1/webhook/lead', (e) => {
       },
     ]),
   )
-
   $app.save(record)
-  console.log('Lead criado via webhook: ' + body.nome + ' (' + dedupKey + ')')
-
   return e.json(201, {
     status: 'created',
     lead_id: record.get('lead_id'),
