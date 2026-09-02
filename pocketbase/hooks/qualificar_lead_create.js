@@ -32,28 +32,32 @@ onRecordCreate((e) => {
     return String(v).trim().toLowerCase().replace(/_/g, ' ')
   }
 
-  // --- leitura das respostas (campo json pode vir string ou objeto) ---
+  // --- leitura das respostas (campo json pode vir string, objeto OU Uint8Array/array de bytes no runtime goja) ---
   let resp = {}
-  const raw = record.get('respostas')
-  console.log('F2T03-create: respostas raw =', JSON.stringify(raw), '| tipo =', typeof raw)
+  let raw = record.get('respostas')
+  if (
+    raw !== null &&
+    raw !== undefined &&
+    typeof raw === 'object' &&
+    typeof raw.length === 'number' &&
+    typeof raw[0] === 'number'
+  ) {
+    // bytes -> string (sem passar por JSON.stringify para nao corromper o conteudo)
+    let s = ''
+    for (let i = 0; i < raw.length; i++) {
+      s += String.fromCharCode(raw[i])
+    }
+    raw = s
+  }
   if (typeof raw === 'string') {
     try {
       resp = JSON.parse(raw)
     } catch (e) {
-      console.log('F2T03-create: parse erro =', e.message)
       resp = {}
     }
   } else if (raw && typeof raw === 'object') {
     resp = raw
   }
-  console.log(
-    'F2T03-create: prest =',
-    JSON.stringify(resp['prestador']),
-    '| seg =',
-    JSON.stringify(resp['segmento']),
-    '| cargo =',
-    JSON.stringify(resp['cargo']),
-  )
 
   const prest = norm(resp['prestador'])
   const seg = norm(resp['segmento'])
