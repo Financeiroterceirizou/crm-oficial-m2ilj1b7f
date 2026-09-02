@@ -6,6 +6,8 @@
 // Aplica a correcao e anexa ao historico: { acao:'revisao_humana', ator, data, decisao,
 //   anterior, motivo, regra_versao }. Nunca apaga dados.
 // Requer autenticacao (CA-2-005).
+//
+// ATENCAO: Toda a logica e inline no callback (top-level nao e visivel no runtime goja).
 
 routerAdd(
   'POST',
@@ -54,40 +56,46 @@ routerAdd(
     // --- estado anterior (para auditoria) ---
     const anterior = record.get('estado_qualificacao') || ''
 
-    // --- historico: append (nunca apaga) ---
-    // O campo json pode chegar como Uint8Array/bytes no runtime goja — converter antes.
+    // --- historico: SEMPRE array (append, nunca apaga) ---
+    // O campo json no goja pode vir como Uint8Array/bytes — converter inline.
     let hist = []
-    let rawHist = record.get('historico')
-    if (
-      rawHist !== null &&
-      rawHist !== undefined &&
-      typeof rawHist === 'object' &&
-      typeof rawHist.length === 'number' &&
-      typeof rawHist[0] === 'number'
-    ) {
+    const histBruto = record.get('historico')
+    let rawHist = null
+    if (histBruto === null || histBruto === undefined) {
+      rawHist = ''
+    } else if (typeof histBruto === 'string') {
+      rawHist = histBruto
+    } else if (typeof histBruto === 'object' && typeof histBruto.length === 'number') {
       let s = ''
-      for (let i = 0; i < rawHist.length; i++) {
-        s += String.fromCharCode(rawHist[i])
+      let ok = true
+      for (let i = 0; i < histBruto.length; i++) {
+        const c = histBruto[i]
+        if (typeof c === 'number') {
+          s += String.fromCharCode(c)
+        } else {
+          ok = false
+          break
+        }
       }
-      rawHist = s
+      rawHist = ok ? s : ''
+    } else {
+      rawHist = ''
     }
-    if (typeof rawHist === 'string') {
+    console.log('F2T04-revisar: rawHist=', JSON.stringify(rawHist))
+    if (typeof rawHist === 'string' && rawHist.length > 0) {
       try {
-        hist = JSON.parse(rawHist)
+        const parsed = JSON.parse(rawHist)
+        if (Array.isArray(parsed)) {
+          hist = parsed
+        }
       } catch (_) {
         hist = []
       }
-    } else if (rawHist && Array.isArray(rawHist)) {
-      hist = rawHist
     }
-    console.log(
-      'F2T04-revisar: rawHist tipo=',
-      typeof rawHist,
-      'len=',
-      rawHist && rawHist.length,
-      'hist antes=',
-      JSON.stringify(hist).length,
-    )
+    if (!Array.isArray(hist)) {
+      hist = []
+    }
+
     hist.push({
       acao: 'revisao_humana',
       ator: operador,
@@ -97,12 +105,6 @@ routerAdd(
       motivo: motivoRev,
       regra_versao: record.get('regra_versao') || '',
     })
-    console.log(
-      'F2T04-revisar: hist depois len=',
-      hist.length,
-      '| ultimo=',
-      JSON.stringify(hist[hist.length - 1]),
-    )
 
     // --- aplicar correcao humana (explicita, registrada) ---
     record.set('estado_qualificacao', decisao)
