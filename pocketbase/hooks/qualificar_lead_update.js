@@ -58,15 +58,25 @@ onRecordUpdate((e) => {
   // --- leitura das respostas (campo json pode vir string ou objeto) ---
   let resp = {}
   const raw = record.get('respostas')
+  console.log('F2T03-update: respostas raw =', JSON.stringify(raw), '| tipo =', typeof raw)
   if (typeof raw === 'string') {
     try {
       resp = JSON.parse(raw)
-    } catch (_) {
+    } catch (e) {
+      console.log('F2T03-update: parse erro =', e.message)
       resp = {}
     }
   } else if (raw && typeof raw === 'object') {
     resp = raw
   }
+  console.log(
+    'F2T03-update: prest =',
+    JSON.stringify(resp['prestador']),
+    '| seg =',
+    JSON.stringify(resp['segmento']),
+    '| cargo =',
+    JSON.stringify(resp['cargo']),
+  )
 
   const prest = norm(resp['prestador'])
   const seg = norm(resp['segmento'])
