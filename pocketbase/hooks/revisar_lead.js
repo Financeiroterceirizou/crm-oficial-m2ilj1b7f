@@ -55,17 +55,39 @@ routerAdd(
     const anterior = record.get('estado_qualificacao') || ''
 
     // --- historico: append (nunca apaga) ---
+    // O campo json pode chegar como Uint8Array/bytes no runtime goja — converter antes.
     let hist = []
-    const rawHist = record.get('historico')
+    let rawHist = record.get('historico')
+    if (
+      rawHist !== null &&
+      rawHist !== undefined &&
+      typeof rawHist === 'object' &&
+      typeof rawHist.length === 'number' &&
+      typeof rawHist[0] === 'number'
+    ) {
+      let s = ''
+      for (let i = 0; i < rawHist.length; i++) {
+        s += String.fromCharCode(rawHist[i])
+      }
+      rawHist = s
+    }
     if (typeof rawHist === 'string') {
       try {
         hist = JSON.parse(rawHist)
       } catch (_) {
         hist = []
       }
-    } else if (Array.isArray(rawHist)) {
+    } else if (rawHist && Array.isArray(rawHist)) {
       hist = rawHist
     }
+    console.log(
+      'F2T04-revisar: rawHist tipo=',
+      typeof rawHist,
+      'len=',
+      rawHist && rawHist.length,
+      'hist antes=',
+      JSON.stringify(hist).length,
+    )
     hist.push({
       acao: 'revisao_humana',
       ator: operador,
@@ -75,6 +97,12 @@ routerAdd(
       motivo: motivoRev,
       regra_versao: record.get('regra_versao') || '',
     })
+    console.log(
+      'F2T04-revisar: hist depois len=',
+      hist.length,
+      '| ultimo=',
+      JSON.stringify(hist[hist.length - 1]),
+    )
 
     // --- aplicar correcao humana (explicita, registrada) ---
     record.set('estado_qualificacao', decisao)
