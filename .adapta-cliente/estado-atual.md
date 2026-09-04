@@ -1,13 +1,13 @@
 # Estado atual — Adapta Cliente
 
-- task_id: F1-T10
+- task_id: F2-T05
 - champion: Vinicius (CEO)
-- spec: 04-fase-atual/specs/spec-1-003-recuperacao-auditoria.md
+- spec: 04-fase-atual/specs/spec-2-001-qualificacao.md
 - etapa: concluida
-- autorizacao_implementacao: confirmada + 2026-08-25T15:59:00-03:00
-- teste_humano: aprovado + 2026-08-25T16:06:00-03:00 — "Tudo certo.. Pode seguir."
-- verificacao_automatica: passou — CA-1-009 a CA-1-012; QA Skip v0.0.26 aprovado
-- aprendizado: capturado: memória do assistente — sincronização Skip/GitHub/Drive e validação de RLS
-- ultima_acao: F1-T10 concluída após aprovação humana; Fase 1 encerrada
-- proxima_acao: Publicar produção no Skip
-- atualizado_em: 2026-08-25T16:06:00-03:00
+- autorizacao_implementacao: confirmada + F2 executada
+- teste_humano: aprovado + F2-T05 aprovada pelo champion em 2026-09-03
+- verificacao_automatica: passou — CA-2-001..004; CA-2-005; rollback; histórico
+- aprendizado: capturado: sincronização Skip/GitHub e validação de RLS
+- ultima_acao: Fase 2 sincronizada no GitHub a partir do Skip v0.0.35
+- proxima_acao: Validação formal do consultor e decisão sobre Fase 3
+- atualizado_em: 2026-09-04T09:30:00-03:00
