@@ -39,7 +39,7 @@ routerAdd(
     ) {
       return e.json(400, { error: 'janela deve ter exatamente 30 minutos' })
     }
-    const partes = inicio.match(/^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2})/)
+    const partes = inicio.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/)
     if (!partes || !inicio.match(/-03:00$|-02:00$/)) {
       return e.json(400, { error: 'inicio deve usar o fuso America/Sao_Paulo' })
     }

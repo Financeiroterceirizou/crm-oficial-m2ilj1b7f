@@ -102,7 +102,7 @@ const Index = () => {
     setScheduleLoading(true)
     setScheduleMessage('')
     try {
-      const response = await fetch('/backend/v1/agendar-lead', {
+      const response = await fetch(pb.baseUrl + '/backend/v1/agendar-lead', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
