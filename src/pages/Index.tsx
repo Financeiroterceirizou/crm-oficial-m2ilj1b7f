@@ -94,18 +94,24 @@ const Index = () => {
       setScheduleMessage('Selecione um horário para continuar.')
       return
     }
-    const start = new Date(scheduleStart)
-    const end = new Date(start.getTime() + 30 * 60 * 1000)
+    const [data, hora] = scheduleStart.split('T')
+    const [h, m] = hora.split(':').map(Number)
+    const inicio = `${data}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00-03:00`
+    const fimDate = new Date(Date.parse(inicio) + 30 * 60 * 1000)
+    const fim = `${fimDate.toISOString().slice(0, 19)}-03:00`
     setScheduleLoading(true)
     setScheduleMessage('')
     try {
       const response = await fetch('/backend/v1/agendar-lead', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: pb.authStore.token,
+        },
         body: JSON.stringify({
           lead_id: selectedLead.id,
-          inicio: start.toISOString(),
-          fim: end.toISOString(),
+          inicio,
+          fim,
           email: selectedLead.email,
         }),
       })
