@@ -1,4 +1,4 @@
-/* CRM Oficial — Página inicial: lista de leads do PocketBase */
+/* CRM Oficial — Página inicial: lista, detalhe e agendamento de leads do PocketBase */
 import { useEffect, useState } from 'react'
 import pb from '@/lib/pocketbase/client'
 
