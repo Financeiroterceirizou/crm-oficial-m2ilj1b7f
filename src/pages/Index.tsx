@@ -13,6 +13,11 @@ interface Lead {
   campanha: string
   estagio: string
   responsavel: string
+  estado_qualificacao: string
+  score: number | null
+  motivo_decisao: string
+  proxima_acao: string
+  estado_agendamento: string
   created: string
   updated: string
 }
@@ -35,6 +40,10 @@ const Index = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [user, setUser] = useState<any>(null)
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
+  const [scheduleStart, setScheduleStart] = useState('')
+  const [scheduleMessage, setScheduleMessage] = useState('')
+  const [scheduleLoading, setScheduleLoading] = useState(false)
 
   useEffect(() => {
     // Verificar se há usuário logado
@@ -78,6 +87,43 @@ const Index = () => {
     pb.authStore.clear()
     setUser(null)
     setLeads([])
+  }
+
+  const handleSchedule = async () => {
+    if (!selectedLead || !scheduleStart) {
+      setScheduleMessage('Selecione um horário para continuar.')
+      return
+    }
+    const start = new Date(scheduleStart)
+    const end = new Date(start.getTime() + 30 * 60 * 1000)
+    setScheduleLoading(true)
+    setScheduleMessage('')
+    try {
+      const response = await fetch('/backend/v1/agendar-lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lead_id: selectedLead.id,
+          inicio: start.toISOString(),
+          fim: end.toISOString(),
+          email: selectedLead.email,
+        }),
+      })
+      const result = await response.json()
+      if (response.ok) {
+        setScheduleMessage('Solicitação enviada: ' + (result.status || 'ok'))
+        fetchLeads()
+      } else {
+        setScheduleMessage(
+          'Solicitação não concluída: ' +
+            (result.motivo || result.error || 'verifique a configuração'),
+        )
+      }
+    } catch (err: any) {
+      setScheduleMessage('Erro de conexão: ' + err.message)
+    } finally {
+      setScheduleLoading(false)
+    }
   }
 
   // Tela de login
@@ -189,7 +235,13 @@ const Index = () => {
                       Responsável
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Qualificação
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Criado em
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Ação
                     </th>
                   </tr>
                 </thead>
@@ -222,8 +274,28 @@ const Index = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {lead.responsavel}
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <span className="font-medium text-gray-900">
+                          {lead.estado_qualificacao || '—'}
+                        </span>
+                        {lead.score !== null && (
+                          <span className="ml-2 text-gray-500">({lead.score})</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {new Date(lead.created).toLocaleDateString('pt-BR')}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <button
+                          onClick={() => {
+                            setSelectedLead(lead)
+                            setScheduleMessage('')
+                            setScheduleStart('')
+                          }}
+                          className="text-indigo-600 hover:text-indigo-800"
+                        >
+                          Abrir
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -233,6 +305,71 @@ const Index = () => {
           )}
         </div>
       </main>
+
+      {selectedLead && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-lg font-medium text-gray-900">{selectedLead.nome}</h3>
+                <p className="text-sm text-gray-500">{selectedLead.lead_id}</p>
+              </div>
+              <button
+                onClick={() => setSelectedLead(null)}
+                className="text-gray-500 hover:text-gray-900"
+              >
+                Fechar
+              </button>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+              <p>
+                <strong>Email:</strong> {selectedLead.email || '—'}
+              </p>
+              <p>
+                <strong>Telefone:</strong> {selectedLead.telefone || '—'}
+              </p>
+              <p>
+                <strong>Qualificação:</strong> {selectedLead.estado_qualificacao || '—'}
+              </p>
+              <p>
+                <strong>Score:</strong> {selectedLead.score ?? '—'}
+              </p>
+              <p className="col-span-2">
+                <strong>Motivo:</strong> {selectedLead.motivo_decisao || '—'}
+              </p>
+              <p className="col-span-2">
+                <strong>Próxima ação:</strong> {selectedLead.proxima_acao || '—'}
+              </p>
+            </div>
+            {selectedLead.estado_qualificacao === 'qualificado' ? (
+              <div className="mt-6 border-t pt-4">
+                <h4 className="font-medium text-gray-900">Solicitar agendamento</h4>
+                <p className="text-sm text-gray-500 mt-1">
+                  Escolha o início da reunião de 30 minutos.
+                </p>
+                <input
+                  type="datetime-local"
+                  value={scheduleStart}
+                  onChange={(event) => setScheduleStart(event.target.value)}
+                  className="mt-3 block w-full border border-gray-300 rounded-md p-2"
+                />
+                <button
+                  onClick={handleSchedule}
+                  disabled={scheduleLoading}
+                  className="mt-3 w-full px-4 py-2 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded-md disabled:opacity-50"
+                >
+                  {scheduleLoading ? 'Enviando...' : 'Solicitar agendamento'}
+                </button>
+                {scheduleMessage && <p className="mt-3 text-sm text-gray-700">{scheduleMessage}</p>}
+              </div>
+            ) : (
+              <p className="mt-6 text-sm text-gray-500">
+                Este lead não está qualificado para agendamento.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
