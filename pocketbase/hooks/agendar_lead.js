@@ -39,10 +39,16 @@ routerAdd(
     ) {
       return e.json(400, { error: 'janela deve ter exatamente 30 minutos' })
     }
-    const inicioDate = new Date(inicioMs)
-    const hora = inicioDate.getHours()
-    const minuto = inicioDate.getMinutes()
-    const dia = inicioDate.getDay()
+    const partes = inicio.match(/^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2})/)
+    if (!partes || !inicio.match(/-03:00$|-02:00$/)) {
+      return e.json(400, { error: 'inicio deve usar o fuso America/Sao_Paulo' })
+    }
+    const ano = Number(partes[1])
+    const mes = Number(partes[2])
+    const diaMes = Number(partes[3])
+    const hora = Number(partes[4])
+    const minuto = Number(partes[5])
+    const dia = new Date(Date.UTC(ano, mes - 1, diaMes)).getUTCDay()
     const manha = hora >= 9 && (hora < 12 || (hora === 11 && minuto <= 30))
     const tarde = hora >= 14 && (hora < 18 || (hora === 17 && minuto <= 30))
     if (dia === 0 || dia === 6 || minuto % 30 !== 0 || !(manha || tarde)) {
