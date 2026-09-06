@@ -40,7 +40,8 @@ routerAdd(
         chamada_calendar: false,
       })
     }
-    if (lead.get('agendamento_situacao') === acao) {
+    const situacao = acao === 'cancelar' ? 'cancelado' : 'no_show'
+    if (lead.get('agendamento_situacao') === situacao) {
       // Idempotencia: repetir a mesma borda nao duplica efeito nem historico
       return e.json(200, {
         status: 'already_' + acao,
@@ -217,7 +218,7 @@ routerAdd(
 
     hist.push(registro)
     lead.set('historico', JSON.stringify(hist))
-    lead.set('agendamento_situacao', acao)
+    lead.set('agendamento_situacao', situacao)
     if (acao === 'cancelar') {
       lead.set('agendamento_proxima_acao', 'reagendar')
     } else {
@@ -228,7 +229,7 @@ routerAdd(
     return e.json(200, {
       status: acao === 'cancelar' ? 'cancelado' : 'no_show',
       lead_id: lead.get('lead_id'),
-      situacao: acao,
+      situacao: situacao,
       calendario: acao === 'no_show' ? 'evento_mantido' : 'evento_removido',
     })
   },
