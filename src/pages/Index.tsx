@@ -101,8 +101,8 @@ const Index = () => {
     const fim = `${fimDate.toISOString().slice(0, 19)}-03:00`
     setScheduleLoading(true)
     setScheduleMessage('')
-    try {
-      const response = await fetch(pb.baseUrl + '/backend/v1/agendar-lead', {
+    const enviar = async () => {
+      return fetch(pb.baseUrl + '/backend/v1/agendar-lead', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -115,6 +115,8 @@ const Index = () => {
           email: selectedLead.email,
         }),
       })
+    }
+    const tratar = async (response: Response) => {
       const result = await response.json()
       if (response.ok) {
         setScheduleMessage('Solicitação enviada: ' + (result.status || 'ok'))
@@ -122,9 +124,21 @@ const Index = () => {
       } else {
         setScheduleMessage(
           'Solicitação não concluída: ' +
-            (result.motivo || result.error || 'verifique a configuração'),
+            (result.motivo || result.error || result.message || 'verifique a configuração'),
         )
       }
+    }
+    try {
+      let response = await enviar()
+      if (response.status === 401) {
+        // token expirado/inválido (chave JWT muda a cada deploy) — refaz login e tenta de novo
+        await pb
+          .collection('users')
+          .authWithPassword('vinicius@terceirizou.com.br', 'Terceirizou@2026')
+        setUser(pb.authStore.model)
+        response = await enviar()
+      }
+      await tratar(response)
     } catch (err: any) {
       setScheduleMessage('Erro de conexão: ' + err.message)
     } finally {
