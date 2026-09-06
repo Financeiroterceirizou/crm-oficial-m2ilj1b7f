@@ -18,6 +18,8 @@ interface Lead {
   motivo_decisao: string
   proxima_acao: string
   estado_agendamento: string
+  agendamento_situacao: string
+  calendar_event_id: string
   created: string
   updated: string
 }
@@ -135,6 +137,61 @@ const Index = () => {
       let response = await enviar()
       if (response.status === 401) {
         // token expirado/inválido (chave JWT muda a cada deploy) — refaz login e tenta de novo
+        await pb
+          .collection('users')
+          .authWithPassword('vinicius@terceirizou.com.br', 'Terceirizou@2026')
+        setUser(pb.authStore.model)
+        response = await enviar()
+      }
+      await tratar(response)
+    } catch (err: any) {
+      setScheduleMessage('Erro de conexão: ' + err.message)
+    } finally {
+      setScheduleLoading(false)
+    }
+  }
+
+  const handleBorda = async (acao: 'cancelar' | 'no_show') => {
+    if (!selectedLead) return
+    const operador = user?.name || user?.email || 'operador'
+    const motivo = acao === 'cancelar' ? 'cancelado pelo champion' : 'lead nao compareceu'
+    setScheduleLoading(true)
+    setScheduleMessage('')
+    const enviar = async () => {
+      return fetch(pb.baseUrl + '/backend/v1/agendar-borda', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: pb.authStore.token,
+        },
+        body: JSON.stringify({
+          lead_id: selectedLead.id,
+          acao,
+          operador,
+          motivo,
+        }),
+      })
+    }
+    const tratar = async (response: Response) => {
+      const result = await response.json()
+      if (response.ok) {
+        setScheduleMessage(
+          acao === 'cancelar'
+            ? 'Agendamento cancelado: ' + (result.status || 'ok')
+            : 'No-show registrado: ' + (result.status || 'ok'),
+        )
+        fetchLeads()
+      } else {
+        setScheduleMessage(
+          'Não concluído: ' +
+            (result.motivo || result.error || result.message || 'verifique a configuração'),
+        )
+      }
+    }
+    try {
+      let response = await enviar()
+      if (response.status === 401) {
+        // token expirado/inválido — refaz login e tenta de novo
         await pb
           .collection('users')
           .authWithPassword('vinicius@terceirizou.com.br', 'Terceirizou@2026')
@@ -384,6 +441,32 @@ const Index = () => {
                   {scheduleLoading ? 'Enviando...' : 'Solicitar agendamento'}
                 </button>
                 {scheduleMessage && <p className="mt-3 text-sm text-gray-700">{scheduleMessage}</p>}
+                {selectedLead.estado_agendamento === 'agendado' &&
+                selectedLead.agendamento_situacao !== 'cancelado' &&
+                selectedLead.agendamento_situacao !== 'no_show' ? (
+                  <div className="mt-4 border-t pt-4">
+                    <h4 className="font-medium text-gray-900">Operar agendamento</h4>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Evento: {selectedLead.calendar_event_id || '—'}
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        onClick={() => handleBorda('cancelar')}
+                        disabled={scheduleLoading}
+                        className="flex-1 px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 rounded-md disabled:opacity-50"
+                      >
+                        {scheduleLoading ? 'Enviando...' : 'Cancelar agendamento'}
+                      </button>
+                      <button
+                        onClick={() => handleBorda('no_show')}
+                        disabled={scheduleLoading}
+                        className="flex-1 px-4 py-2 text-sm text-white bg-amber-600 hover:bg-amber-700 rounded-md disabled:opacity-50"
+                      >
+                        {scheduleLoading ? 'Enviando...' : 'Marcar no-show'}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : (
               <p className="mt-6 text-sm text-gray-500">
