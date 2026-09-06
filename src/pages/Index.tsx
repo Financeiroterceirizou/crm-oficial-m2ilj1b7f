@@ -97,8 +97,11 @@ const Index = () => {
     const [data, hora] = scheduleStart.split('T')
     const [h, m] = hora.split(':').map(Number)
     const inicio = `${data}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00-03:00`
-    const fimDate = new Date(Date.parse(inicio) + 30 * 60 * 1000)
-    const fim = `${fimDate.toISOString().slice(0, 19)}-03:00`
+    // fim = 30 min depois, mantendo o fuso America/Sao_Paulo (-03:00) sem passar por UTC
+    const totalMin = h * 60 + m + 30
+    const fh = Math.floor(totalMin / 60) % 24
+    const fm = totalMin % 60
+    const fim = `${data}T${String(fh).padStart(2, '0')}:${String(fm).padStart(2, '0')}:00-03:00`
     setScheduleLoading(true)
     setScheduleMessage('')
     const enviar = async () => {
