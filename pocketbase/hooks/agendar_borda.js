@@ -175,6 +175,20 @@ routerAdd(
           }
         }
       }
+      // 410 Gone = evento já não existe no calendário (já removido) -> trata como cancelado
+      if (resposta.statusCode === 410) {
+        hist.push(registro)
+        lead.set('historico', JSON.stringify(hist))
+        lead.set('agendamento_situacao', situacao)
+        lead.set('agendamento_proxima_acao', 'reagendar')
+        $app.save(lead)
+        return e.json(200, {
+          status: 'cancelado',
+          lead_id: lead.get('lead_id'),
+          situacao: 'cancelado',
+          calendario: 'evento_ja_removido',
+        })
+      }
       if (resposta.statusCode < 200 || resposta.statusCode >= 300) {
         try {
           const errCol = $app.findCollectionByNameOrId('error_log')
