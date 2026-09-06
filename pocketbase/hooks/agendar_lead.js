@@ -82,7 +82,7 @@ routerAdd(
       })
     }
 
-    const resposta = $http.send({
+    let resposta = $http.send({
       url: 'https://www.googleapis.com/calendar/v3/calendars/financeiro%40terceirizou.com.br/events',
       method: 'POST',
       headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
@@ -95,6 +95,48 @@ routerAdd(
       }),
       timeout: 15,
     })
+    // Token expirado (401) -> renova via refresh token e tenta uma vez mais
+    if (resposta.statusCode === 401) {
+      const refreshToken = $secrets.get('GOOGLE_CALENDAR_REFRESH_TOKEN')
+      const clientId = $secrets.get('GOOGLE_CALENDAR_CLIENT_ID')
+      const clientSecret = $secrets.get('GOOGLE_CALENDAR_CLIENT_SECRET')
+      if (refreshToken && clientId && clientSecret) {
+        const troca = $http.send({
+          url: 'https://oauth2.googleapis.com/token',
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body:
+            'grant_type=refresh_token&refresh_token=' +
+            encodeURIComponent(refreshToken) +
+            '&client_id=' +
+            encodeURIComponent(clientId) +
+            '&client_secret=' +
+            encodeURIComponent(clientSecret),
+          timeout: 15,
+        })
+        if (
+          troca.statusCode >= 200 &&
+          troca.statusCode < 300 &&
+          troca.json &&
+          troca.json.access_token
+        ) {
+          const tokenNovo = troca.json.access_token
+          resposta = $http.send({
+            url: 'https://www.googleapis.com/calendar/v3/calendars/financeiro%40terceirizou.com.br/events',
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + tokenNovo, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              summary: 'Reunião Terceirizou — ' + lead.get('nome'),
+              description: 'lead_id: ' + lead.get('lead_id'),
+              start: { dateTime: inicio, timeZone: 'America/Sao_Paulo' },
+              end: { dateTime: fim, timeZone: 'America/Sao_Paulo' },
+              attendees: email ? [{ email }] : [],
+            }),
+            timeout: 15,
+          })
+        }
+      }
+    }
     if (
       resposta.statusCode < 200 ||
       resposta.statusCode >= 300 ||
