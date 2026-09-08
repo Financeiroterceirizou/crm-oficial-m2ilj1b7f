@@ -4,6 +4,7 @@
 
 ## Registro
 
+- 2026-09-08 · [Adapta/Ethos] · FIX polling F1-T05: bug `UA` indefinido em `renovar_token()` (renovação de token JWT sempre falhava em silêncio desde 01/09); corrigido em `scripts/captacao_leads/processar.py`, token renovado e validado. Lead novo capturado (linha Cora 12/04, nome anonimizado pela Cora) — PATCH manual de correção do nome aplicado (updateRule exige role admin; responsavel='-' não atualiza pelo token comum).
 - 2026-09-04 · [Adapta/Ethos] · Fase 2 sincronizada no GitHub a partir do Skip v0.0.35: F2-T01 a F2-T05, migration 0006, hooks de qualificação/fila/revisão, SPEC e status.
 - 2026-09-03 · [Vinicius/Champion] · F2-T05 teste final aprovado; regressão CA-2-001..004, acesso CA-2-005, rollback e histórico comprovados; commit de referência `1fbf13b`.
 - 2026-09-02 · [Vinicius/Champion] · F2-T04 concluída: fila de revisão, revisão humana e preservação de histórico.
@@ -18,6 +19,3 @@
 - 2026-08-21 · [Vinicius/Champion] · F1-T07 TESTE APROVADO.
 - 2026-08-21 · [Vinicius/Champion] · F1-T06 TESTE APROVADO.
 - 2026-08-20 · [Vinicius/Champion] · F1-T05 TESTE APROVADO.
-- 2026-08-19 · [Vinicius/Champion] · F1-T02 TESTE APROVADO.
-- 2026-08-19 · [Vinicius/Champion] · F1-T04 TESTE APROVADO.
-- 2026-08-19 · [Vinicius/Champion] · F1-T01 TESTE APROVADO.
