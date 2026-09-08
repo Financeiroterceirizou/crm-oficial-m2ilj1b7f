@@ -19,3 +19,6 @@
 - 2026-08-21 · [Vinicius/Champion] · F1-T07 TESTE APROVADO.
 - 2026-08-21 · [Vinicius/Champion] · F1-T06 TESTE APROVADO.
 - 2026-08-20 · [Vinicius/Champion] · F1-T05 TESTE APROVADO.
+- 2026-08-19 · [Vinicius/Champion] · F1-T02 TESTE APROVADO.
+- 2026-08-19 · [Vinicius/Champion] · F1-T04 TESTE APROVADO.
+- 2026-08-19 · [Vinicius/Champion] · F1-T01 TESTE APROVADO.
