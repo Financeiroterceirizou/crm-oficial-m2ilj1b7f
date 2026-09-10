@@ -6,6 +6,7 @@
 # e brigavam com o pipeline live → CRM oscilando entre valores truncados e completos).
 set -euo pipefail
 cd /home/ethos/.assistant/workspace
-python3 scripts/91e08561a5b65e5d/transform.py
 export ESTADO_PATH="$PWD/scripts/a5b0d6956d407911/estado.json"
-cat tmp/polling/leads_input.json | python3 scripts/captacao_leads/processar.py
+export LEADS_INPUT_PATH="$PWD/scripts/a5b0d6956d407911/leads_input.json"
+python3 scripts/91e08561a5b65e5d/transform.py
+cat "$LEADS_INPUT_PATH" | python3 scripts/captacao_leads/processar.py
