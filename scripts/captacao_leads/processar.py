@@ -1,160 +1,146 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Capta\u00e7\u00e3o de Leads \u2014 monitora planilhas do Google Sheets e sincroniza com o CRM Terceirizou.
+"""Captação de Leads — sincronização planilhas Google Sheets → CRM Terceirizou.
 
-Fontes:
-  - Cora:        https://docs.google.com/spreadsheets/d/1TYe2__HmgLUhqOoudmxm-I2fL94wKSJ8ThmXmbCUXfY
-  - Meta Ads:    https://docs.google.com/spreadsheets/d/1GiZZjYkBNz_i6r_0cg2D9N6FulB4rJftFctzh4WxeEk  (PROPRIEDADE TERCEIRIZOU, desde 2026-08-31)
+Pipeline:
+  1. O agente (ETHOS) lê as planilhas via MCP e salva em tmp/polling/{fonte}.json.
+  2. transform.py converte para {fonte: [ {coluna: valor}, ... ]} (leads_input.json).
+  3. Este script recebe o JSON em stdin e faz upsert no CRM (PocketBase/Skip):
+     - dedup por e-mail > telefone > dedup_key
+     - idempotência por hash da linha (estado por job via ESTADO_PATH)
 
-Regras:
-  - Processa somente linhas NOVAS ou ALTERADAS desde a \u00faltima verifica\u00e7\u00e3o (por data/hora ou estado local).
-  - Dedup: se o lead j\u00e1 existe no CRM (telefone/e-mail/CNPJ), atualiza; sen\u00e3o cria.
-  - Preserva regras do CRM: hooks de score/trava rodam no create; canal_origem por fonte.
-  - Log das a\u00e7\u00f5es em JSON para o resumo di\u00e1rio.
+Estado (ESTADO_PATH, default scripts/captacao_leads/estado.json):
+  { fonte: { chave_dedup: [hash_linha, ...] } }
+  - LISTA de hashes por chave: várias linhas da planilha podem compartilhar a
+    mesma chave (ex.: colisão Cora Isamara×Sperka). Guardar um hash só causava
+    ping-pong infinito de updates.
 
-Uso: python3 processar.py < leads_input.json
+Lições embutidas (não remover sem ler o changelog):
+  - PocketBase rejeita '!=' em filtros (400) — busca sem filtro e filtra em Python.
+  - updateRule leads: responsavel = @request.auth.id || admin → lead com
+    responsavel='-' só é atualizável por token admin (404 caso contrário).
+  - Linha SEM nome: create falha 400 (validation_required) para sempre e update
+    nunca dispara → descartar e registrar no estado (linhas de teste F1-T04 da
+    aba Jun vêm com colunas deslocadas → telefone vira '104').
+  - Linha criptografada da Cora (nome+email cript, sem telefone): descartar e
+    registrar no estado.
 """
 import json
 import os
+import re
 import sys
+import hashlib
 import urllib.request
 import urllib.error
-import urllib.parse
 import datetime
-import hashlib
-import re
+import random
 
-# ---------- Config ----------
-BASE = "https://crm-oficial-65bb8.shrd00.internal.goskip.dev"
-AQUI = os.path.dirname(os.path.abspath(__file__))
-TOKEN = open(os.path.join(AQUI, 'crm_token.txt')).read().strip()
+BASE = 'https://crm-oficial-65bb8.shrd00.internal.goskip.dev'
+ESTADO = os.environ.get('ESTADO_PATH', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'estado.json'))
+LOG = os.environ.get('LOG_PATH', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'log_acoes.jsonl'))
 
-# Credenciais de automa\u00e7\u00e3o (usu\u00e1rio do CRM) \u2014 usadas para renovar o token quando expirar
-_ADMIN_EMAIL = "vinicius@terceirizou.com.br"
-_ADMIN_SENHA = "Terceirizou@2026"
+_ADMIN_EMAIL = 'vinicius@terceirizou.com.br'
+_ADMIN_SENHA = 'Terceirizou@2026'
+_TOKEN = None
 
-# User-Agent de navegador \u2014 obrigat\u00f3rio: sem ele o Cloudflare bloqueia com "error code: 1010"
-UA = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36'}
+
+def _token():
+    global _TOKEN
+    if _TOKEN: return _TOKEN
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'crm_token.txt')
+    if os.path.exists(path):
+        _TOKEN = open(path).read().strip()
+    return _TOKEN
+
 
 def renovar_token():
-    """Re-autentica e salva novo token (JWT de auth expira ~5 dias)."""
-    global TOKEN
-    try:
-        req = urllib.request.Request(
-            BASE + '/api/collections/users/auth-with-password',
-            data=json.dumps({'identity': _ADMIN_EMAIL, 'password': _ADMIN_SENHA}).encode('utf-8'),
-            headers={'Content-Type': 'application/json', **UA},
-            method='POST',
-        )
-        with urllib.request.urlopen(req, timeout=40) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
-        TOKEN = data['token']
-        with open(os.path.join(AQUI, 'crm_token.txt'), 'w', encoding='utf-8') as f:
-            f.write(TOKEN)
-        print('  [token] renovado e salvo', file=sys.stderr)
-    except Exception as e:
-        print(f'  [token] falha ao renovar: {e}', file=sys.stderr)
-
-# Estado e log podem ser isolados por job via env var (evita briga entre o
-# polling 91e08561a5b65e5d e o job antigo a5b0d6956d407911, que compartilhavam
-# o mesmo arquivo e se invalidavam mutuamente a cada ciclo).
-ESTADO = os.environ.get('ESTADO_PATH', os.path.join(AQUI, 'estado.json'))
-LOG_DIARIO = os.environ.get('LOG_DIARIO_PATH', os.path.join(AQUI, 'log_acoes.jsonl'))
-
-SPREADSHEETS = [
-    {
-        'nome': 'cora',
-        'id': '1TYe2__HmgLUhqOoudmxm-I2fL94wKSJ8ThmXmbCUXfY',
-        'aba': 'Principal',
-        'header_row': 4,          # linha do cabe\u00e7alho (dados come\u00e7am na 5)
-        'canal': 'banco_cora',
-        'colunas': ['data_envio', 'nome', 'cnpj_ou_cpf', 'tipo_empresa', 'email', 'telefone',
-                    'servico_desejado', 'ramo_atividade', 'segmento', 'estado', 'cidade',
-                    'preferencia_atendimento', 'status_atendimento', 'observa\u00e7\u00e3o/coment\u00e1rios'],
-    },
-    {
-        'nome': 'meta_ads_jun',
-        'id': '1GiZZjYkBNz_i6r_0cg2D9N6FulB4rJftFctzh4WxeEk',   # NOVA (propriedade Terceirizou)
-        'aba': 'Leads Meta Ads - Jun.26',
-        'header_row': 1,
-        'canal': 'meta',
-        'colunas': ['Data/Hora', 'Nome completo', 'Email', 'Telefone', 'segmento', 'cargo',
-                    'gestao_financeira', 'problema', 'motivacao', 'anuncio', 'conjunto', 'campanha'],
-        'mapeamento': {
-            'Data/Hora': 'Data/Hora',
-            'nome': 'Nome completo',
-            'email': 'Email',
-            'telefone': 'Telefone',
-            'segmento': 'Qual o segmento de atua\u00e7\u00e3o da empresa?',
-            'cargo': 'Qual seu cargo na empresa?',
-            'gestao_financeira': 'Quem faz a gest\u00e3o financeira hoje?',
-            'problema': 'Qual o maior problema na gest\u00e3o financeira?',
-            'motivacao': 'O que te motivou a buscar a terceiriza\u00e7\u00e3o financeira agora',
-            'anuncio': 'Nome do An\u00fancio',
-            'conjunto': 'Conjunto de An\u00fancio',
-            'campanha': 'Campanha',
-        },
-    },
-    {
-        'nome': 'meta_ads_cadastro',
-        'id': '1GiZZjYkBNz_i6r_0cg2D9N6FulB4rJftFctzh4WxeEk',   # NOVA (propriedade Terceirizou)
-        'aba': 'Leads An\u00fancios de Cadastro',
-        'header_row': 1,
-        'canal': 'meta',
-        'colunas': ['Data/Hora', 'Nome completo', 'Email', 'Telefone', 'cargo', 'funcionarios',
-                    'faturamento', 'gestao_financeira', 'problema', 'interesse', 'investimento',
-                    'motivacao', 'anuncio', 'conjunto', 'campanha'],
-        'mapeamento': {
-            'Data/Hora': 'Data/Hora',
-            'nome': 'Nome completo',
-            'email': 'Email',
-            'telefone': 'Telefone',
-            'cargo': 'Qual \u00e9 o seu cargo na empresa?',
-            'funcionarios': 'Quantos funcion\u00e1rios a empresa possui hoje?',
-            'faturamento': 'Qual \u00e9 o faturamento m\u00e9dio mensal da empresa?',
-            'gestao_financeira': 'Hoje, como \u00e9 feita a gest\u00e3o financeira da empresa?',
-            'problema': 'Qual \u00e9 o MAIOR problema financeiro da sua empresa hoje?',
-            'interesse': 'Voc\u00ea tem interesse em contratar uma empresa para cuidar da gest\u00e3o financeira do seu neg\u00f3cio?',
-            'investimento': 'Se fizer sentido, voc\u00ea estaria disposto a investir mensalmente para ter uma gest\u00e3o financeira profissional?',
-            'motivacao': 'O que te motivou a buscar terceiriza\u00e7\u00e3o financeira agora?',
-            'anuncio': 'Nome do An\u00fancio',
-            'conjunto': 'Conjunto de An\u00fancio',
-            'campanha': 'Campanha',
-        },
-    },
-]
+    """Re-autentica como admin e salva o token novo (acionada em 401/403)."""
+    global _TOKEN
+    req = urllib.request.Request(
+        BASE + '/api/collections/users/auth-with-password',
+        data=json.dumps({'identity': _ADMIN_EMAIL, 'password': _ADMIN_SENHA}).encode('utf-8'),
+        headers={'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36'},
+    )
+    with urllib.request.urlopen(req, timeout=40) as resp:
+        data = json.loads(resp.read().decode('utf-8'))
+    _TOKEN = data['token']
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'crm_token.txt'), 'w') as f:
+        f.write(_TOKEN)
+    return _TOKEN
 
 
 def api(method, path, data=None):
-    req = urllib.request.Request(
-        BASE + path,
-        data=json.dumps(data).encode('utf-8') if data is not None else None,
-        headers={'Content-Type': 'application/json',
-                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
-                 'Authorization': 'Bearer ' + TOKEN},
-        method=method,
-    )
+    """Chamada à API do CRM. Em 401/403 renova o token e tenta mais uma vez."""
+    headers = {
+        'Authorization': 'Bearer ' + (_token() or ''),
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+    }
+    req = urllib.request.Request(BASE + path, data=json.dumps(data).encode('utf-8') if data is not None else None, headers=headers, method=method)
     try:
         with urllib.request.urlopen(req, timeout=40) as resp:
             return resp.status, json.loads(resp.read().decode('utf-8'))
     except urllib.error.HTTPError as e:
-        # Token expirado/inv\u00e1lido: renova uma vez e tenta de novo
+        body = e.read().decode('utf-8', 'replace')
         if e.code in (401, 403):
-            renovar_token()
-            req2 = urllib.request.Request(
-                BASE + path,
-                data=json.dumps(data).encode('utf-8') if data is not None else None,
-                headers={'Content-Type': 'application/json',
-                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
-                         'Authorization': 'Bearer ' + TOKEN},
-                method=method,
-            )
             try:
-                with urllib.request.urlopen(req2, timeout=40) as resp2:
+                renovar_token()
+                headers['Authorization'] = 'Bearer ' + _TOKEN
+                req = urllib.request.Request(BASE + path, data=json.dumps(data).encode('utf-8') if data is not None else None, headers=headers, method=method)
+                with urllib.request.urlopen(req, timeout=40) as resp2:
                     return resp2.status, json.loads(resp2.read().decode('utf-8'))
-            except urllib.error.HTTPError as e2:
-                return e2.code, e2.read().decode('utf-8')[:300]
-        return e.code, e.read().decode('utf-8')[:300]
+            except Exception:
+                pass
+        return e.code, body
+
+
+SPREADSHEETS = [
+    {
+        'nome': 'cora',
+        'canal': 'banco_cora',
+        'planilha': '1TYe2__aZ0Y-x9LbUevJ8gYEMvGZtOWZE',
+        'aba': 'Principal',
+        'header_row': 3,
+        'colunas': {
+            'data_envio': 'data_envio', 'nome': 'nome', 'cnpj_ou_cpf': 'cnpj_ou_cpf',
+            'tipo_empresa': 'tipo_empresa', 'email': 'email', 'telefone': 'telefone',
+            'servico_desejado': 'servico_desejado', 'ramo_atividade': 'ramo_atividade',
+            'segmento': 'segmento', 'estado': 'estado', 'cidade': 'cidade',
+            'preferencia_atendimento': 'preferencia_atendimento',
+            'status_atendimento': 'status_atendimento',
+            'observação/comentários': 'observacao',
+        },
+    },
+    {
+        'nome': 'meta_ads_jun',
+        'canal': 'meta',
+        'planilha': '1GiZZjYkBNz_i6r_0cg2D9N6FulB4rJftFctzh4WxeEk',
+        'aba': 'Leads Meta Ads - Jun.26',
+        'header_row': 1,
+        'colunas': {
+            'Data/Hora': 'data_hora', 'Nome completo': 'nome', 'Email': 'email',
+            'Telefone': 'telefone', 'segmento': 'segmento', 'cargo': 'cargo',
+            'gestao_financeira': 'gestao_financeira', 'problema': 'problema',
+            'motivacao': 'motivacao', 'anuncio': 'anuncio', 'conjunto': 'conjunto',
+            'campanha': 'campanha',
+        },
+    },
+    {
+        'nome': 'meta_ads_cadastro',
+        'canal': 'meta',
+        'planilha': '1GiZZjYkBNz_i6r_0cg2D9N6FulB4rJftFctzh4WxeEk',
+        'aba': 'Leads Anúncios de Cadastro',
+        'header_row': 1,
+        'colunas': {
+            'Data/Hora': 'data_hora', 'Nome completo': 'nome', 'Email': 'email',
+            'Telefone': 'telefone', 'cargo': 'cargo', 'funcionarios': 'funcionarios',
+            'faturamento': 'faturamento', 'gestao_financeira': 'gestao_financeira',
+            'problema': 'problema', 'interesse': 'interesse',
+            'investimento': 'investimento', 'motivacao': 'motivacao',
+            'anuncio': 'anuncio', 'conjunto': 'conjunto', 'campanha': 'campanha',
+        },
+    },
+]
 
 
 def normalizar_telefone(t):
@@ -179,20 +165,21 @@ def parece_criptografado(s):
     """Detecta valores criptografados da Cora (base64 com '=', '+', '/' e poucas letras)."""
     if not s: return False
     s = str(s).strip()
-    if len(s) < 20: return False
+    if len(s) < 16: return False
+    especiais = sum(1 for ch in s if ch in '+=/')
     letras = sum(1 for ch in s if ch.isalpha())
-    especiais = sum(1 for ch in s if ch in '=+/')
-    # base64 t\u00edpico: muitos n\u00e3o-alfanum\u00e9ricos e propor\u00e7\u00e3o baixa de letras
-    if especiais > 0 and (letras / len(s)) < 0.75:
-        return True
-    # string longa sem espa\u00e7os, s\u00f3 base64-ish
-    if len(s) > 30 and ' ' not in s and sum(1 for ch in s if ch.isalnum() or ch in '=+/') == len(s):
-        return True
-    # base64 cl\u00e1ssico: comprimento m\u00faltiplo de 4, termina em '=' (padding), s\u00f3 charset base64
-    if ' ' not in s and len(s) % 4 == 0 and s.endswith('=') and \
-       sum(1 for ch in s if ch.isalnum() or ch in '=+/') == len(s):
-        return True
-    return False
+    return especiais >= 1 and letras / max(len(s), 1) > 0.5
+
+
+def gerar_dedup_key(tel, em, cnpj):
+    if em: return 'email:' + em
+    if tel: return 'tel:' + tel
+    if cnpj: return 'cnpj:' + cnpj
+    return ''
+
+
+def gerar_lead_id():
+    return format(random.getrandbits(32), '08x')
 
 
 def hash_linha(vals):
@@ -213,65 +200,20 @@ def salvar_estado(est):
 
 
 def registrar_acao(acao):
-    with open(LOG_DIARIO, 'a', encoding='utf-8') as f:
+    with open(LOG, 'a', encoding='utf-8') as f:
         f.write(json.dumps({'ts': datetime.datetime.now().isoformat(), **acao}, ensure_ascii=False) + '\n')
 
 
-def gerar_lead_id():
-    """Gera um lead_id curto \u00fanico (8 chars hex)."""
-    import uuid
-    return uuid.uuid4().hex[:8]
-
-
-def gerar_dedup_key(tel, em, cnpj):
-    """Gera chave de dedup a partir dos identificadores dispon\u00edveis."""
-    if em: return f'email:{em}'
-    if tel: return f'tel:{tel}'
-    if cnpj: return f'cnpj:{cnpj}'
-    return ''
-
-
 def mapear_respostas(linha, fonte):
-    """Extrai respostas do formul\u00e1rio como JSON para o campo 'respostas' do CRM."""
+    """Campos extras da planilha → JSON 'respostas' do lead (chaves canônicas)."""
     respostas = {}
-    if fonte['nome'] == 'meta_ads_jun':
-        for campo_src, campo_dst in [
-            ('segmento', 'segmento'),
-            ('cargo', 'cargo'),
-            ('gestao_financeira', 'gestao_financeira'),
-            ('problema', 'problema'),
-            ('motivacao', 'motivacao'),
-        ]:
-            val = linha.get(campo_src, '')
-            if val and str(val).strip():
-                respostas[campo_dst] = str(val).strip()
-    elif fonte['nome'] == 'meta_ads_cadastro':
-        for campo_src, campo_dst in [
-            ('cargo', 'cargo'),
-            ('funcionarios', 'funcionarios'),
-            ('faturamento', 'faturamento'),
-            ('gestao_financeira', 'gestao_financeira'),
-            ('problema', 'problema'),
-            ('interesse', 'interesse'),
-            ('investimento', 'investimento'),
-            ('motivacao', 'motivacao'),
-        ]:
-            val = linha.get(campo_src, '')
-            if val and str(val).strip():
-                respostas[campo_dst] = str(val).strip()
-    elif fonte['nome'] == 'cora':
-        for campo_src, campo_dst in [
-            ('servico_desejado', 'servico_desejado'),
-            ('ramo_atividade', 'ramo_atividade'),
-            ('segmento', 'segmento'),
-            ('preferencia_atendimento', 'preferencia_atendimento'),
-            ('status_atendimento', 'status_atendimento'),
-            ('observa\u00e7\u00e3o/coment\u00e1rios', 'observacao'),
-        ]:
-            val = linha.get(campo_src, '')
-            if val and str(val).strip() and str(val).strip() != '-':
-                respostas[campo_dst] = str(val).strip()
-    return respostas if respostas else None
+    for col, chave in fonte['colunas'].items():
+        if chave in ('nome', 'email', 'telefone', 'data_hora', 'anuncio', 'conjunto', 'campanha', 'cnpj_ou_cpf'):
+            continue
+        v = linha.get(col)
+        if v not in (None, ''):
+            respostas[chave] = str(v)
+    return respostas
 
 
 def mapear_origem(fonte):
@@ -314,24 +256,41 @@ def processar_linhas(fonte, linhas, estado_atual):
             ignorados.append({'linha': i + fonte['header_row'] + 1, 'motivo': 'sem identificador'})
             continue
 
-        # Cora criptografado: se nome E email s\u00e3o criptografados E n\u00e3o h\u00e1 telefone, pula
-        # (CNPJ \u00e9 leg\u00edtimo \u2014 n\u00e3o descarta linhas com CNPJ v\u00e1lido)
+        # Cora criptografado: se nome E email são criptografados E não há telefone, pula
+        # (CNPJ é legítimo — não descarta linhas com CNPJ válido)
         nome_raw = str(linha.get('nome') or linha.get('Nome completo') or '').strip()
         email_raw = str(linha.get('email') or linha.get('Email') or '').strip()
         if parece_criptografado(nome_raw) and parece_criptografado(email_raw) and not tel:
             ignorados.append({'linha': i + fonte['header_row'] + 1, 'motivo': 'dados criptografados'})
+            # registra o hash para não re-avaliar a linha a cada rodada
+            h = hash_linha(linha)
+            base = estado_novo.get(chave) or est.get(chave)
+            hashes_chave = [base] if isinstance(base, str) else (list(base) if base else [])
+            estado_novo[chave] = sorted(set(hashes_chave + [h]))
+            continue
+
+        # Linha sem nome útil: o CRM exige 'nome' no create (validation_required) e
+        # o update nunca dispara (nome vazio não gera upd). Sem esse descarte, a
+        # linha tenta CREATE a cada rodada e falha 400 para sempre (ex.: linhas de
+        # teste F1-T04 na aba Jun com colunas deslocadas → telefone vira '104').
+        if not nome_raw:
+            ignorados.append({'linha': i + fonte['header_row'] + 1, 'motivo': 'sem nome (create sempre falharia)'})
+            h = hash_linha(linha)
+            base = estado_novo.get(chave) or est.get(chave)
+            hashes_chave = [base] if isinstance(base, str) else (list(base) if base else [])
+            estado_novo[chave] = sorted(set(hashes_chave + [h]))
             continue
 
         h = hash_linha(linha)
-        # j\u00e1 processada e inalterada?
-        # est[chave] pode ser string (hash \u00fanico, legado) ou lista de hashes \u2014
-        # v\u00e1rias linhas da planilha podem compartilhar a mesma chave de dedup
-        # (ex.: colis\u00e3o Cora Isamara\u00d7Sperka, mesmo telefone/e-mail). Sem lista,
-        # s\u00f3 o hash da \u00daLTIMA linha fica no estado e a primeira linha \u00e9
+        # já processada e inalterada?
+        # est[chave] pode ser string (hash único, legado) ou lista de hashes —
+        # várias linhas da planilha podem compartilhar a mesma chave de dedup
+        # (ex.: colisão Cora Isamara×Sperka, mesmo telefone/e-mail). Sem lista,
+        # só o hash da ÚLTIMA linha fica no estado e a primeira linha é
         # re-processada em TODA rodada (ping-pong infinito de updates).
-        # Base de hashes: prioriza o ACUMULADO desta rodada (estado_novo) \u2014
-        # sem isso, a 2\u00aa linha com a mesma chave na mesma passada sobrescreve
-        # o hash da 1\u00aa e sobra 1 update por rodada para sempre.
+        # Base de hashes: prioriza o ACUMULADO desta rodada (estado_novo) —
+        # sem isso, a 2ª linha com a mesma chave na mesma passada sobrescreve
+        # o hash da 1ª e sobra 1 update por rodada para sempre.
         base = estado_novo.get(chave)
         if base is None:
             base = est.get(chave)
@@ -359,10 +318,10 @@ def processar_linhas(fonte, linhas, estado_atual):
         dedup_key = gerar_dedup_key(tel, em, cnpj)
         respostas = mapear_respostas(linha, fonte)
         campanha = (linha.get('campanha') or linha.get('Campanha') or '').strip()[:200]
-        anuncio = (linha.get('anuncio') or linha.get('Nome do An\u00fancio') or '').strip()[:200]
+        anuncio = (linha.get('anuncio') or linha.get('Nome do Anúncio') or '').strip()[:200]
 
         if lead:
-            # ATUALIZA apenas campos relevantes (n\u00e3o sobrescreve config do CRM)
+            # ATUALIZA apenas campos relevantes (não sobrescreve config do CRM)
             upd = {}
             if nome_lead and nome_lead != (lead.get('nome') or ''):
                 upd['nome'] = nome_lead
@@ -394,7 +353,7 @@ def processar_linhas(fonte, linhas, estado_atual):
             else:
                 estado_novo[chave] = sorted(set(hashes_chave + [h]))
         else:
-            # CRIA \u2014 campos obrigat\u00f3rios do schema atual
+            # CRIA — campos obrigatórios do schema atual
             payload = {
                 'lead_id': gerar_lead_id(),
                 'opportunity_id': '-',
