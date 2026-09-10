@@ -4,6 +4,7 @@
 
 ## Registro
 
+- 2026-09-10 · [Adapta/Ethos] · FIX polling F1-T05: loop infinito de updates no lead dldr9dp92fj1tzd (colisão Cora Isamara×Sperka — mesmo telefone/e-mail, 2 linhas na planilha). Causa: `estado.json` guardava UM hash por chave de dedup; como as 2 linhas compartilham a chave, só o hash da ÚLTIMA linha (Sperka) sobrevivia e a 1ª (Isamara) era re-processada em toda rodada (update nome/respostas a cada ciclo). Correção em `scripts/captacao_leads/processar.py`: estado agora guarda LISTA de hashes por chave (legado string migrado na leitura). Validado: 2 rodadas consecutivas com 0 criados/0 atualizados.
 - 2026-09-08 · [Adapta/Ethos] · FIX polling F1-T05: bug `UA` indefinido em `renovar_token()` (renovação de token JWT sempre falhava em silêncio desde 01/09); corrigido em `scripts/captacao_leads/processar.py`, token renovado e validado. Lead novo capturado (linha Cora 12/04, nome anonimizado pela Cora) — PATCH manual de correção do nome aplicado (updateRule exige role admin; responsavel='-' não atualiza pelo token comum).
 - 2026-09-04 · [Adapta/Ethos] · Fase 2 sincronizada no GitHub a partir do Skip v0.0.35: F2-T01 a F2-T05, migration 0006, hooks de qualificação/fila/revisão, SPEC e status.
 - 2026-09-03 · [Vinicius/Champion] · F2-T05 teste final aprovado; regressão CA-2-001..004, acesso CA-2-005, rollback e histórico comprovados; commit de referência `1fbf13b`.
