@@ -64,7 +64,15 @@ def main():
             data = json.load(f)
         
         # MCP format: {"values": [[row1], [row2], ...]}
-        raw_values = data.get('values', [])
+        # Tolerante: alguns saves do agente gravam a lista crua (sem wrapper
+        # {"values": ...}). Aceitar ambos os formatos (fix 2026-09-11).
+        if isinstance(data, dict):
+            raw_values = data.get('values', [])
+        elif isinstance(data, list):
+            raw_values = data
+        else:
+            print(f'  WARN: formato inesperado em {filepath}, pulando {source_name}', file=sys.stderr)
+            continue
         
         # Skip header row if first row matches headers (meta sheets include header)
         if raw_values and raw_values[0][0] == headers[0]:
