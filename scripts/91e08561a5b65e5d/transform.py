@@ -21,7 +21,8 @@ import sys
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
 WORKSPACE = os.path.dirname(os.path.dirname(AQUI))
-TMP = os.path.join(WORKSPACE, 'tmp', 'polling')
+# POLLING_TMP: cada job de cron usa tmp próprio (evita corrida entre 91e0856 e a5b0).
+TMP = os.environ.get('POLLING_TMP', os.path.join(WORKSPACE, 'tmp', 'polling'))
 
 # Headers canônicos esperados pelo processar.py (mesmos do converter.py).
 HEADERS = {
@@ -101,7 +102,7 @@ def main():
         # → processar.py re-processaria TODAS as linhas (re-sync em massa).
         # Aborta (exit 1) antes de gravar o input; o run.sh (set -euo pipefail)
         # interrompe antes do processar.py. Agente deve re-ler as planilhas com
-        # value_render_option=FORMATTED_VALUE e salvar tmp/polling/*.json de novo.
+        # value_render_option=FORMATTED_VALUE e salvar tmp/polling/{source_name}.json de novo.
         col_data = 'data_envio' if source_name == 'cora' else 'Data/Hora'
         suspeitas = [r.get(col_data) for r in output[source_name]
                      if isinstance(r.get(col_data), (int, float))
