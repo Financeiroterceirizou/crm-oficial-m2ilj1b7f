@@ -2,73 +2,75 @@
 // POST /backend/v1/followup-lead
 // Body: { lead_id, tentativa (1..3, opcional; default = followup_tentativa+1 ou 1) }
 // - Valida: config aprovada (RN-3-101), lead qualificado + e-mail válido + base legal (RN-3-102).
-// - Envia APENAS o e-mail do modelo aprovado (config/cadencia_followup_v1.json v1.1) — sem copy nova.
+// - Envia APENAS o e-mail do modelo aprovado (cadencia_followup_v1.json v1.1) — sem copy nova.
 // - Idempotência: chave lead_id + cadencia + tentativa; repetição devolve already_sent sem nova chamada.
 // - Falha Resend (4xx/5xx/timeout): 502 sem falso sucesso + error_log (fila humana), sem chave exposta.
 // - Paradas (resposta/agendamento/no_show/descadastro/bounce) são da F3-T06 — aqui só o disparo.
 // Requer autenticacao.
-
-// Modelos aprovados pelo champion (cadencia_followup_v1.json v1.1, 2026-09-16).
-// Fonte: config aprovada no repo; variaveis {{nome}} e {{link_agenda}}.
-const MODELOS = [
-  {
-    ordem: 1,
-    dia: 'D+0',
-    assunto: '{{nome}}, sua gestão financeira organizada — vale 15 minutos?',
-    corpo:
-      'Bom dia {{nome}}!\n\nRecebi seu contato pelo nosso formulário. Antes de qualquer proposta, quero entender o seu financeiro: como estão as contas a pagar e a receber, e o quanto o dono ainda faz na mão.\n\nA Terceirizou faz o financeiro de prestadores de serviço: organiza os dados, entrega fluxo de caixa e DRE, e dá direção para a decisão. Mais do que terceirizar o financeiro.\n\nSe fizer sentido, escolha um horário aqui: {{link_agenda}}\nSe preferir, responda este e-mail com uma pergunta direta — respondo de imediato.\n\nVinícius Oliveira da Costa\nTerceirizou — mais do que terceirizar o financeiro\nterceirizou.com.br',
-  },
-  {
-    ordem: 2,
-    dia: 'D+1',
-    assunto: 'O que muda quando o financeiro sai da mão do dono',
-    corpo:
-      'Bom dia {{nome}}!\n\nA maioria dos prestadores que atendo chega com o mesmo cenário: contas misturadas, fluxo de caixa na cabeça do dono e decisão sem número.\n\nDepois que assumimos a gestão: caixa organizado, relatórios legíveis e o dono decide com dado — sem virar refém do financeiro no fim do mês.\n\nQuero te mostrar isso com o SEU número, não com exemplo. 15 minutos resolvem.\n\n{{link_agenda}}\n\nVinícius Oliveira da Costa\nTerceirizou — mais do que terceirizar o financeiro\nterceirizou.com.br',
-  },
-  {
-    ordem: 3,
-    dia: 'D+2',
-    assunto: 'Encerro por aqui, {{nome}} — a porta fica aberta',
-    corpo:
-      'Bom dia {{nome}}!\n\nNão quero insistir. Se o momento não é agora, tudo bem — encerro a sequência por aqui.\n\nDeixo só o essencial: quando o financeiro começar a pesar na sua operação, o primeiro passo é uma conversa de 15 minutos. A porta fica aberta.\n\n{{link_agenda}}\n\nQualquer dúvida estamos à disposição.\n\nVinícius Oliveira da Costa\nTerceirizou — mais do que terceirizar o financeiro\nterceirizou.com.br',
-  },
-]
-
-const CADENCIA_VERSAO = '1.1'
-const MODELOS_VERSAO = '1.0'
-const REMETENTE = 'Terceirizou <financeiro@terceirizou.com.br>'
-const LINK_AGENDA = 'https://crm-oficial-65bb8.goskip.app'
-
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
-
-function corpoHtml(texto) {
-  const linhas = String(texto).split('\n')
-  let html = ''
-  for (const linha of linhas) {
-    if (linha.trim() === '') {
-      html += '<br>'
-    } else {
-      html +=
-        '<p style="margin:0 0 12px 0;font-family:Arial,sans-serif;font-size:14px;line-height:1.5;color:#222">' +
-        escapeHtml(linha) +
-        '</p>'
-    }
-  }
-  html +=
-    '<p style="font-family:Arial,sans-serif;font-size:11px;color:#999"><a href="{{link_descadastro}}" style="color:#999">Não quero mais receber estes e-mails</a></p>'
-  return html
-}
+// NOTA runtime Skip: constantes/helpers declarados DENTRO do callback do routerAdd —
+// escopo de módulo não fica visível ao handler (padrão de agendar_lead.js/agendar_borda.js).
 
 routerAdd(
   'POST',
   '/backend/v1/followup-lead',
   (e) => {
+    // Modelos aprovados pelo champion (cadencia_followup_v1.json v1.1, 2026-09-16).
+    // Fonte: config aprovada no repo; variaveis {{nome}} e {{link_agenda}}.
+    const MODELOS = [
+      {
+        ordem: 1,
+        dia: 'D+0',
+        assunto: '{{nome}}, sua gestão financeira organizada — vale 15 minutos?',
+        corpo:
+          'Bom dia {{nome}}!\n\nRecebi seu contato pelo nosso formulário. Antes de qualquer proposta, quero entender o seu financeiro: como estão as contas a pagar e a receber, e o quanto o dono ainda faz na mão.\n\nA Terceirizou faz o financeiro de prestadores de serviço: organiza os dados, entrega fluxo de caixa e DRE, e dá direção para a decisão. Mais do que terceirizar o financeiro.\n\nSe fizer sentido, escolha um horário aqui: {{link_agenda}}\nSe preferir, responda este e-mail com uma pergunta direta — respondo de imediato.\n\nVinícius Oliveira da Costa\nTerceirizou — mais do que terceirizar o financeiro\nterceirizou.com.br',
+      },
+      {
+        ordem: 2,
+        dia: 'D+1',
+        assunto: 'O que muda quando o financeiro sai da mão do dono',
+        corpo:
+          'Bom dia {{nome}}!\n\nA maioria dos prestadores que atendo chega com o mesmo cenário: contas misturadas, fluxo de caixa na cabeça do dono e decisão sem número.\n\nDepois que assumimos a gestão: caixa organizado, relatórios legíveis e o dono decide com dado — sem virar refém do financeiro no fim do mês.\n\nQuero te mostrar isso com o SEU número, não com exemplo. 15 minutos resolvem.\n\n{{link_agenda}}\n\nVinícius Oliveira da Costa\nTerceirizou — mais do que terceirizar o financeiro\nterceirizou.com.br',
+      },
+      {
+        ordem: 3,
+        dia: 'D+2',
+        assunto: 'Encerro por aqui, {{nome}} — a porta fica aberta',
+        corpo:
+          'Bom dia {{nome}}!\n\nNão quero insistir. Se o momento não é agora, tudo bem — encerro a sequência por aqui.\n\nDeixo só o essencial: quando o financeiro começar a pesar na sua operação, o primeiro passo é uma conversa de 15 minutos. A porta fica aberta.\n\n{{link_agenda}}\n\nQualquer dúvida estamos à disposição.\n\nVinícius Oliveira da Costa\nTerceirizou — mais do que terceirizar o financeiro\nterceirizou.com.br',
+      },
+    ]
+
+    const CADENCIA_VERSAO = '1.1'
+    const MODELOS_VERSAO = '1.0'
+    const REMETENTE = 'Terceirizou <financeiro@terceirizou.com.br>'
+    const LINK_AGENDA = 'https://crm-oficial-65bb8.goskip.app'
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+    }
+
+    function corpoHtml(texto) {
+      const linhas = String(texto).split('\n')
+      let html = ''
+      for (const linha of linhas) {
+        if (linha.trim() === '') {
+          html += '<br>'
+        } else {
+          html +=
+            '<p style="margin:0 0 12px 0;font-family:Arial,sans-serif;font-size:14px;line-height:1.5;color:#222">' +
+            escapeHtml(linha) +
+            '</p>'
+        }
+      }
+      html +=
+        '<p style="font-family:Arial,sans-serif;font-size:11px;color:#999"><a href="{{link_descadastro}}" style="color:#999">Não quero mais receber estes e-mails</a></p>'
+      return html
+    }
+
     const body = e.requestInfo().body || {}
     const leadId = String(body.lead_id || '').trim()
     if (!leadId) return e.json(400, { error: 'lead_id obrigatorio' })
