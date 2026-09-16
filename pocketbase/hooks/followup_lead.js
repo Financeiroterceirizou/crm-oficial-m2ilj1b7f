@@ -11,6 +11,7 @@
 // Requer autenticacao.
 // NOTA runtime Skip: constantes/helpers declarados DENTRO do callback do routerAdd —
 // escopo de módulo não fica visível ao handler (padrão de agendar_lead.js/agendar_borda.js).
+// v0.0.54: paradas checadas antes do envio; secrets lidas a cada request via $secrets.get.
 
 routerAdd(
   'POST',
