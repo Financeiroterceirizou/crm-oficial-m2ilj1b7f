@@ -1,9 +1,11 @@
 // F3-T05 - Sequência de follow-up idempotente via Resend (SPEC-3-002 CA-3-101/102).
 // POST /backend/v1/followup-lead
-// Body: { lead_id, tentativa (1..3, opcional; default = followup_tentativa+1 ou 1) }
+// Body: { lead_id, tentativa (1..3, opcional; sem tentativa = repete a tentativa atual, ou 1 na 1a vez) }
 // - Valida: config aprovada (RN-3-101), lead qualificado + e-mail válido + base legal (RN-3-102).
 // - Envia APENAS o e-mail do modelo aprovado (cadencia_followup_v1.json v1.1) — sem copy nova.
 // - Idempotência: chave lead_id + cadencia + tentativa; repetição devolve already_sent sem nova chamada.
+//   Repetir a chamada NUNCA auto-avança a tentativa — avançar é papel do scheduler (F3-T06),
+//   que passa a tentativa explícita no body.
 // - Falha Resend (4xx/5xx/timeout): 502 sem falso sucesso + error_log (fila humana), sem chave exposta.
 // - Paradas (resposta/agendamento/no_show/descadastro/bounce) são da F3-T06 — aqui só o disparo.
 // Requer autenticacao.
@@ -119,10 +121,12 @@ routerAdd(
     }
 
     // --- Tentativa da cadência ---
+    // Sem tentativa no body: repete a tentativa atual (ou 1 na primeira vez).
+    // Avançar a cadência é papel do scheduler (F3-T06), que passa a tentativa explícita.
     let tentativa = Number(body.tentativa || 0)
     if (!Number.isInteger(tentativa) || tentativa < 1 || tentativa > 3) {
       const atual = Number(lead.get('followup_tentativa') || 0)
-      tentativa = Math.min(atual + 1, 3)
+      tentativa = atual >= 1 && atual <= 3 ? atual : 1
     }
     const modelo = MODELOS[tentativa - 1]
     const chave = leadId + ':followup:v' + CADENCIA_VERSAO + ':t' + tentativa
