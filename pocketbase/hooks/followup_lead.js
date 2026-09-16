@@ -94,6 +94,15 @@ routerAdd(
       })
     }
 
+    // --- RN-3-103: parada ativa -> zero envio, historico preservado ---
+    if (lead.get('followup_estado') === 'parado') {
+      return e.json(409, {
+        status: 'bloqueado',
+        motivo: 'followup_parado:' + (lead.get('followup_parada') || 'sem_motivo'),
+        chamada_resend: false,
+      })
+    }
+
     // --- RN-3-102: elegibilidade ---
     if (lead.get('estado_qualificacao') !== 'qualificado') {
       return e.json(409, {
