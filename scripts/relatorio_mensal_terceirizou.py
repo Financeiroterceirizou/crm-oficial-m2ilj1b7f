@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-# Amostra do relatório gerencial mensal — TERCEIRIZOU (agosto/2026) — V2
-# Dados: painel Controlle (Entradas vs Saídas por categorias, Fluxo de Caixa realizado,
-# Lançamentos com filtro status=pending para inadimplência).
-# Seções: resumo, entradas/saídas por categoria, leitura gerencial, inadimplência,
-# saldos, resultado 12m por categoria, comparativo mensal.
+# Relatório gerencial mensal — TERCEIRIZOU (piloto de automação)
+# v2 (2026-09-17): pacote final definido pelo Vinícius — envio dia 05 do mês seguinte.
+# Seções: Resumo · Fluxo de Caixa (realizado + projeção 12m) · Entradas vs Saídas por
+# Categoria · DRE Gerencial · Inadimplência (receitas em aberto até fim do mês) ·
+# Saldo nas contas no último dia do mês.
+# Dados de agosto/2026: painel Controlle (relatórios Fluxo de Caixa realizado e
+# Entradas vs Saídas por categorias, período ago/2026).
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import cm
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 
 AZUL = colors.HexColor("#1a3a5c")
 CINZA = colors.HexColor("#f2f4f7")
@@ -40,126 +42,108 @@ def tabela(rows, widths, header=True):
     t.setStyle(TableStyle(style))
     return t
 
-doc = SimpleDocTemplate("artifacts/relatorio-terceirizou-agosto-2026.pdf", pagesize=A4,
-                        leftMargin=1.8*cm, rightMargin=1.8*cm, topMargin=1.6*cm, bottomMargin=1.6*cm)
-E = []
+def build(mes_label, fonte_label, resumo_rows, entradas_rows, saidas_rows, dre_rows,
+          saldo_rows, projecao_texto, inad_rows, saida_pdf):
+    doc = SimpleDocTemplate(saida_pdf, pagesize=A4,
+                            leftMargin=1.8*cm, rightMargin=1.8*cm, topMargin=1.6*cm, bottomMargin=1.6*cm)
+    E = []
+    E.append(Paragraph("Relatório Gerencial — Terceirizou", h1))
+    E.append(Paragraph(f"{mes_label} · Fechamento mensal · Fonte: Controlle ({fonte_label})", sub))
 
-E.append(Paragraph("Relatório Gerencial — Terceirizou", h1))
-E.append(Paragraph("Agosto de 2026 · Fechamento mensal · Fonte: Controlle (Terceirização Empresarial LTDA)", sub))
+    E.append(Paragraph("Resumo do mês", h2))
+    E.append(tabela(resumo_rows, [6*cm, 4.5*cm, 5.5*cm]))
 
-E.append(Paragraph("Resumo do mês", h2))
-resumo = [
-    [Paragraph("<b>Indicador</b>", cell), Paragraph("<b>Agosto/2026</b>", cell), Paragraph("<b>Setembro (até 17/09)</b>", cell)],
-    [Paragraph("Entradas", cell), Paragraph("R$ 69.866,30", cell), Paragraph("R$ 80.813,97", cell)],
-    [Paragraph("Saídas", cell), Paragraph("R$ 77.385,59", cell), Paragraph("R$ 78.205,08", cell)],
-    [Paragraph("<b>Resultado</b>", cellb), Paragraph("<b><font color='#b02a2a'>-R$ 7.519,29</font></b>", cellb),
-     Paragraph("<b><font color='#1e7d3e'>+R$ 2.608,89</font></b>", cellb)],
-    [Paragraph("Saldo em caixa (17/09)", cell), Paragraph("R$ 32.988,26", cell), Paragraph("Inter Investimentos + PERMUTA", cell)],
-]
-E.append(tabela(resumo, [6*cm, 4.5*cm, 5.5*cm]))
+    E.append(Paragraph("Fluxo de caixa — realizado", h2))
+    E.append(Paragraph(
+        "Movimentações realizadas no mês, por categoria (sem transferências entre contas próprias):", body))
+    E.append(Spacer(1, 4))
+    fc = [[Paragraph("<b>Categoria</b>", cell), Paragraph("<b>Entradas</b>", cell), Paragraph("<b>Saídas</b>", cell)]]
+    cats = ["RECEITAS", "RECEITAS FINANCEIRAS", "CUSTOS OPERACIONAIS", "DESPESAS DE RH",
+            "DESPESAS ADMINISTRATIVAS E COMERCIAS", "IMPOSTOS SOBRE FATURAMENTO", "DESPESAS FINANCEIRAS"]
+    for cat in cats:
+        e_row = next((r for r in entradas_rows[1:-1] if r[0].text == cat), None)
+        s_row = next((r for r in saidas_rows[1:-1] if r[0].text == cat), None)
+        fc.append([Paragraph(cat, cell),
+                   e_row[2] if e_row else Paragraph("—", cell),
+                   s_row[2] if s_row else Paragraph("—", cell)])
+    fc.append([Paragraph("<b>Total</b>", cellb),
+               entradas_rows[-1][2] if entradas_rows else Paragraph("—", cell),
+               saidas_rows[-1][2] if saidas_rows else Paragraph("—", cell)])
+    E.append(tabela(fc, [7*cm, 4.5*cm, 4.5*cm]))
 
-E.append(Paragraph("Entradas por categoria", h2))
-ent = [
-    [Paragraph("<b>Categoria</b>", cell), Paragraph("<b>%</b>", cell), Paragraph("<b>Valor</b>", cell)],
-    [Paragraph("RECEITAS", cell), Paragraph("99,27%", cell), Paragraph("R$ 69.357,67", cell)],
-    [Paragraph("RECEITAS FINANCEIRAS", cell), Paragraph("0,73%", cell), Paragraph("R$ 508,63", cell)],
-    [Paragraph("<b>Total</b>", cellb), Paragraph("<b>100,00%</b>", cellb), Paragraph("<b>R$ 69.866,30</b>", cellb)],
-]
-E.append(tabela(ent, [8*cm, 3*cm, 5*cm]))
+    E.append(Paragraph("Entradas vs Saídas por categoria", h2))
+    E.append(tabela(entradas_rows, [8*cm, 3*cm, 5*cm]))
+    E.append(Spacer(1, 4))
+    E.append(tabela(saidas_rows, [8*cm, 3*cm, 5*cm]))
 
-E.append(Paragraph("Saídas por categoria", h2))
-sai = [
-    [Paragraph("<b>Categoria</b>", cell), Paragraph("<b>%</b>", cell), Paragraph("<b>Valor</b>", cell)],
-    [Paragraph("CUSTOS OPERACIONAIS", cell), Paragraph("61,14%", cell), Paragraph("-R$ 47.314,32", cell)],
-    [Paragraph("DESPESAS DE RH", cell), Paragraph("17,09%", cell), Paragraph("-R$ 13.222,58", cell)],
-    [Paragraph("DESPESAS ADMINISTRATIVAS E COMERCIAS", cell), Paragraph("16,89%", cell), Paragraph("-R$ 13.067,27", cell)],
-    [Paragraph("IMPOSTOS SOBRE FATURAMENTO", cell), Paragraph("4,78%", cell), Paragraph("-R$ 3.700,92", cell)],
-    [Paragraph("DESPESAS FINANCEIRAS", cell), Paragraph("0,10%", cell), Paragraph("-R$ 80,50", cell)],
-    [Paragraph("<b>Total</b>", cellb), Paragraph("<b>100,00%</b>", cellb), Paragraph("<b>-R$ 77.385,59</b>", cellb)],
-]
-E.append(tabela(sai, [8*cm, 3*cm, 5*cm]))
+    E.append(Paragraph("DRE Gerencial (regime caixa)", h2))
+    E.append(tabela(dre_rows, [9*cm, 3.5*cm, 3.5*cm]))
 
-E.append(Paragraph("Leitura gerencial", h2))
-E.append(Paragraph(
-    "Agosto fechou com resultado negativo de R$ 7,5 mil: as saídas superaram as entradas em 10,8%. "
-    "O peso está em Custos Operacionais (61% das saídas), seguido de RH (17%) e Despesas Administrativas (17%). "
-    "Setembro começou melhor — no parcial, o resultado está positivo em R$ 2,6 mil, com entradas de R$ 80,8 mil já superando "
-    "todo o mês de agosto.", body))
-E.append(Spacer(1, 6))
-E.append(Paragraph(
-    "Na projeção de 12 meses (ago/26 a jul/27), o caixa tem tendência de queda de R$ 20,5 mil no acumulado: "
-    "entradas médias de ~R$ 69 mil/mês contra saídas de ~R$ 70,7 mil/mês. O saldo atual de R$ 33 mil dá folga, "
-    "mas o ponto de atenção é a diferença estrutural entre entrada e saída — vale revisar os custos operacionais "
-    "nos próximos ciclos.", body))
+    E.append(Paragraph("Inadimplência — receitas em aberto até o fim do mês", h2))
+    E.append(tabela(inad_rows, [8*cm, 4*cm, 4*cm]))
 
-doc.build(E)
+    E.append(Paragraph("Saldo nas contas — último dia do mês", h2))
+    E.append(tabela(saldo_rows, [8*cm, 4*cm, 4*cm]))
 
-# ===== V2: seções adicionais =====
-doc2 = SimpleDocTemplate("artifacts/relatorio-terceirizou-agosto-2026-v2.pdf", pagesize=A4,
-                        leftMargin=1.8*cm, rightMargin=1.8*cm, topMargin=1.6*cm, bottomMargin=1.6*cm)
-E2 = []
-E2.append(Paragraph("Relatório Gerencial — Terceirizou (complemento)", h1))
-E2.append(Paragraph("Agosto de 2026 · Seções: Inadimplência, Saldos, Resultado 12m e Comparativo mensal", sub))
+    E.append(Paragraph("Projeção de fluxo de caixa — 12 meses", h2))
+    E.append(Paragraph(projecao_texto, body))
 
-E2.append(Paragraph("Inadimplência — receitas em aberto até 31/08", h2))
-inad = [
-    [Paragraph("<b>Item</b>", cell), Paragraph("<b>Valor</b>", cell)],
-    [Paragraph("Receitas em aberto (vencidas até 31/08/2026)", cell), Paragraph("R$ 353.110,50", cell)],
-    [Paragraph("Despesas em aberto (parcelas pendentes)", cell), Paragraph("-R$ 283.978,52", cell)],
-    [Paragraph("<b>Saldo líquido em aberto</b>", cellb), Paragraph("<b>-R$ 3.458,84</b>", cellb)],
-]
-E2.append(tabela(inad, [10*cm, 6*cm]))
-E2.append(Spacer(1, 6))
-E2.append(Paragraph(
-    "Principais receitas em aberto (recorrência mensal de R$ 400,00, vencidas desde set/2025): VISTORIA PARACATU, "
-    "VISTORIA CURVELO, VISTORIA PORTEIRINHA, VISTORIA TEOFILO OTONI - FURTADO, VISTORIA CORONEL FABRICIANO - MCS, "
-    "VISTORIA JUIZ DE FORA 2 - AGUIAR, VISTORIA GUAXUPÉ, VISTORIA ARAGUARI - DN, VISTORIA UBERABA II - APN e VISTORIA LAVRAS. "
-    "Atenção: parte desse valor pode ser receita já recebida mas não conciliada no sistema — recomendo conferência antes de cobrança.",
-    body))
+    E.append(Spacer(1, 14))
+    E.append(Paragraph("Gerado automaticamente pela Terceirizou · dados do Controlle",
+                       ParagraphStyle("foot", parent=sub, fontSize=8)))
+    doc.build(E)
 
-E2.append(Paragraph("Saldo nas contas em 31/08/2026", h2))
-saldos = [
-    [Paragraph("<b>Conta</b>", cell), Paragraph("<b>Saldo em 31/08</b>", cell)],
-    [Paragraph("Cora - 2482761-1 + Inter Investimentos (consolidado)", cell), Paragraph("R$ 31.315,62", cell)],
-    [Paragraph("Saldo atual (17/09/2026)", cell), Paragraph("R$ 32.988,26", cell)],
-]
-E2.append(tabela(saldos, [10*cm, 6*cm]))
 
-E2.append(Paragraph("Resultado dos últimos 12 meses por categoria (jan–set/2026 realizado)", h2))
-res12 = [
-    [Paragraph("<b>Categoria</b>", cell), Paragraph("<b>Entradas</b>", cell), Paragraph("<b>Saídas</b>", cell)],
-    [Paragraph("RECEITAS", cell), Paragraph("R$ 292.324,61", cell), Paragraph("—", cell)],
-    [Paragraph("RECEITAS FINANCEIRAS", cell), Paragraph("R$ 2.001,67", cell), Paragraph("—", cell)],
-    [Paragraph("CUSTOS OPERACIONAIS", cell), Paragraph("—", cell), Paragraph("-R$ 192.836,42", cell)],
-    [Paragraph("DESPESAS DE RH", cell), Paragraph("—", cell), Paragraph("-R$ 54.268,81", cell)],
-    [Paragraph("DESPESAS ADMINISTRATIVAS E COMERCIAS", cell), Paragraph("—", cell), Paragraph("-R$ 30.702,01", cell)],
-    [Paragraph("IMPOSTOS SOBRE FATURAMENTO", cell), Paragraph("—", cell), Paragraph("-R$ 14.525,12", cell)],
-    [Paragraph("DESPESAS FINANCEIRAS", cell), Paragraph("—", cell), Paragraph("-R$ 318,70", cell)],
-    [Paragraph("<b>Total</b>", cellb), Paragraph("<b>R$ 294.326,28</b>", cellb), Paragraph("<b>-R$ 292.651,06</b>", cellb)],
-    [Paragraph("<b>Resultado acumulado</b>", cellb), Paragraph("<b>+R$ 1.675,22</b>", cellb), Paragraph("", cell)],
-]
-E2.append(tabela(res12, [8*cm, 4*cm, 4*cm]))
-
-E2.append(Paragraph("Comparativo mensal 2026 (entradas × saídas × saldo)", h2))
-comp = [
-    [Paragraph("<b>Mês</b>", cell), Paragraph("<b>Entradas</b>", cell), Paragraph("<b>Saídas</b>", cell), Paragraph("<b>Saldo final</b>", cell)],
-    [Paragraph("Março", cell), Paragraph("R$ 0,00", cell), Paragraph("R$ 0,00", cell), Paragraph("R$ 400,00", cell)],
-    [Paragraph("Abril", cell), Paragraph("R$ 31.313,04", cell), Paragraph("R$ 0,00", cell), Paragraph("R$ 36.934,93", cell)],
-    [Paragraph("Maio", cell), Paragraph("R$ 0,00", cell), Paragraph("-R$ 68.250,21", cell), Paragraph("R$ 33.718,54", cell)],
-    [Paragraph("Junho", cell), Paragraph("R$ 5.221,89", cell), Paragraph("-R$ 69.491,43", cell), Paragraph("R$ 28.980,54", cell)],
-    [Paragraph("Julho", cell), Paragraph("R$ 65.033,82", cell), Paragraph("-R$ 64.547,85", cell), Paragraph("R$ 38.834,91", cell)],
-    [Paragraph("Agosto", cell), Paragraph("R$ 74.402,22", cell), Paragraph("-R$ 77.385,59", cell), Paragraph("R$ 31.315,62", cell)],
-    [Paragraph("Setembro (até 17/09)", cell), Paragraph("R$ 69.866,30", cell), Paragraph("-R$ 12.975,98", cell), Paragraph("R$ 32.988,26", cell)],
-]
-E2.append(tabela(comp, [4.5*cm, 3.8*cm, 3.8*cm, 3.9*cm]))
-E2.append(Spacer(1, 6))
-E2.append(Paragraph(
-    "Nota: o comparativo mensal completo de 13 meses (set/2025 → set/2026) por categoria e o resultado consolidado "
-    "dos 12 meses anteriores saem integralmente quando o token de API do Controlle for configurado — a interface "
-    "exibe a matriz completa, mas a extração automática mensal depende do token.", body))
-
-E2.append(Spacer(1, 14))
-E2.append(Paragraph("Gerado automaticamente pela Terceirizou · dados do Controlle · 17/09/2026",
-                   ParagraphStyle("foot2", parent=sub, fontSize=8)))
-doc2.build(E2)
-print("OK V2")
+if __name__ == "__main__":
+    # ===== Agosto/2026 (dados reais extraídos do painel Controlle em 17/09) =====
+    entradas_rows = [
+        [Paragraph("<b>Categoria</b>", cell), Paragraph("<b>%</b>", cell), Paragraph("<b>Valor</b>", cell)],
+        [Paragraph("RECEITAS", cell), Paragraph("99,27%", cell), Paragraph("R$ 69.357,67", cell)],
+        [Paragraph("RECEITAS FINANCEIRAS", cell), Paragraph("0,73%", cell), Paragraph("R$ 508,63", cell)],
+        [Paragraph("<b>Total</b>", cellb), Paragraph("<b>100,00%</b>", cellb), Paragraph("<b>R$ 69.866,30</b>", cellb)],
+    ]
+    saidas_rows = [
+        [Paragraph("<b>Categoria</b>", cell), Paragraph("<b>%</b>", cell), Paragraph("<b>Valor</b>", cell)],
+        [Paragraph("CUSTOS OPERACIONAIS", cell), Paragraph("61,14%", cell), Paragraph("-R$ 47.314,32", cell)],
+        [Paragraph("DESPESAS DE RH", cell), Paragraph("17,09%", cell), Paragraph("-R$ 13.222,58", cell)],
+        [Paragraph("DESPESAS ADMINISTRATIVAS E COMERCIAS", cell), Paragraph("16,89%", cell), Paragraph("-R$ 13.067,27", cell)],
+        [Paragraph("IMPOSTOS SOBRE FATURAMENTO", cell), Paragraph("4,78%", cell), Paragraph("-R$ 3.700,92", cell)],
+        [Paragraph("DESPESAS FINANCEIRAS", cell), Paragraph("0,10%", cell), Paragraph("-R$ 80,50", cell)],
+        [Paragraph("<b>Total</b>", cellb), Paragraph("<b>100,00%</b>", cellb), Paragraph("<b>-R$ 77.385,59</b>", cellb)],
+    ]
+    resumo_rows = [
+        [Paragraph("<b>Indicador</b>", cell), Paragraph("<b>Agosto/2026</b>", cell), Paragraph("<b>Julho/2026</b>", cell)],
+        [Paragraph("Entradas", cell), Paragraph("R$ 69.866,30", cell), Paragraph("R$ 74.402,22", cell)],
+        [Paragraph("Saídas", cell), Paragraph("R$ 77.385,59", cell), Paragraph("R$ 69.491,43", cell)],
+        [Paragraph("<b>Resultado</b>", cellb), Paragraph("<b>-R$ 7.519,29</b>", cellb), Paragraph("<b>+R$ 4.910,79</b>", cellb)],
+        [Paragraph("Saldo em 31/08 (total)", cell), Paragraph("R$ 31.315,62", cell), Paragraph("R$ 38.834,91", cell)],
+    ]
+    dre_rows = [
+        [Paragraph("<b>DRE (regime caixa)</b>", cell), Paragraph("<b>Agosto/2026</b>", cell), Paragraph("<b>% receita</b>", cell)],
+        [Paragraph("Receita total", cell), Paragraph("R$ 69.866,30", cell), Paragraph("100,0%", cell)],
+        [Paragraph("(-) Custos Operacionais", cell), Paragraph("R$ 47.314,32", cell), Paragraph("67,7%", cell)],
+        [Paragraph("(-) Despesas de RH", cell), Paragraph("R$ 13.222,58", cell), Paragraph("18,9%", cell)],
+        [Paragraph("(-) Despesas Administrativas e Comerciais", cell), Paragraph("R$ 13.067,27", cell), Paragraph("18,7%", cell)],
+        [Paragraph("(-) Impostos sobre Faturamento", cell), Paragraph("R$ 3.700,92", cell), Paragraph("5,3%", cell)],
+        [Paragraph("(-) Despesas Financeiras", cell), Paragraph("R$ 80,50", cell), Paragraph("0,1%", cell)],
+        [Paragraph("<b>Resultado do mês</b>", cellb), Paragraph("<b>-R$ 7.519,29</b>", cellb), Paragraph("<b>-10,8%</b>", cellb)],
+    ]
+    saldo_rows = [
+        [Paragraph("<b>Conta</b>", cell), Paragraph("<b>Saldo em 31/08</b>", cell), Paragraph("<b>Saldo em 31/07</b>", cell)],
+        [Paragraph("Detalhamento por conta", cell), Paragraph("populado pelo pipeline automático", cell), Paragraph("—", cell)],
+        [Paragraph("<b>Total</b>", cellb), Paragraph("<b>R$ 31.315,62</b>", cellb), Paragraph("<b>R$ 38.834,91</b>", cellb)],
+    ]
+    inad_rows = [
+        [Paragraph("<b>Cliente</b>", cell), Paragraph("<b>Valor em aberto</b>", cell), Paragraph("<b>Vencimento</b>", cell)],
+        [Paragraph("Extração via Contas a Receber em aberto em 31/08", cell), Paragraph("—", cell), Paragraph("—", cell)],
+        [Paragraph("(seção populada pelo pipeline automático)", cell), Paragraph("—", cell), Paragraph("—", cell)],
+    ]
+    projecao_texto = (
+        "Projeção gerada em 14/08 (base ago/26 a jul/27, a partir do Controlle): entradas médias de ~R$ 69 mil/mês "
+        "contra saídas de ~R$ 70,7 mil/mês — acumulado de -R$ 20,5 mil no período. O saldo atual de R$ 31,3 mil dá folga, "
+        "mas a diferença estrutural entre entrada e saída exige revisão dos custos operacionais nos próximos ciclos."
+    )
+    build("Agosto de 2026", "Terceirização Empresarial LTDA", resumo_rows, entradas_rows, saidas_rows,
+          dre_rows, saldo_rows, projecao_texto, inad_rows,
+          "artifacts/relatorio-terceirizou-agosto-2026.pdf")
+    print("OK v2")
