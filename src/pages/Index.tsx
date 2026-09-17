@@ -104,6 +104,13 @@ const Index = () => {
       setScheduleMessage('Selecione um horário de 30 em 30 minutos (ex.: 10:00 ou 10:30).')
       return
     }
+    const min = h * 60 + m
+    const dentroManha = min >= 8 * 60 && min <= 11 * 60 + 30
+    const dentroTarde = min >= 13 * 60 + 30 && min <= 17 * 60 + 30
+    if (!dentroManha && !dentroTarde) {
+      setScheduleMessage('Horário fora do atendimento (08:00–12:00 e 13:30–18:00).')
+      return
+    }
     const inicio = `${data}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00-03:00`
     // fim = 30 min depois, mantendo o fuso America/Sao_Paulo (-03:00) sem passar por UTC
     const totalMin = h * 60 + m + 30
@@ -453,6 +460,11 @@ const Index = () => {
                     {Array.from({ length: 48 }, (_, i) => {
                       const h = String(Math.floor(i / 2)).padStart(2, '0')
                       const m = i % 2 === 0 ? '00' : '30'
+                      // Horário de atendimento: 08:00–12:00 e 13:30–18:00
+                      const min = h * 60 + Number(m)
+                      const dentroManha = min >= 8 * 60 && min <= 11 * 60 + 30
+                      const dentroTarde = min >= 13 * 60 + 30 && min <= 17 * 60 + 30
+                      if (!dentroManha && !dentroTarde) return null
                       return (
                         <option key={`${h}:${m}`} value={`${h}:${m}`}>
                           {h}:{m}
