@@ -31,7 +31,12 @@ HEADERS = {
         'servico_desejado', 'ramo_atividade', 'segmento', 'estado', 'cidade',
         'preferencia_atendimento', 'status_atendimento', 'observação/comentários'
     ],
-    # A aba Jun tem a coluna extra "É prestador de serviços?" (índice 4), descartada.
+    # A aba Jun TINHA a coluna extra "É prestador de serviços?" (índice 4),
+    # descartada. FIX 2026-09-17: a planilha foi editada e PERDEU essa coluna
+    # (12 colunas ao vivo) — o descarte fixo por índice deslocava tudo:
+    # segmento cortado, anuncio recebendo conjunto, respostas erradas no CRM
+    # (14 updates errados em 17/09 02:10, revertidos via PATCH admin).
+    # Agora o descarte só ocorre se o header real tiver >12 colunas.
     'meta_ads_jun': [
         'Data/Hora', 'Nome completo', 'Email', 'Telefone',
         'segmento', 'cargo', 'gestao_financeira', 'problema', 'motivacao',
@@ -91,9 +96,11 @@ def main():
             if header_idx is not None:
                 raw_values = raw_values[header_idx + 1:]
 
-        # Jun: descarta a coluna extra "É prestador de serviços?" (índice 4)
+        # Jun: descarta a coluna extra "É prestador de serviços?" APENAS se
+        # presente no header real (>12 colunas). Ver fix 2026-09-17 acima.
         if source_name == 'meta_ads_jun':
-            raw_values = [r[:4] + r[5:] for r in raw_values]
+            if raw_values and len(raw_values[0]) > 12:
+                raw_values = [r[:4] + r[5:] for r in raw_values]
 
         output[source_name] = transform_rows(raw_values, headers)
 
@@ -102,7 +109,7 @@ def main():
         # → processar.py re-processaria TODAS as linhas (re-sync em massa).
         # Aborta (exit 1) antes de gravar o input; o run.sh (set -euo pipefail)
         # interrompe antes do processar.py. Agente deve re-ler as planilhas com
-        # value_render_option=FORMATTED_VALUE e salvar tmp/polling/{source_name}.json de novo.
+        # value_render_option=FORMATTED_VALUE e salvar tmp/polling/*.json de novo.
         col_data = 'data_envio' if source_name == 'cora' else 'Data/Hora'
         suspeitas = [r.get(col_data) for r in output[source_name]
                      if isinstance(r.get(col_data), (int, float))
