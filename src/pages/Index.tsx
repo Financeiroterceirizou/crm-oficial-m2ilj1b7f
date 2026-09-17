@@ -43,7 +43,9 @@ const Index = () => {
   const [error, setError] = useState<string | null>(null)
   const [user, setUser] = useState<any>(null)
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
-  const [scheduleStart, setScheduleStart] = useState('')
+  const [scheduleDate, setScheduleDate] = useState('')
+  const [scheduleTime, setScheduleTime] = useState('')
+  const scheduleStart = scheduleDate && scheduleTime ? `${scheduleDate}T${scheduleTime}` : ''
   const [scheduleMessage, setScheduleMessage] = useState('')
   const [scheduleLoading, setScheduleLoading] = useState(false)
 
@@ -98,6 +100,10 @@ const Index = () => {
     }
     const [data, hora] = scheduleStart.split('T')
     const [h, m] = hora.split(':').map(Number)
+    if (m !== 0 && m !== 30) {
+      setScheduleMessage('Selecione um horário de 30 em 30 minutos (ex.: 10:00 ou 10:30).')
+      return
+    }
     const inicio = `${data}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00-03:00`
     // fim = 30 min depois, mantendo o fuso America/Sao_Paulo (-03:00) sem passar por UTC
     const totalMin = h * 60 + m + 30
@@ -427,12 +433,33 @@ const Index = () => {
                 <p className="text-sm text-gray-500 mt-1">
                   Escolha o início da reunião de 30 minutos.
                 </p>
-                <input
-                  type="datetime-local"
-                  value={scheduleStart}
-                  onChange={(event) => setScheduleStart(event.target.value)}
-                  className="mt-3 block w-full border border-gray-300 rounded-md p-2"
-                />
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <input
+                    type="date"
+                    value={scheduleDate}
+                    onChange={(event) => {
+                      setScheduleDate(event.target.value)
+                      setScheduleTime('')
+                    }}
+                    className="block w-full border border-gray-300 rounded-md p-2"
+                  />
+                  <select
+                    value={scheduleTime}
+                    onChange={(event) => setScheduleTime(event.target.value)}
+                    className="block w-full border border-gray-300 rounded-md p-2"
+                  >
+                    <option value="">Horário</option>
+                    {Array.from({ length: 48 }, (_, i) => {
+                      const h = String(Math.floor(i / 2)).padStart(2, '0')
+                      const m = i % 2 === 0 ? '00' : '30'
+                      return (
+                        <option key={`${h}:${m}`} value={`${h}:${m}`}>
+                          {h}:{m}
+                        </option>
+                      )
+                    })}
+                  </select>
+                </div>
                 <button
                   onClick={handleSchedule}
                   disabled={scheduleLoading}
