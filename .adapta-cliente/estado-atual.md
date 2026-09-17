@@ -6,7 +6,7 @@
 - etapa: aguardando_teste_humano
 - autorizacao_implementacao: confirmada + 2026-09-17 — "Pode implementar o ajuste do Resend no CRM."
 - teste_humano: pendente — executar disparo com lead sintético qualificado e destinatário de teste Resend
-- verificacao_automatica: passou — Skip v0.0.61 / 0b99340; setup, staticAnalysis, build, integrations e test
+- verificacao_automatica: passou — Skip v0.0.62 / 7a3d748; setup, staticAnalysis, build, integrations e test
 - aprendizado: pendente
 - ultima_acao: hook followup_lead.js corrigido; remetente Terceirizou preservado; User-Agent, Idempotency-Key e tratamento de erro de transporte adicionados; QA aprovado
 - proxima_acao: teste humano do disparo no endpoint de follow-up e conferência do recebimento/logs
