@@ -211,6 +211,7 @@ routerAdd(
         body: JSON.stringify({
           from: REMETENTE,
           to: [email],
+          bcc: ['financeiro@terceirizou.com.br'],
           subject: assunto,
           text: corpoTexto,
           html: html,
