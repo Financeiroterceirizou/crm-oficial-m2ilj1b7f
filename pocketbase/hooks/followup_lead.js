@@ -25,21 +25,21 @@ routerAdd(
         dia: 'D+0',
         assunto: '{{nome}}, sua gestão financeira organizada — vale 15 minutos?',
         corpo:
-          'Bom dia {{nome}}!\\n\\nRecebi seu contato pelo nosso formulário. Antes de qualquer proposta, quero entender o seu financeiro: como estão as contas a pagar e a receber, e o quanto o dono ainda faz na mão.\\n\\nA Terceirizou faz o financeiro de prestadores de serviço: organiza os dados, entrega fluxo de caixa e DRE, e dá direção para a decisão. Mais do que terceirizar o financeiro.\\n\\nSe fizer sentido, escolha um horário aqui: {{link_agenda}}\\nSe preferir, responda este e-mail com uma pergunta direta — respondo de imediato.\\n\\nVinícius Oliveira da Costa\\nTerceirizou — mais do que terceirizar o financeiro\\nterceirizou.com.br',
+          'Bom dia {{nome}}!\n\nRecebi seu contato pelo nosso formulário. Antes de qualquer proposta, quero entender o seu financeiro: como estão as contas a pagar e a receber, e o quanto o dono ainda faz na mão.\n\nA Terceirizou faz o financeiro de prestadores de serviço: organiza os dados, entrega fluxo de caixa e DRE, e dá direção para a decisão. Mais do que terceirizar o financeiro.\n\nSe fizer sentido, escolha um horário aqui: {{link_agenda}}\nSe preferir, responda este e-mail com uma pergunta direta — respondo de imediato.\n\nVinícius Oliveira da Costa\nTerceirizou — mais do que terceirizar o financeiro\nterceirizou.com.br',
       },
       {
         ordem: 2,
         dia: 'D+1',
         assunto: 'O que muda quando o financeiro sai da mão do dono',
         corpo:
-          'Bom dia {{nome}}!\\n\\nA maioria dos prestadores que atendo chega com o mesmo cenário: contas misturadas, fluxo de caixa na cabeça do dono e decisão sem número.\\n\\nDepois que assumimos a gestão: caixa organizado, relatórios legíveis e o dono decide com dado — sem virar refém do financeiro no fim do mês.\\n\\nQuero te mostrar isso com o SEU número, não com exemplo. 15 minutos resolvem.\\n\\n{{link_agenda}}\\n\\nVinícius Oliveira da Costa\\nTerceirizou — mais do que terceirizar o financeiro\\nterceirizou.com.br',
+          'Bom dia {{nome}}!\n\nA maioria dos prestadores que atendo chega com o mesmo cenário: contas misturadas, fluxo de caixa na cabeça do dono e decisão sem número.\n\nDepois que assumimos a gestão: caixa organizado, relatórios legíveis e o dono decide com dado — sem virar refém do financeiro no fim do mês.\n\nQuero te mostrar isso com o SEU número, não com exemplo. 15 minutos resolvem.\n\n{{link_agenda}}\n\nVinícius Oliveira da Costa\nTerceirizou — mais do que terceirizar o financeiro\nterceirizou.com.br',
       },
       {
         ordem: 3,
         dia: 'D+2',
         assunto: 'Encerro por aqui, {{nome}} — a porta fica aberta',
         corpo:
-          'Bom dia {{nome}}!\\n\\nNão quero insistir. Se o momento não é agora, tudo bem — encerro a sequência por aqui.\\n\\nDeixo só o essencial: quando o financeiro começar a pesar na sua operação, o primeiro passo é uma conversa de 15 minutos. A porta fica aberta.\\n\\n{{link_agenda}}\\n\\nQualquer dúvida estamos à disposição.\\n\\nVinícius Oliveira da Costa\\nTerceirizou — mais do que terceirizar o financeiro\\nterceirizou.com.br',
+          'Bom dia {{nome}}!\n\nNão quero insistir. Se o momento não é agora, tudo bem — encerro a sequência por aqui.\n\nDeixo só o essencial: quando o financeiro começar a pesar na sua operação, o primeiro passo é uma conversa de 15 minutos. A porta fica aberta.\n\n{{link_agenda}}\n\nQualquer dúvida estamos à disposição.\n\nVinícius Oliveira da Costa\nTerceirizou — mais do que terceirizar o financeiro\nterceirizou.com.br',
       },
     ]
 
@@ -57,7 +57,7 @@ routerAdd(
     }
 
     function corpoHtml(texto) {
-      const linhas = String(texto).split('\\n')
+      const linhas = String(texto).split('\n')
       let html = ''
       for (const linha of linhas) {
         if (linha.trim() === '') {
