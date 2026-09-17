@@ -376,7 +376,8 @@ const Index = () => {
                           onClick={() => {
                             setSelectedLead(lead)
                             setScheduleMessage('')
-                            setScheduleStart('')
+                            setScheduleDate('')
+                            setScheduleTime('')
                           }}
                           className="text-indigo-600 hover:text-indigo-800"
                         >
