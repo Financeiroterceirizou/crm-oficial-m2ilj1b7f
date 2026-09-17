@@ -1,13 +1,13 @@
 # Estado atual — Adapta Cliente
 
-- task_id: F3-T02
+- task_id: F3-T05-CORRECAO-RESEND
 - champion: Vinicius (CEO)
-- spec: 04-fase-atual/specs/spec-3-001-agendamento-google-calendar.md
-- etapa: aguardando_teste_humano
-- autorizacao_implementacao: confirmada + 2026-09-05 — "pode seguir o plano"
-- teste_humano: pendente — frontend corrigido; aguardando teste do champion
-- verificacao_automatica: passou — Skip v0.0.39 (setup, staticAnalysis, build, integrations, test)
-- aprendizado: capturado: teste de integração precisa validar fuso explícito America/Sao_Paulo e Authorization no frontend
-- ultima_acao: frontend corrigido para detalhe, qualificação, ação de agendamento, fuso -03:00 e token autenticado
-- proxima_acao: executar teste humano com o lead F3T02-SINTETICO-QUALIFICADO
-- atualizado_em: 2026-09-05T16:35:00-03:00
+- spec: correção operacional do envio Resend no follow-up da F3-T05
+- etapa: implementando
+- autorizacao_implementacao: confirmada + 2026-09-17 — "Pode implementar o ajuste do Resend no CRM."
+- teste_humano: pendente
+- verificacao_automatica: pendente
+- aprendizado: pendente
+- ultima_acao: autorização recebida; diagnóstico confirmou remetente Terceirizou, RESEND_API_KEY no cofre e falhas HTTP 502 no follow-up
+- proxima_acao: corrigir headers da chamada Resend e executar QA
+- atualizado_em: 2026-09-17T10:01:00-03:00

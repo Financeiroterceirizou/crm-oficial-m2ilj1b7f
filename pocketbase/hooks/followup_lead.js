@@ -196,22 +196,34 @@ routerAdd(
       })
     }
 
-    let resposta = $http.send({
-      url: 'https://api.resend.com/emails',
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: REMETENTE,
-        to: [email],
-        subject: assunto,
-        text: corpoTexto,
-        html: html,
-      }),
-      timeout: 15,
-    })
+    const idempotencyKey = 'followup/' + chave
+    let resposta = null
+    try {
+      resposta = $http.send({
+        url: 'https://api.resend.com/emails',
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer ' + apiKey,
+          'Content-Type': 'application/json',
+          'User-Agent': 'terceirizou-crm-followup/1.0',
+          'Idempotency-Key': idempotencyKey,
+        },
+        body: JSON.stringify({
+          from: REMETENTE,
+          to: [email],
+          subject: assunto,
+          text: corpoTexto,
+          html: html,
+        }),
+        timeout: 15,
+      })
+    } catch (_) {
+      resposta = null
+    }
 
     // --- Falha Resend: sem falso sucesso, fila humana (CA-3-104) ---
     if (
+      !resposta ||
       resposta.statusCode < 200 ||
       resposta.statusCode >= 300 ||
       !resposta.json ||
@@ -225,16 +237,27 @@ routerAdd(
         errRec.set('categoria', 'timeout')
         errRec.set(
           'resumo',
-          'falha envio follow-up Resend (HTTP ' + resposta.statusCode + '): ' + lead.get('lead_id'),
+          'falha envio follow-up Resend (' +
+            (resposta ? 'HTTP ' + resposta.statusCode : 'erro de transporte') +
+            '): ' +
+            lead.get('lead_id'),
         )
         errRec.set(
           'payload_resumido',
-          'lead_id=' + leadId + ';tentativa=' + tentativa + ';http=' + resposta.statusCode,
+          'lead_id=' +
+            leadId +
+            ';tentativa=' +
+            tentativa +
+            ';http=' +
+            (resposta ? resposta.statusCode : 'transport_error'),
         )
         errRec.set('tentativa', 1)
         errRec.set('estado', 'pendente')
         errRec.set('dono', 'Henrique Tavano')
-        errRec.set('proxima_acao', 'verificar dominio/chave Resend e reenviar manualmente')
+        errRec.set(
+          'proxima_acao',
+          'verificar dominio/chave/indisponibilidade Resend e reenviar manualmente',
+        )
         errRec.set(
           'historico',
           JSON.stringify([
@@ -242,7 +265,7 @@ routerAdd(
               acao: 'criacao',
               ator: 'followup_lead',
               data: new Date().toISOString(),
-              detalhes: 'HTTP ' + resposta.statusCode,
+              detalhes: resposta ? 'HTTP ' + resposta.statusCode : 'erro de transporte',
             },
           ]),
         )
@@ -253,7 +276,7 @@ routerAdd(
       $app.save(lead)
       return e.json(502, {
         status: 'falha',
-        motivo: 'resend_indisponivel_ou_invalido',
+        motivo: resposta ? 'resend_indisponivel_ou_invalido' : 'resend_erro_de_transporte',
         chamada_resend: true,
       })
     }

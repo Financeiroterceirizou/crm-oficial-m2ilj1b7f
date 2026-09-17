@@ -2,6 +2,8 @@
 
 > Registro de tudo que acontece no projeto, em ordem cronológica inversa.
 
+- 2026-09-17 · [Adapta/Ethos] · F3-T05-CORREÇÃO RESEND implementada no hook `followup_lead.js`: remetente Terceirizou preservado; adicionados `User-Agent`, `Idempotency-Key` estável por lead/cadência/tentativa e tratamento sanitizado de erro de transporte. Aguardando QA e teste humano.
+
 ## Registro
 
 - 2026-08-25 · [Vinicius/Champion] · F1-T10 TESTE APROVADO: "Tudo certo.. Pode seguir."
