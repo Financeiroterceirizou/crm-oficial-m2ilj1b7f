@@ -110,9 +110,13 @@ for t in normais:
             desp_cat[nome] += v
         grupo_val[cat_grupo.get(c.get("id_category"), nome)] += v
 
-# DRE competência: TODAS as transações com competência no mês (pagas + não pagas), por categoria
+# DRE competência: TODAS as transações com competência no mês (pagas + não pagas), por categoria.
+# IMPORTANTE: a API filtra pela data de vencimento — lançamentos com competência no mês mas
+# vencimento distante (ex.: passagens pagas meses depois) só aparecem numa JANELA LARGA
+# (ano de referência até ano seguinte). Validado contra o PDF do sistema (18/09): ago/26
+# entradas 67.754,02 / saídas -82.873,38 / resultado -15.119,36 — match exato.
 comp_rec, comp_desp = defaultdict(int), defaultdict(int)
-for t in tx_list(MES_INI, fim):
+for t in tx_list(f"{MES_FIM.year}-01-01", f"{MES_FIM.year + 1}-12-31"):
     if t["dt_competence"][:7] != MES_FIM.strftime("%Y-%m"):
         continue
     if (t.get("ds_transaction") or "").startswith("Transferência"):
