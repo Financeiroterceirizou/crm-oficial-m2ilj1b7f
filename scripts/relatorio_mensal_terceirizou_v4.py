@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Relatório Gerencial Mensal — TERCEIRIZOU (v4, 2026-09-18)
+# Relatório Gerencial Mensal — TERCEIRIZOU (v4.1, 2026-09-18)
 # Uso: python3 relatorio_mensal_terceirizou_v4.py [YYYY-MM-DD]
 #   Sem argumento: mês anterior completo (rodar no dia 05 via cron).
 #   Com argumento: último dia do mês de referência (ex.: 2026-08-31).
@@ -9,10 +9,12 @@
 #   2. Fluxo de Caixa — realizado (planilha: saldo anterior, entradas, saídas, resultado, saldo final)
 #   3. Categorias Receitas e Despesas (planilha única com resultado)
 #   4. DRE Gerencial — regime caixa (por grupo de categoria)
-#   5. DRE Gerencial — regime competência (por categoria, incluindo não pagos/não recebidos)
+#   5. DRE Gerencial — regime competência (MESMO FORMATO do caixa, dados de competência,
+#      incluindo não pagos/não recebidos; janela larga jan/ano→dez/ano+1 + filtro dt_competence)
 #   6. Receitas em aberto até [fim] por cliente
 #   7. Saldo nas Contas dia [fim] por conta (exceto zero)
-#   8. Projeção de fluxo de caixa — 12 meses (gráfico)
+#   8. Projeção de fluxo de caixa — PRÓXIMOS 12 meses (mês seguinte ao de referência,
+#      balancePreview do Controlle)
 # Excluídos por decisão: Resultado 12m, Comparativo 13m, Comparativo por categoria.
 # Logo + paleta laranja (#ff501c).
 import json, os, sys, urllib.request
@@ -116,6 +118,7 @@ for t in normais:
 # (ano de referência até ano seguinte). Validado contra o PDF do sistema (18/09): ago/26
 # entradas 67.754,02 / saídas -82.873,38 / resultado -15.119,36 — match exato.
 comp_rec, comp_desp = defaultdict(int), defaultdict(int)
+cat_grupo_id = {}  # nome da categoria -> grupo pai (para o DRE competência por grupo)
 for t in tx_list(f"{MES_FIM.year}-01-01", f"{MES_FIM.year + 1}-12-31"):
     if t["dt_competence"][:7] != MES_FIM.strftime("%Y-%m"):
         continue
@@ -123,10 +126,13 @@ for t in tx_list(f"{MES_FIM.year}-01-01", f"{MES_FIM.year + 1}-12-31"):
         continue
     for c in (t.get("apportionments_plan_account") or []):
         v = c.get("value") or 0
+        nome = c.get("ds_category") or "?"
+        gid = cat_grupo.get(c.get("id_category"), nome)
+        cat_grupo_id[nome] = gid
         if v > 0:
-            comp_rec[c.get("ds_category") or "?"] += v
+            comp_rec[nome] += v
         elif v < 0:
-            comp_desp[c.get("ds_category") or "?"] += v
+            comp_desp[nome] += v
 comp_te, comp_ts = sum(comp_rec.values()), sum(comp_desp.values())
 
 # receitas em aberto por cliente (desde 2017)
@@ -148,20 +154,6 @@ for c in contas:
     b = req(f"{BASE}/transaction/v1/transactions/balances?start_date=2017-01-01&end_date={fim}&id_account_main={c['id']}")["results"]
     if b["balanceDone"] != 0:
         saldos_conta.append((c["ds_account"], b["balanceDone"]))
-
-# série de saldos para o gráfico da projeção (13 meses)
-MESES = []
-for i in range(12, -1, -1):
-    ini_m = add_months(MES_FIM.replace(day=1), -i)
-    fim_m = min((add_months(ini_m, 1) - timedelta(days=1)), date.today())
-    label = f"{MES_AB[ini_m.month]}/{str(ini_m.year)[2:]}"
-    if fim_m == date.today() and fim_m.day < 28:
-        label += "*"
-    MESES.append((fim_m.isoformat(), label, ini_m.isoformat()))
-saldos_serie = []
-for fim_m, label, ini_m in MESES:
-    b = req(f"{BASE}/transaction/v1/transactions/balances?start_date={ini_m}&end_date={fim_m}")["results"]
-    saldos_serie.append((label, b["balanceDone"]))
 
 # ===== PDF =====
 styles = getSampleStyleSheet()
@@ -242,10 +234,17 @@ dre_rows = [[P("<b>Conta</b>", cell), P(f"<b>{MES_LABEL}</b>", cellr), P("<b>% r
 dre_rows.append([P("Receita total", cell), P(brl(entradas_mes), cellr), P("100,0%", cellr)])
 GRUPOS_ORDEM = ["CUSTOS OPERACIONAIS", "DESPESAS DE RH", "DESPESAS ADMINISTRATIVAS E COMERCIAS",
                 "IMPOSTOS SOBRE FATURAMENTO", "DESPESAS FINANCEIRAS"]
+GRUPO_LABEL = {
+    "CUSTOS OPERACIONAIS": "Custos Operacionais",
+    "DESPESAS DE RH": "Despesas de RH",
+    "DESPESAS ADMINISTRATIVAS E COMERCIAS": "Despesas Administrativas e Comerciais",
+    "IMPOSTOS SOBRE FATURAMENTO": "Impostos sobre Faturamento",
+    "DESPESAS FINANCEIRAS": "Despesas Financeiras",
+}
 for g in GRUPOS_ORDEM:
     v = grupo_val.get(g, 0)
     if v:
-        dre_rows.append([P(f"(-) {g.title()}", cell), P(brl(v), cellr),
+        dre_rows.append([P(f"(-) {GRUPO_LABEL[g]}", cell), P(brl(v), cellr),
                          P(f"{abs(v)/entradas_mes*100:.1f}%".replace(".", ","), cellr)])
 dre_rows.append([P("<b>Resultado do mês</b>", cellrb), P(f"<b>{brl(resultado_mes)}</b>", cellrb),
                  P(f"<b>{resultado_mes/entradas_mes*100:.1f}%</b>".replace(".", ","), cellrb)])
@@ -253,17 +252,23 @@ t = tabela(dre_rows, [9*cm, 3.5*cm, 3.5*cm])
 t.setStyle(TableStyle([("BACKGROUND", (0,len(dre_rows)-1), (-1,len(dre_rows)-1), LARANJA_CLARO)]))
 E.append(t)
 
-# 5. DRE Gerencial — regime competência (por categoria, incluindo não pagos)
+# 5. DRE Gerencial — regime competência (mesmo formato do caixa, dados de competência)
 E.append(P("DRE Gerencial — regime competência (inclui não pagos e não recebidos)", h2))
-dc_rows = [[P("<b>Categoria</b>", cell), P(f"<b>{MES_LABEL}</b>", cellr)]]
-for nome, v in sorted(comp_rec.items(), key=lambda x: -x[1]):
-    dc_rows.append([P(nome, cell), P(brl(v), cellr)])
-for nome, v in sorted(comp_desp.items(), key=lambda x: x[1]):
-    dc_rows.append([P(nome, cell), P(brl(v), cellr)])
-dc_rows.append([P("<b>Totais</b>", cellrb), P(f"<b>{brl(comp_te + comp_ts)}</b>", cellrb)])
-dc_rows.append([P("<b>Resultado do mês (competência)</b>", cellrb), P(f"<b>{brl(comp_te + comp_ts)}</b>", cellrb)])
-t = tabela(dc_rows, [11*cm, 5*cm])
-t.setStyle(TableStyle([("BACKGROUND", (0,len(dc_rows)-2), (-1,len(dc_rows)-1), LARANJA_CLARO)]))
+comp_total = comp_te + comp_ts
+dc_rows = [[P("<b>Conta</b>", cell), P(f"<b>{MES_LABEL}</b>", cellr), P("<b>% receita</b>", cellr)]]
+dc_rows.append([P("Receita total", cell), P(brl(comp_te), cellr), P("100,0%", cellr)])
+GRUPOS_COMP = ["CUSTOS OPERACIONAIS", "DESPESAS DE RH", "DESPESAS ADMINISTRATIVAS E COMERCIAS",
+               "IMPOSTOS SOBRE FATURAMENTO", "DESPESAS FINANCEIRAS"]
+for g in GRUPOS_COMP:
+    v = sum(val for cat, val in comp_desp.items()
+            if cat_grupo_id.get(cat) == g or cat == g)
+    if v:
+        dc_rows.append([P(f"(-) {GRUPO_LABEL[g]}", cell), P(brl(v), cellr),
+                        P(f"{abs(v)/comp_te*100:.1f}%".replace(".", ","), cellr)])
+dc_rows.append([P("<b>Resultado do mês (competência)</b>", cellrb), P(f"<b>{brl(comp_total)}</b>", cellrb),
+                P(f"<b>{comp_total/comp_te*100:.1f}%</b>".replace(".", ","), cellrb)])
+t = tabela(dc_rows, [9*cm, 3.5*cm, 3.5*cm])
+t.setStyle(TableStyle([("BACKGROUND", (0,len(dc_rows)-1), (-1,len(dc_rows)-1), LARANJA_CLARO)]))
 E.append(t)
 
 # 6. Receitas em aberto por cliente
@@ -285,10 +290,16 @@ for nome, v in saldos_conta:
 sc_rows.append([P("<b>Total</b>", cellrb), P(f"<b>{brl(sum(v for _, v in saldos_conta))}</b>", cellrb)])
 E.append(tabela(sc_rows, [11*cm, 5*cm]))
 
-# 8. Projeção 12 meses com gráfico
+# 8. Projeção 12 meses com gráfico — PRÓXIMOS 12 meses (mês seguinte ao de referência)
 E.append(P("Projeção de fluxo de caixa — 12 meses", h2))
-E.append(P("Evolução do saldo mês a mês. O saldo permanece positivo, mas com tendência de queda: revisar custos operacionais.", body))
-proj = [(l, s) for l, s in saldos_serie[1:]]
+E.append(P(f"Projeção dos próximos 12 meses (lançamentos previstos do Controlle, base {MES_LABEL}):", body))
+proj = []
+for i in range(1, 13):
+    ini_m = add_months(MES_FIM.replace(day=1), i)
+    fim_m = (add_months(ini_m, 1) - timedelta(days=1))
+    label = f"{MES_AB[ini_m.month]}/{str(ini_m.year)[2:]}"
+    b = req(f"{BASE}/transaction/v1/transactions/balances?start_date={ini_m.isoformat()}&end_date={fim_m.isoformat()}")["results"]
+    proj.append((label, b["balancePreview"]))
 d = Drawing(17*cm, 5.2*cm)
 chart = VerticalBarChart()
 chart.x, chart.y, chart.width, chart.height = 42, 14, 430, 120
@@ -298,15 +309,16 @@ chart.categoryAxis.labels.fontName = "Helvetica"
 chart.categoryAxis.labels.fontSize = 5.5
 chart.categoryAxis.labels.angle = 45
 chart.valueAxis.valueMin = 0
-chart.valueAxis.valueMax = max(50000, max(v for _, v in proj) * 1.1)
-chart.valueAxis.valueStep = 10000
+chart.valueAxis.valueMax = int(max(5000000, max(v for _, v in proj) * 1.15) / 500000) * 500000
+chart.valueAxis.valueStep = 500000
 chart.valueAxis.labels.fontName = "Helvetica"
 chart.valueAxis.labels.fontSize = 6
+chart.valueAxis.labelTextFormat = lambda v: f"{v/100000:.0f}k"  # v em centavos -> milhares
 chart.bars[0].fillColor = LARANJA
 chart.bars[0].strokeColor = None
 d.add(chart)
 for i, (m, v) in enumerate(proj):
-    d.add(String(48 + i*36.2, 138, f"{v/1000:.0f}k", fontSize=5.5, fillColor=colors.HexColor("#555555")))
+    d.add(String(48 + i*36.2, 138, f"{v/100:,.0f}".replace(",", ".")[:-1] + "k", fontSize=5.5, fillColor=colors.HexColor("#555555")))
 E.append(d)
 
 E.append(Spacer(1, 10))
