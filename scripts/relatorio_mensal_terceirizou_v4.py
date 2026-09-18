@@ -1,0 +1,311 @@
+#!/usr/bin/env python3
+# Relatório Gerencial Mensal — TERCEIRIZOU (v4, 2026-09-18)
+# Uso: python3 relatorio_mensal_terceirizou_v4.py [YYYY-MM-DD]
+#   Sem argumento: mês anterior completo (rodar no dia 05 via cron).
+#   Com argumento: último dia do mês de referência (ex.: 2026-08-31).
+# Fonte: API Controlle v1. Token: scripts/.controlle_token ou env CONTROLLE_TOKEN.
+# Seções (feedback Vinícius 18/09):
+#   1. Resumo do mês
+#   2. Fluxo de Caixa — realizado (planilha: saldo anterior, entradas, saídas, resultado, saldo final)
+#   3. Categorias Receitas e Despesas (planilha única com resultado)
+#   4. DRE Gerencial — regime caixa (por grupo de categoria)
+#   5. DRE Gerencial — regime competência (por categoria, incluindo não pagos/não recebidos)
+#   6. Receitas em aberto até [fim] por cliente
+#   7. Saldo nas Contas dia [fim] por conta (exceto zero)
+#   8. Projeção de fluxo de caixa — 12 meses (gráfico)
+# Excluídos por decisão: Resultado 12m, Comparativo 13m, Comparativo por categoria.
+# Logo + paleta laranja (#ff501c).
+import json, os, sys, urllib.request
+from collections import defaultdict
+from datetime import date, timedelta
+
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import cm
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+                                Image)
+from reportlab.graphics.shapes import Drawing, String
+from reportlab.graphics.charts.barcharts import VerticalBarChart
+
+BASE = "https://api-v1.controlle.com"
+_token_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".controlle_token")
+TOKEN = os.environ.get("CONTROLLE_TOKEN") or (open(_token_path).read().strip() if os.path.exists(_token_path) else "")
+UA = {"Authorization": f"Bearer {TOKEN}", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0"}
+LARANJA = colors.HexColor("#ff501c")
+LARANJA_CLARO = colors.HexColor("#ffe3d6")
+PRETO = colors.HexColor("#1a1a1a")
+CINZA = colors.HexColor("#f5f5f5")
+
+MES_PT = {1:"janeiro",2:"fevereiro",3:"março",4:"abril",5:"maio",6:"junho",7:"julho",8:"agosto",9:"setembro",10:"outubro",11:"novembro",12:"dezembro"}
+MES_AB = {1:"jan",2:"fev",3:"mar",4:"abr",5:"mai",6:"jun",7:"jul",8:"ago",9:"set",10:"out",11:"nov",12:"dez"}
+
+def req(url):
+    r = urllib.request.Request(url)
+    for k, v in UA.items():
+        r.add_header(k, v)
+    with urllib.request.urlopen(r, timeout=90) as resp:
+        return json.loads(resp.read().decode("utf-8", "replace"))
+
+def tx_list(start, end, **filtros):
+    out, page = [], 1
+    while True:
+        url = (f"{BASE}/transaction/v1/transactions/list?start_date={start}&end_date={end}"
+               f"&page={page}&orderBy=date&orderByCardinality=ASC")
+        for k, v in filtros.items():
+            url += f"&{k}={v}"
+        tl = req(url).get("results", {}).get("transactionsList", [])
+        out.extend(tl)
+        if len(tl) < 100:
+            return out
+        page += 1
+
+def brl(cents):
+    v = cents / 100
+    s = f"{abs(v):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return ("-" if v < 0 else "") + "R$ " + s
+
+def add_months(d, n):
+    m = d.month - 1 + n
+    y = d.year + m // 12
+    m = m % 12 + 1
+    return date(y, m, 1)
+
+# ===== período de referência =====
+if len(sys.argv) > 1:
+    MES_FIM = date.fromisoformat(sys.argv[1])
+else:
+    MES_FIM = date.today().replace(day=1) - timedelta(days=1)
+fim = MES_FIM.isoformat()
+MES_INI = MES_FIM.replace(day=1).isoformat()
+MES_LABEL = f"{MES_PT[MES_FIM.month].capitalize()} de {MES_FIM.year}"
+FIM_LABEL = MES_FIM.strftime("%d/%m/%Y")
+
+# ===== dados =====
+bal = req(f"{BASE}/transaction/v1/transactions/balances?start_date={MES_INI}&end_date={fim}")["results"]
+entradas_mes, saidas_mes = bal["revenuesDone"], bal["expensesDone"]
+saldo_anterior, saldo_final = bal["previousMonthBalance"], bal["balanceDone"]
+resultado_mes = entradas_mes + saidas_mes
+
+# mapa categoria -> grupo pai (para o DRE caixa)
+plan = req(f"{BASE}/plan-account/v1/planAccountsEntities").get("results", [])
+pai_nome, cat_grupo = {}, {}
+for c in plan:
+    pai_nome[c["id"]] = c["ds_category"]
+for c in plan:
+    if c.get("id_plan_accounts_parent"):
+        cat_grupo[c["id"]] = pai_nome.get(c["id_plan_accounts_parent"], "?")
+
+txs = tx_list(MES_INI, fim)
+normais = [t for t in txs if not (t.get("ds_transaction") or "").startswith("Transferência")]
+rec_vals, desp_cat = defaultdict(int), defaultdict(int)
+grupo_val = defaultdict(int)
+for t in normais:
+    for c in (t.get("apportionments_plan_account") or []):
+        v = c.get("value") or 0
+        nome = c.get("ds_category") or "?"
+        if v > 0:
+            rec_vals[nome] += v
+        elif v < 0:
+            desp_cat[nome] += v
+        grupo_val[cat_grupo.get(c.get("id_category"), nome)] += v
+
+# DRE competência: TODAS as transações com competência no mês (pagas + não pagas), por categoria
+comp_rec, comp_desp = defaultdict(int), defaultdict(int)
+for t in tx_list(MES_INI, fim):
+    if t["dt_competence"][:7] != MES_FIM.strftime("%Y-%m"):
+        continue
+    if (t.get("ds_transaction") or "").startswith("Transferência"):
+        continue
+    for c in (t.get("apportionments_plan_account") or []):
+        v = c.get("value") or 0
+        if v > 0:
+            comp_rec[c.get("ds_category") or "?"] += v
+        elif v < 0:
+            comp_desp[c.get("ds_category") or "?"] += v
+comp_te, comp_ts = sum(comp_rec.values()), sum(comp_desp.values())
+
+# receitas em aberto por cliente (desde 2017)
+abertas = tx_list("2017-01-01", fim, **{"activity_type": "1", "situation": "[0]"})
+por_cliente = defaultdict(int)
+for t in abertas:
+    nome = (t.get("name_contact") or "").strip() or (t.get("ds_transaction") or "").strip()[:45]
+    if nome.startswith("Transferência"):
+        continue
+    por_cliente[nome] += t.get("value_in_cent") or 0
+total_aberto = sum(por_cliente.values())
+
+# saldos por conta no fim do mês
+contas = req(f"{BASE}/account/v1/accounts").get("results", [])
+saldos_conta = []
+for c in contas:
+    if c.get("status") != 1:
+        continue
+    b = req(f"{BASE}/transaction/v1/transactions/balances?start_date=2017-01-01&end_date={fim}&id_account_main={c['id']}")["results"]
+    if b["balanceDone"] != 0:
+        saldos_conta.append((c["ds_account"], b["balanceDone"]))
+
+# série de saldos para o gráfico da projeção (13 meses)
+MESES = []
+for i in range(12, -1, -1):
+    ini_m = add_months(MES_FIM.replace(day=1), -i)
+    fim_m = min((add_months(ini_m, 1) - timedelta(days=1)), date.today())
+    label = f"{MES_AB[ini_m.month]}/{str(ini_m.year)[2:]}"
+    if fim_m == date.today() and fim_m.day < 28:
+        label += "*"
+    MESES.append((fim_m.isoformat(), label, ini_m.isoformat()))
+saldos_serie = []
+for fim_m, label, ini_m in MESES:
+    b = req(f"{BASE}/transaction/v1/transactions/balances?start_date={ini_m}&end_date={fim_m}")["results"]
+    saldos_serie.append((label, b["balanceDone"]))
+
+# ===== PDF =====
+styles = getSampleStyleSheet()
+h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=15, textColor=PRETO, spaceAfter=2)
+h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontSize=11.5, textColor=LARANJA, spaceBefore=12, spaceAfter=5)
+sub = ParagraphStyle("sub", parent=styles["Normal"], fontSize=9, textColor=colors.HexColor("#666666"), spaceAfter=8)
+body = ParagraphStyle("body", parent=styles["Normal"], fontSize=9, leading=12.5)
+cell = ParagraphStyle("cell", parent=styles["Normal"], fontSize=8)
+cellb = ParagraphStyle("cellb", parent=styles["Normal"], fontSize=8, fontName="Helvetica-Bold")
+cellr = ParagraphStyle("cellr", parent=cell, alignment=2)
+cellrb = ParagraphStyle("cellrb", parent=cellb, alignment=2)
+
+def tabela(rows, widths):
+    t = Table(rows, colWidths=widths, repeatRows=1)
+    style = [("FONTNAME", (0,0), (-1,-1), "Helvetica"), ("FONTSIZE", (0,0), (-1,-1), 8),
+             ("TOPPADDING", (0,0), (-1,-1), 4), ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+             ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+             ("BACKGROUND", (0,0), (-1,0), LARANJA), ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+             ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+             ("LINEBELOW", (0,-1), (-1,-1), 0.7, LARANJA)]
+    for i in range(1, len(rows)):
+        if i % 2 == 0:
+            style.append(("BACKGROUND", (0,i), (-1,i), CINZA))
+    t.setStyle(TableStyle(style))
+    return t
+
+P = Paragraph
+ARQ = f"artifacts/relatorio-terceirizou-{MES_FIM.strftime('%Y-%m')}.pdf"
+doc = SimpleDocTemplate(ARQ, pagesize=A4, leftMargin=1.6*cm, rightMargin=1.6*cm, topMargin=1.4*cm, bottomMargin=1.4*cm)
+E = []
+
+logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "artifacts", "logo-terceirizou.png")
+if os.path.exists(logo_path):
+    E.append(Image(logo_path, width=6.2*cm, height=6.2*cm*702/2000))
+E.append(Spacer(1, 4))
+E.append(P("<b>Relatório Gerencial Mensal</b>", h1))
+E.append(P(f"{MES_LABEL} · Fechamento · Fonte: Controlle · Gerado em {date.today().strftime('%d/%m/%Y')}", sub))
+
+# 1. Resumo do mês
+E.append(P("Resumo do mês", h2))
+resumo = [
+    [P("<b>Indicador</b>", cell), P(f"<b>{MES_LABEL}</b>", cellr)],
+    [P("Entradas (realizado)", cell), P(brl(entradas_mes), cellr)],
+    [P("Saídas (realizado)", cell), P(brl(saidas_mes), cellr)],
+    [P("<b>Resultado</b>", cellrb), P(f"<b>{brl(resultado_mes)}</b>", cellrb)],
+    [P(f"Saldo em {FIM_LABEL}", cell), P(brl(saldo_final), cellr)],
+]
+E.append(tabela(resumo, [7*cm, 5*cm]))
+
+# 2. Fluxo de Caixa — realizado (planilha com resultado)
+E.append(P("Fluxo de Caixa — realizado", h2))
+fc_rows = [[P("<b>Descrição</b>", cell), P(f"<b>{MES_LABEL}</b>", cellr)]]
+fc_rows.append([P("Saldo anterior", cell), P(brl(saldo_anterior), cellr)])
+fc_rows.append([P("(+) Total de entradas", cell), P(brl(entradas_mes), cellr)])
+fc_rows.append([P("(-) Total de saídas", cell), P(brl(saidas_mes), cellr)])
+fc_rows.append([P("<b>Resultado do mês</b>", cellrb), P(f"<b>{brl(resultado_mes)}</b>", cellrb)])
+fc_rows.append([P("<b>Saldo final</b>", cellrb), P(f"<b>{brl(saldo_final)}</b>", cellrb)])
+t = tabela(fc_rows, [7*cm, 5*cm])
+t.setStyle(TableStyle([("BACKGROUND", (0,4), (-1,5), LARANJA_CLARO)]))
+E.append(t)
+
+# 3. Categorias Receitas e Despesas (planilha única com resultado)
+E.append(P("Categorias Receitas e Despesas", h2))
+cd_rows = [[P("<b>Categoria</b>", cell), P("<b>Entradas</b>", cellr), P("<b>Saídas</b>", cellr)]]
+for nome, v in sorted(rec_vals.items(), key=lambda x: -x[1]):
+    cd_rows.append([P(nome, cell), P(brl(v), cellr), P("—", cellr)])
+for nome, v in sorted(desp_cat.items(), key=lambda x: x[1]):
+    cd_rows.append([P(nome, cell), P("—", cellr), P(brl(v), cellr)])
+cd_rows.append([P("<b>Totais</b>", cellrb), P(f"<b>{brl(entradas_mes)}</b>", cellrb), P(f"<b>{brl(saidas_mes)}</b>", cellrb)])
+cd_rows.append([P("", cell), P(""), P(f"<b>{brl(resultado_mes)}</b>", cellrb)])
+t = tabela(cd_rows, [9*cm, 3.5*cm, 3.5*cm])
+t.setStyle(TableStyle([("BACKGROUND", (0,len(cd_rows)-2), (-1,len(cd_rows)-1), LARANJA_CLARO)]))
+E.append(t)
+
+# 4. DRE Gerencial — regime caixa (por grupo)
+E.append(P("DRE Gerencial — regime caixa", h2))
+dre_rows = [[P("<b>Conta</b>", cell), P(f"<b>{MES_LABEL}</b>", cellr), P("<b>% receita</b>", cellr)]]
+dre_rows.append([P("Receita total", cell), P(brl(entradas_mes), cellr), P("100,0%", cellr)])
+GRUPOS_ORDEM = ["CUSTOS OPERACIONAIS", "DESPESAS DE RH", "DESPESAS ADMINISTRATIVAS E COMERCIAS",
+                "IMPOSTOS SOBRE FATURAMENTO", "DESPESAS FINANCEIRAS"]
+for g in GRUPOS_ORDEM:
+    v = grupo_val.get(g, 0)
+    if v:
+        dre_rows.append([P(f"(-) {g.title()}", cell), P(brl(v), cellr),
+                         P(f"{abs(v)/entradas_mes*100:.1f}%".replace(".", ","), cellr)])
+dre_rows.append([P("<b>Resultado do mês</b>", cellrb), P(f"<b>{brl(resultado_mes)}</b>", cellrb),
+                 P(f"<b>{resultado_mes/entradas_mes*100:.1f}%</b>".replace(".", ","), cellrb)])
+t = tabela(dre_rows, [9*cm, 3.5*cm, 3.5*cm])
+t.setStyle(TableStyle([("BACKGROUND", (0,len(dre_rows)-1), (-1,len(dre_rows)-1), LARANJA_CLARO)]))
+E.append(t)
+
+# 5. DRE Gerencial — regime competência (por categoria, incluindo não pagos)
+E.append(P("DRE Gerencial — regime competência (inclui não pagos e não recebidos)", h2))
+dc_rows = [[P("<b>Categoria</b>", cell), P(f"<b>{MES_LABEL}</b>", cellr)]]
+for nome, v in sorted(comp_rec.items(), key=lambda x: -x[1]):
+    dc_rows.append([P(nome, cell), P(brl(v), cellr)])
+for nome, v in sorted(comp_desp.items(), key=lambda x: x[1]):
+    dc_rows.append([P(nome, cell), P(brl(v), cellr)])
+dc_rows.append([P("<b>Totais</b>", cellrb), P(f"<b>{brl(comp_te + comp_ts)}</b>", cellrb)])
+dc_rows.append([P("<b>Resultado do mês (competência)</b>", cellrb), P(f"<b>{brl(comp_te + comp_ts)}</b>", cellrb)])
+t = tabela(dc_rows, [11*cm, 5*cm])
+t.setStyle(TableStyle([("BACKGROUND", (0,len(dc_rows)-2), (-1,len(dc_rows)-1), LARANJA_CLARO)]))
+E.append(t)
+
+# 6. Receitas em aberto por cliente
+E.append(P(f"Receitas em aberto até {FIM_LABEL}", h2))
+E.append(P(f"Total em aberto: <b>{brl(total_aberto)}</b> em {len(por_cliente)} clientes (entradas não pagas desde o início das atividades):", body))
+ab_rows = [[P("<b>Cliente</b>", cell), P("<b>Valor em aberto</b>", cellr)]]
+for nome, v in sorted(por_cliente.items(), key=lambda x: -x[1]):
+    ab_rows.append([P(nome, cell), P(brl(v), cellr)])
+ab_rows.append([P("<b>Total</b>", cellrb), P(f"<b>{brl(total_aberto)}</b>", cellrb)])
+E.append(tabela(ab_rows, [11*cm, 5*cm]))
+E.append(Spacer(1, 4))
+E.append(P("Nota: parte desses valores pode ser receita já recebida e não conciliada — validar antes de cobrança.", body))
+
+# 7. Saldo nas contas
+E.append(P(f"Saldo nas Contas dia {FIM_LABEL}", h2))
+sc_rows = [[P("<b>Conta</b>", cell), P(f"<b>Saldo em {FIM_LABEL}</b>", cellr)]]
+for nome, v in saldos_conta:
+    sc_rows.append([P(nome, cell), P(brl(v), cellr)])
+sc_rows.append([P("<b>Total</b>", cellrb), P(f"<b>{brl(sum(v for _, v in saldos_conta))}</b>", cellrb)])
+E.append(tabela(sc_rows, [11*cm, 5*cm]))
+
+# 8. Projeção 12 meses com gráfico
+E.append(P("Projeção de fluxo de caixa — 12 meses", h2))
+E.append(P("Evolução do saldo mês a mês. O saldo permanece positivo, mas com tendência de queda: revisar custos operacionais.", body))
+proj = [(l, s) for l, s in saldos_serie[1:]]
+d = Drawing(17*cm, 5.2*cm)
+chart = VerticalBarChart()
+chart.x, chart.y, chart.width, chart.height = 42, 14, 430, 120
+chart.data = [[v for _, v in proj]]
+chart.categoryAxis.categoryNames = [m for m, _ in proj]
+chart.categoryAxis.labels.fontName = "Helvetica"
+chart.categoryAxis.labels.fontSize = 5.5
+chart.categoryAxis.labels.angle = 45
+chart.valueAxis.valueMin = 0
+chart.valueAxis.valueMax = max(50000, max(v for _, v in proj) * 1.1)
+chart.valueAxis.valueStep = 10000
+chart.valueAxis.labels.fontName = "Helvetica"
+chart.valueAxis.labels.fontSize = 6
+chart.bars[0].fillColor = LARANJA
+chart.bars[0].strokeColor = None
+d.add(chart)
+for i, (m, v) in enumerate(proj):
+    d.add(String(48 + i*36.2, 138, f"{v/1000:.0f}k", fontSize=5.5, fillColor=colors.HexColor("#555555")))
+E.append(d)
+
+E.append(Spacer(1, 10))
+E.append(P("Gerado automaticamente pela Terceirizou · dados do Controlle", sub))
+doc.build(E)
+print(f"OK: {ARQ}")
