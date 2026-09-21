@@ -4,6 +4,7 @@
 #   Sem argumento: usa o PDF do mês anterior (artifacts/relatorio-terceirizou-YYYY-MM.pdf).
 # Chave Resend: scripts/95b7f382c0a1ba1d/resend_key.txt (fora do repo) ou env RESEND_API_KEY.
 # Destinatários: vinicius@terceirizou.com.br (to) + financeiro@terceirizou.com.br (bcc).
+# Anexos: PDF + Excel do mês de referência.
 import base64, json, os, sys, urllib.request
 from datetime import date, timedelta
 
@@ -36,6 +37,12 @@ if not os.path.exists(pdf_path):
 with open(pdf_path, "rb") as f:
     pdf_b64 = base64.b64encode(f.read()).decode()
 
+xlsx_path = pdf_path.replace(".pdf", ".xlsx")
+anexos = [{"filename": os.path.basename(pdf_path), "content": pdf_b64}]
+if os.path.exists(xlsx_path):
+    with open(xlsx_path, "rb") as f:
+        anexos.append({"filename": os.path.basename(xlsx_path), "content": base64.b64encode(f.read()).decode()})
+
 html = f"""<p>Bom dia!</p>
 <p>Segue em anexo o <b>Relatório Gerencial Mensal — {MES_LABEL}</b> (fechamento, fonte Controlle).</p>
 <p>O relatório inclui: Resumo do mês, Fluxo de Caixa realizado, Categorias Receitas e Despesas,
@@ -50,15 +57,15 @@ payload = {
     "bcc": BCC,
     "subject": f"Relatório Gerencial Mensal — {MES_LABEL}",
     "html": html,
-    "attachments": [{"filename": os.path.basename(pdf_path), "content": pdf_b64}],
+    "attachments": anexos,
 }
 
 req = urllib.request.Request(API, data=json.dumps(payload).encode(), method="POST")
 req.add_header("Authorization", f"Bearer {KEY}")
 req.add_header("User-Agent", "terceirizou-relatorio-mensal/1.0")
-req.add_header("Idempotency-Key", f"relatorio-mensal-{mes_ref}")
+req.add_header("Idempotency-Key", f"relatorio-mensal-{mes_ref}-{date.today().strftime('%Y%m%d')}")
 req.add_header("Content-Type", "application/json")
 
 with urllib.request.urlopen(req, timeout=60) as resp:
     out = json.loads(resp.read().decode())
-    print(f"OK: enviado (id {out.get('id')}) — {os.path.basename(pdf_path)} → {', '.join(TO)} | bcc {', '.join(BCC)}")
+    print(f"OK: enviado (id {out.get('id')}) — {os.path.basename(pdf_path)}{' + ' + os.path.basename(xlsx_path) if os.path.exists(xlsx_path) else ''} → {', '.join(TO)} | bcc {', '.join(BCC)}")

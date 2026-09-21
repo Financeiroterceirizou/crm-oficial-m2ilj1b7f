@@ -1,22 +1,14 @@
 #!/usr/bin/env python3
-# Relatório Gerencial Mensal — TERCEIRIZOU (v4.1, 2026-09-18)
+# Relatório Gerencial Mensal — TERCEIRIZOU (v4.2, 2026-09-18)
 # Uso: python3 relatorio_mensal_terceirizou_v4.py [YYYY-MM-DD]
 #   Sem argumento: mês anterior completo (rodar no dia 05 via cron).
 #   Com argumento: último dia do mês de referência (ex.: 2026-08-31).
 # Fonte: API Controlle v1. Token: scripts/.controlle_token ou env CONTROLLE_TOKEN.
-# Seções (feedback Vinícius 18/09):
-#   1. Resumo do mês
-#   2. Fluxo de Caixa — realizado (planilha: saldo anterior, entradas, saídas, resultado, saldo final)
-#   3. Categorias Receitas e Despesas (planilha única com resultado)
-#   4. DRE Gerencial — regime caixa (por grupo de categoria)
-#   5. DRE Gerencial — regime competência (MESMO FORMATO do caixa, dados de competência,
-#      incluindo não pagos/não recebidos; janela larga jan/ano→dez/ano+1 + filtro dt_competence)
-#   6. Receitas em aberto até [fim] por cliente
-#   7. Saldo nas Contas dia [fim] por conta (exceto zero)
-#   8. Projeção de fluxo de caixa — PRÓXIMOS 12 meses (mês seguinte ao de referência,
-#      balancePreview do Controlle)
-# Excluídos por decisão: Resultado 12m, Comparativo 13m, Comparativo por categoria.
-# Logo + paleta laranja (#ff501c).
+# Gera PDF (logo + laranja #ff501c) + Excel (7 abas).
+# Seções: Resumo · Fluxo de Caixa realizado (planilha) · Categorias Receitas e Despesas
+# (planilha única com resultado) · DRE caixa por grupo · DRE competência no mesmo formato
+# do caixa (janela larga jan/ano→dez/ano+1 + filtro dt_competence) · Receitas em aberto por
+# cliente · Saldo nas contas · Projeção dos PRÓXIMOS 12 meses (balancePreview) com gráfico.
 import json, os, sys, urllib.request
 from collections import defaultdict
 from datetime import date, timedelta
@@ -324,4 +316,102 @@ E.append(d)
 E.append(Spacer(1, 10))
 E.append(P("Gerado automaticamente pela Terceirizou · dados do Controlle", sub))
 doc.build(E)
+
+# ===== Excel (mesmos dados, uma aba por seção) =====
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill
+from openpyxl.utils import get_column_letter
+
+ARQ_XLSX = f"artifacts/relatorio-terceirizou-{MES_FIM.strftime('%Y-%m')}.xlsx"
+wb = Workbook()
+wb.remove(wb.active)
+FILL_H = PatternFill("solid", fgColor="FF501C")
+FILL_T = PatternFill("solid", fgColor="FFE3D6")
+FH = Font(bold=True, color="FFFFFF")
+FB = Font(bold=True)
+TOTALS = ("Total", "Totais", "Resultado", "Saldo final", "Resultado do mês", "Resultado do mês (competência)")
+
+def aba(nome, linhas, larguras):
+    ws = wb.create_sheet(nome)
+    for r in linhas:
+        ws.append(list(r))
+    for c in ws[1]:
+        c.fill = FILL_H
+        c.font = FH
+    for row in ws.iter_rows(min_row=2):
+        label = str(row[0].value or "")
+        if label.startswith(TOTALS):
+            for c in row:
+                c.font = FB
+                c.fill = FILL_T
+        for c in row[1:]:
+            if isinstance(c.value, (int, float)):
+                c.number_format = '"R$" #,##0.00'
+    for j, w in enumerate(larguras, 1):
+        ws.column_dimensions[get_column_letter(j)].width = w
+    ws.freeze_panes = "A2"
+
+r_ = lambda v: v / 100  # centavos -> reais
+
+aba("Resumo e Fluxo de Caixa", [
+    ("Indicador", MES_LABEL),
+    ("Entradas (realizado)", r_(entradas_mes)),
+    ("Saídas (realizado)", r_(saidas_mes)),
+    ("Resultado do mês", r_(resultado_mes)),
+    (f"Saldo em {FIM_LABEL}", r_(saldo_final)),
+    ("", None),
+    ("Saldo anterior", r_(saldo_anterior)),
+    ("(+) Total de entradas", r_(entradas_mes)),
+    ("(-) Total de saídas", r_(saidas_mes)),
+    ("Resultado do mês", r_(resultado_mes)),
+    ("Saldo final", r_(saldo_final)),
+], [28, 18])
+
+aba("Categorias", 
+    [("Categoria", "Entradas", "Saídas")] +
+    [(n, r_(v), None) for n, v in sorted(rec_vals.items(), key=lambda x: -x[1])] +
+    [(n, None, r_(v)) for n, v in sorted(desp_cat.items(), key=lambda x: x[1])] +
+    [("Totais", r_(entradas_mes), r_(saidas_mes)),
+     ("Resultado", None, r_(resultado_mes))],
+    [45, 16, 16])
+
+def aba_dre(nome, receita, grupos, resultado):
+    linhas = [("Conta", MES_LABEL, "% receita"), ("Receita total", r_(receita), 1.0)]
+    for g, v in grupos:
+        linhas.append((f"(-) {GRUPO_LABEL[g]}", r_(v), abs(v) / receita))
+    linhas.append((f"Resultado do mês{' (competência)' if 'compet' in nome.lower() else ''}", r_(resultado), resultado / receita))
+    aba(nome, linhas, [40, 18, 12])
+    ws = wb[nome]
+    for row in ws.iter_rows(min_row=3, min_col=3):
+        for c in row:
+            if isinstance(c.value, float):
+                c.number_format = "0.0%"
+
+aba_dre("DRE Caixa", entradas_mes,
+        [(g, grupo_val[g]) for g in GRUPOS_ORDEM if grupo_val.get(g)],
+        resultado_mes)
+aba_dre("DRE Competência", comp_te,
+        [(g, sum(val for cat, val in comp_desp.items() if cat_grupo_id.get(cat) == g or cat == g))
+         for g in GRUPOS_COMP if any(cat_grupo_id.get(cat) == g or cat == g for cat in comp_desp)],
+        comp_te + comp_ts)
+
+aba("Receitas em Aberto",
+    [("Cliente", "Valor em aberto")] +
+    [(n, r_(v)) for n, v in sorted(por_cliente.items(), key=lambda x: -x[1])] +
+    [("Total", r_(total_aberto))],
+    [50, 18])
+
+aba("Saldos",
+    [("Conta", f"Saldo em {FIM_LABEL}")] +
+    [(n, r_(v)) for n, v in saldos_conta] +
+    [("Total", r_(sum(v for _, v in saldos_conta)))],
+    [35, 18])
+
+aba("Projeção 12 meses",
+    [("Mês", "Saldo projetado")] +
+    [(m, r_(v)) for m, v in proj],
+    [12, 18])
+
+wb.save(ARQ_XLSX)
 print(f"OK: {ARQ}")
+print(f"OK: {ARQ_XLSX}")
