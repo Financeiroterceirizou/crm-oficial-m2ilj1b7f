@@ -314,8 +314,8 @@ routerAdd(
       // divergência: campanha declarada difere da campanha real do anúncio (RN-4-103)
       const campDeclarada = normalizar(String(lead.get('campanha') || ''))
       let divergente = false
-      if (campDeclarada && campanhaNome) {
-        const campReal = normalizar(campanhaNome)
+      if (campDeclarada && nomeCampanha) {
+        const campReal = normalizar(nomeCampanha)
         // declarada truncada também: match por prefixo
         if (!(campReal.indexOf(campDeclarada) === 0 || campDeclarada.indexOf(campReal) === 0)) {
           divergente = true
