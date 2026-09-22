@@ -239,33 +239,8 @@ routerAdd(
       }
     }
 
-    // leads com origem meta_ads e anúncio declarado
-    let page = 1
-    const leadsAlvo = []
-    while (true) {
-      const req = $http.send({
-        url:
-          'https://crm-oficial-65bb8.shrd00.internal.goskip.dev/api/collections/leads/records?filter=' +
-          encodeURIComponent("origem='meta_ads'") +
-          '&perPage=200&page=' +
-          page,
-        method: 'GET',
-        headers: {
-          Authorization:
-            'Bearer ' +
-            e
-              .requestInfo()
-              .headers.get('authorization')
-              .replace(/^Bearer\s+/i, ''),
-          'User-Agent': 'terceirizou-crm-fase4/1.0',
-        },
-        timeout: 20,
-      })
-      if (!req || req.statusCode !== 200 || !req.json || !req.json.items) break
-      for (let i = 0; i < req.json.items.length; i++) leadsAlvo.push(req.json.items[i])
-      if (req.json.items.length < 200) break
-      page++
-    }
+    // leads alvo: leitura DIRETA do banco (sem self-call HTTP — sem dependência de header/token)
+    const leadsAlvo = $app.findRecordsByFilter('leads', "origem = 'meta_ads'", '-created', 500, 0)
 
     let espelhados = 0
     let semDado = 0
