@@ -1,9 +1,18 @@
 #!/usr/bin/env python3
-# Relatórios Semanais — BEM VIVER (ILPI) — v1.2, 2026-09-21
+# Relatórios Semanais — BEM VIVER (ILPI) — v1.3, 2026-09-21
 # Uso: python3 relatorio_bemviver.py [YYYY-MM-DD]  (default: hoje)
 # Gera UM PDF + UM Excel com os 11 relatórios no padrão dos exemplos de 14/09
 #   + Comparativo 13 meses em PDF PRÓPRIO PAISAGEM.
 # Fonte: API Controlle v1 (token Bem Viver). Envio: segunda-feira 14:00 → financeirodabemviver@gmail.com
+#
+# v1.3 (feedback Vinícius 21/09 22:35):
+#   - Comparativo: coluna MÉDIA (série e matriz por categoria)
+#   - Consolidado: linhas Total de Receitas / Total de Despesas / Resultado
+#   - Despesas em aberto: resumo + demonstrativo dos lançamentos (igual Inadimplência)
+#   - Inadimplência: somatório considerando Negociação Judicial
+#   - Saldo nas contas: verde positivo / vermelho negativo
+#   - Previsão Fluxo de Caixa: entradas verde / saídas vermelho, saldo projetado negrito colorido, SEM gráfico
+#   - Layout: título (h1 16) / subtítulo (h2 12 laranja) / sub-subtítulo (h3 10) / nota (sub itálico cinza)
 #
 # v1.2 (feedback Vinícius 21/09):
 #   - Comparativo: valores SEM centavos e SEM R$ (inteiros), receitas VERDE / despesas VERMELHO
@@ -27,8 +36,6 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
                                 PageBreak)
-from reportlab.graphics.shapes import Drawing, String
-from reportlab.graphics.charts.barcharts import VerticalBarChart
 
 BASE = "https://api-v1.controlle.com"
 _token = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".controlle_token_bemviver")
@@ -217,9 +224,10 @@ for i in range(0, 12):
 
 # ===== PDF =====
 styles = getSampleStyleSheet()
-h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=14, textColor=PRETO, spaceAfter=2)
-h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontSize=11.5, textColor=LARANJA, spaceBefore=12, spaceAfter=5)
-sub = ParagraphStyle("sub", parent=styles["Normal"], fontSize=9, textColor=colors.HexColor("#666666"), spaceAfter=8)
+h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=16, textColor=PRETO, spaceAfter=4)
+h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontSize=12, textColor=LARANJA, spaceBefore=14, spaceAfter=3)
+h3 = ParagraphStyle("h3", parent=styles["Heading3"], fontSize=10, textColor=PRETO, spaceBefore=10, spaceAfter=3)
+sub = ParagraphStyle("sub", parent=styles["Normal"], fontName="Helvetica-Oblique", fontSize=8.5, textColor=colors.HexColor("#777777"), spaceAfter=10)
 body = ParagraphStyle("body", parent=styles["Normal"], fontSize=9, leading=12.5)
 cell = ParagraphStyle("cell", parent=styles["Normal"], fontSize=8)
 cellb = ParagraphStyle("cellb", parent=styles["Normal"], fontSize=8, fontName="Helvetica-Bold")
@@ -267,6 +275,28 @@ def tabela_cat(titulo, grupos, positivo=True, total_label="Total"):
     E.append(t)
     return E
 
+def tabela_lancamentos(txs, titulo=None, total_label="Total"):
+    """Demonstrativo dos lançamentos (um bloco por categoria, com total por categoria)."""
+    E = []
+    if titulo:
+        E.append(P(f"<b>{titulo}</b>", h2))
+    por_cat = defaultdict(list)
+    for t in txs:
+        por_cat[cat_nome(t)].append(t)
+    for cat in sorted(por_cat):
+        txs_cat = sorted(por_cat[cat], key=bdate)
+        rows = [[P("<b>Vencimento</b>", cell), P("<b>Descrição</b>", cell), P("<b>Conta</b>", cell), P("<b>Situação</b>", cellc), P("<b>Valor</b>", cellr)]]
+        for t in txs_cat:
+            d = bdate(t)
+            rows.append([P(f"{d[8:10]}/{d[5:7]}/{d[:4]}", cell), P((t.get("ds_transaction") or "")[:70], cell),
+                         P(t.get("ds_account_main") or "", cell), P("Aberto", cellc), P_val(t["value_in_cent"], cellr)])
+        rows.append([P("<b>Total</b>", cellrb), P(f"<b>{cat}</b>", cellrb), P("", cell), P(f"<b>{len(txs_cat)}</b>", cellc), P_val(sum(t["value_in_cent"] for t in txs_cat), cellrb)])
+        tt = tabela(rows, [2.2*cm, 7.3*cm, 3.2*cm, 1.8*cm, 3*cm])
+        tt.setStyle(TableStyle([("BACKGROUND", (0,len(rows)-1), (-1,len(rows)-1), LARANJA_CLARO)]))
+        E.append(P(f"<b>{cat}</b>", h3))
+        E.append(tt)
+    return E
+
 P = Paragraph
 ARQ_PDF = f"artifacts/{HOJE.strftime('%y%m%d')}_Relatorios_Bem_Viver.pdf"
 doc = SimpleDocTemplate(ARQ_PDF, pagesize=A4, leftMargin=1.5*cm, rightMargin=1.5*cm, topMargin=1.3*cm, bottomMargin=1.3*cm)
@@ -281,26 +311,30 @@ doc_comp = SimpleDocTemplate(ARQ_COMP, pagesize=landscape(A4), leftMargin=1.2*cm
 C = []
 C.append(P("<b>BEM VIVER — Comparativo dos últimos 13 meses</b>", h1))
 C.append(P(f"Gerado em {HOJE_LABEL} · Fonte: Controlle · {label_curto(INI_13)} a {label_curto(MES_REF)} · Apenas pago/recebido · Valores em R$ inteiros", sub))
-cm_rows = [[P("<b>Série</b>", cell)] + [P(f"<b>{lab}</b>", cellr) for _, _, lab in meses_13] + [P("<b>Total</b>", cellr)]]
+cm_rows = [[P("<b>Série</b>", cell)] + [P(f"<b>{lab}</b>", cellr) for _, _, lab in meses_13] + [P("<b>Média</b>", cellr), P("<b>Total</b>", cellr)]]
 for idx, nome_serie in [(1, "Entrada realizada"), (2, "Saída realizada"), (3, "Saldo realizado")]:
     row = [P(nome_serie, cell)]
-    for lab, e_m, s_m, saldo in serie_13:
-        val = [e_m, s_m, saldo][idx-1]
+    vals = [[e_m, s_m, saldo][idx-1] for _, e_m, s_m, saldo in serie_13]
+    for val in vals:
         row.append(P_val_int(val, cellr))
-    row.append(P_val_int(sum(([e_m, s_m, saldo][idx-1]) for _, e_m, s_m, saldo in serie_13), cellrb))
+    row.append(P_val_int(round(sum(vals) / len(vals)), cellrb))
+    row.append(P_val_int(sum(vals), cellrb))
     cm_rows.append(row)
-C.append(tabela(cm_rows, [3.3*cm] + [1.73*cm]*13 + [2.2*cm], fs=7))
+C.append(tabela(cm_rows, [3.1*cm] + [1.66*cm]*13 + [1.9*cm, 2.2*cm], fs=7))
 C.append(Spacer(1, 10))
 C.append(P("Detalhamento por categoria (rateio da API; valores realizados; R$ inteiros):", body))
 cat_names_13 = sorted({c for c in matriz_13})
-mt_rows = [[P("<b>Categoria</b>", cell)] + [P(f"<b>{lab}</b>", cellr) for _, _, lab in meses_13]]
+mt_rows = [[P("<b>Categoria</b>", cell)] + [P(f"<b>{lab}</b>", cellr) for _, _, lab in meses_13] + [P("<b>Média</b>", cellr)]]
 for cat in cat_names_13:
     row = [P(cat, cell)]
+    vals = []
     for _, fim_m_iso, lab in [(a, b, l) for a, b, l in meses_13]:
         v = matriz_13[cat].get(fim_m_iso[:7], 0)
+        vals.append(v)
         row.append(P_val_int(v, cellr) if v else P("—", cellr))
+    row.append(P_val_int(round(sum(vals) / len(vals)), cellrb))
     mt_rows.append(row)
-C.append(tabela(mt_rows, [3.3*cm] + [1.73*cm]*13, fs=6))
+C.append(tabela(mt_rows, [3.1*cm] + [1.66*cm]*13 + [1.9*cm], fs=6))
 C.append(Spacer(1, 10))
 C.append(P("Gerado automaticamente pela Terceirizou · dados do Controlle", sub))
 doc_comp.build(C)
@@ -308,55 +342,40 @@ print(f"OK: {ARQ_COMP}")
 
 # 2. Consolidado do mês
 E.append(P(f"Consolidado do mês — {label_mes(MES_REF)} (pago/recebido até {HOJE_LABEL})", h2))
-E.append(P(f"{len(setembro_pago)} lançamentos pagos/recebidos no mês. Entradas {brl(cons_entradas)} · Saídas {brl(cons_saidas)} · <b>Resultado consolidado {brl(cons_resultado)}</b>", body))
+E.append(P(f"{len(setembro_pago)} lançamentos pagos/recebidos no mês.", sub))
 cd_rows = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
 for nome, (v, n) in sorted(cons_rec.items()):
     cd_rows.append([P(nome, cell), P(str(n), cellc), P_val(v, cellr)])
+cd_rows.append([P("<b>Total de Receitas</b>", cellrb), P(f"<b>{sum(n for _, n in cons_rec.values())}</b>", cellc), P_val(cons_entradas, cellrb)])
 for nome, (v, n) in sorted(cons_desp.items()):
     cd_rows.append([P(nome, cell), P(str(n), cellc), P_val(v, cellr)])
+cd_rows.append([P("<b>Total de Despesas</b>", cellrb), P(f"<b>{sum(n for _, n in cons_desp.values())}</b>", cellc), P_val(cons_saidas, cellrb)])
 cd_rows.append([P("<b>Resultado consolidado</b>", cellrb), P(f"<b>{len(setembro_pago)}</b>", cellc), P_val(cons_resultado, cellrb)])
 t = tabela(cd_rows, [11*cm, 2.5*cm, 3*cm])
-t.setStyle(TableStyle([("BACKGROUND", (0,len(cd_rows)-1), (-1,len(cd_rows)-1), LARANJA_CLARO)]))
+t.setStyle(TableStyle([("BACKGROUND", (0,len(cd_rows)-3), (-1,len(cd_rows)-1), LARANJA_CLARO)]))
 E.append(t)
 
-# 3. Despesas em aberto
+# 3. Despesas em aberto — resumo por categoria + demonstrativo dos lançamentos
 E += tabela_cat(f"Despesas em aberto até {FIM_MES_ANT_LABEL}", g_desp_aberto, total_label="Total em aberto")
+E += tabela_lancamentos(desp_aberto, titulo="Demonstrativo dos lançamentos")
 
-# 4. Inadimplência — por categoria + TODOS os lançamentos de cada categoria
+# 4. Inadimplência — resumo + demonstrativo + somatório considerando Negociação Judicial
 E.append(P(f"Inadimplência até {FIM_MES_ANT_LABEL}", h2))
 E += tabela_cat("Resumo por categoria", g_inad, total_label="Total em aberto")
-por_cat_inad = defaultdict(list)
-for t in inad:
-    por_cat_inad[cat_nome(t)].append(t)
-for cat in sorted(por_cat_inad):
-    txs = sorted(por_cat_inad[cat], key=bdate)
-    rows = [[P("<b>Vencimento</b>", cell), P("<b>Descrição</b>", cell), P("<b>Conta</b>", cell), P("<b>Situação</b>", cellc), P("<b>Valor</b>", cellr)]]
-    for t in txs:
-        rows.append([P(bdate(t)[8:10]+"/"+bdate(t)[5:7]+"/"+bdate(t)[:4], cell), P((t.get("ds_transaction") or "")[:70], cell),
-                     P(t.get("ds_account_main") or "", cell), P("Aberto", cellc), P_val(t["value_in_cent"], cellr)])
-    rows.append([P("<b>Total</b>", cellrb), P(f"<b>{cat}</b>", cellrb), P("", cell), P(f"<b>{len(txs)}</b>", cellc), P_val(sum(t["value_in_cent"] for t in txs), cellrb)])
-    tt = tabela(rows, [2.2*cm, 7.3*cm, 3.2*cm, 1.8*cm, 3*cm])
-    tt.setStyle(TableStyle([("BACKGROUND", (0,len(rows)-1), (-1,len(rows)-1), LARANJA_CLARO)]))
-    E.append(P(f"<b>{cat}</b>", h2))
-    E.append(tt)
+jud = [v for nome, (v, _) in g_inad.items() if "Judicial" in nome]
+if jud:
+    rows = [[P("<b>Composição do total</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)],
+            [P("Total em aberto (todas as categorias)", cell), P(f"<b>{len(inad)}</b>", cellc), P_val(total_inad, cellr)],
+            [P("Somatório considerando Negociação Judicial", cell), P("", cell), P_val(total_inad + sum(jud), cellrb)]]
+    tj = tabela(rows, [11*cm, 2.5*cm, 3*cm])
+    tj.setStyle(TableStyle([("BACKGROUND", (0,len(rows)-1), (-1,len(rows)-1), LARANJA_CLARO)]))
+    E.append(tj)
+E += tabela_lancamentos(inad, titulo="Demonstrativo dos lançamentos")
 
-# 5. Inadimplência apenas boleto — por categoria + TODOS os lançamentos
+# 5. Inadimplência apenas boleto — resumo + demonstrativo
 E.append(P(f"Inadimplência até {FIM_MES_ANT_LABEL} (Apenas Boleto)", h2))
 E += tabela_cat("Resumo por categoria — TAG Boleto Emitido", g_inad_boleto, total_label="Total em aberto (boleto)")
-por_cat_inadb = defaultdict(list)
-for t in inad_boleto:
-    por_cat_inadb[cat_nome(t)].append(t)
-for cat in sorted(por_cat_inadb):
-    txs = sorted(por_cat_inadb[cat], key=bdate)
-    rows = [[P("<b>Vencimento</b>", cell), P("<b>Descrição</b>", cell), P("<b>Conta</b>", cell), P("<b>Situação</b>", cellc), P("<b>Valor</b>", cellr)]]
-    for t in txs:
-        rows.append([P(bdate(t)[8:10]+"/"+bdate(t)[5:7]+"/"+bdate(t)[:4], cell), P((t.get("ds_transaction") or "")[:70], cell),
-                     P(t.get("ds_account_main") or "", cell), P("Aberto", cellc), P_val(t["value_in_cent"], cellr)])
-    rows.append([P("<b>Total</b>", cellrb), P(f"<b>{cat}</b>", cellrb), P("", cell), P(f"<b>{len(txs)}</b>", cellc), P_val(sum(t["value_in_cent"] for t in txs), cellrb)])
-    tt = tabela(rows, [2.2*cm, 7.3*cm, 3.2*cm, 1.8*cm, 3*cm])
-    tt.setStyle(TableStyle([("BACKGROUND", (0,len(rows)-1), (-1,len(rows)-1), LARANJA_CLARO)]))
-    E.append(P(f"<b>{cat}</b>", h2))
-    E.append(tt)
+E += tabela_lancamentos(inad_boleto, titulo="Demonstrativo dos lançamentos")
 
 # 6. Previsão do mês corrente
 E.append(P(f"Previsão do mês corrente — {label_mes(MES_REF)} (pago + pendente)", h2))
@@ -395,38 +414,19 @@ E += tabela_cat(f"Previsão de Receitas da semana corrente ({SEM_LABEL}) — Ape
 E.append(P(f"Saldo nas contas em {DIA_ANT.strftime('%d/%m/%Y')}", h2))
 sc_rows = [[P("<b>Conta</b>", cell), P(f"<b>Saldo em {DIA_ANT.strftime('%d/%m/%Y')}</b>", cellr)]]
 for nome, v in saldos_conta:
-    sc_rows.append([P(nome, cell), P(brl(v), cellr)])
-sc_rows.append([P("<b>Total</b>", cellrb), P(f"<b>{brl(sum(v for _, v in saldos_conta))}</b>", cellrb)])
+    sc_rows.append([P(nome, cell), P_val(v, cellr)])
+sc_rows.append([P("<b>Total</b>", cellrb), P_val(sum(v for _, v in saldos_conta), cellrb)])
 t = tabela(sc_rows, [11*cm, 5*cm])
 t.setStyle(TableStyle([("BACKGROUND", (0,len(sc_rows)-1), (-1,len(sc_rows)-1), LARANJA_CLARO)]))
 E.append(t)
 
 # 11. Previsão de fluxo de caixa 12 meses
 E.append(P("Previsão de Fluxo de Caixa — próximos 12 meses", h2))
+cellrb_big = ParagraphStyle("cellrb_big", parent=cellrb, fontSize=8.5)
 pj_rows = [[P("<b>Mês</b>", cell), P("<b>Entradas previstas</b>", cellr), P("<b>Saídas previstas</b>", cellr), P("<b>Saldo projetado</b>", cellr)]]
 for lab, e_p, s_p, saldo in proj:
-    pj_rows.append([P(lab, cell), P_val(e_p, cellr), P_val(s_p, cellr), P_val(saldo, cellr)])
+    pj_rows.append([P(lab, cell), P_val(e_p, cellr), P_val(s_p, cellr), P_val(saldo, cellrb_big)])
 E.append(tabela(pj_rows, [3*cm, 4.6*cm, 4.6*cm, 4.6*cm]))
-d = Drawing(17*cm, 5*cm)
-chart = VerticalBarChart()
-chart.x, chart.y, chart.width, chart.height = 42, 14, 430, 115
-chart.data = [[saldo for _, _, _, saldo in proj]]
-chart.categoryAxis.categoryNames = [lab for lab, _, _, _ in proj]
-chart.categoryAxis.labels.fontName = "Helvetica"
-chart.categoryAxis.labels.fontSize = 6
-chart.categoryAxis.labels.angle = 45
-chart.valueAxis.valueMin = 0
-chart.valueAxis.valueMax = int(max(5000000, max(s for _, _, _, s in proj) * 1.15) / 500000) * 500000
-chart.valueAxis.valueStep = 500000
-chart.valueAxis.labels.fontName = "Helvetica"
-chart.valueAxis.labels.fontSize = 6
-chart.valueAxis.labelTextFormat = lambda v: f"{v/100000:.0f}k"
-chart.bars[0].fillColor = LARANJA
-chart.bars[0].strokeColor = None
-d.add(chart)
-for i, (lab, _, _, saldo) in enumerate(proj):
-    d.add(String(48 + i*36.2, 133, f"{saldo/100:,.0f}".replace(",", "..")[:-1] + "k", fontSize=5.5, fillColor=colors.HexColor("#555555")))
-E.append(d)
 
 E.append(Spacer(1, 10))
 E.append(P("Gerado automaticamente pela Terceirizou · dados do Controlle", sub))
@@ -446,7 +446,8 @@ FILL_T = PatternFill("solid", fgColor="FFE3D6")
 FH = Font(bold=True, color="FFFFFF")
 FB = Font(bold=True)
 TOT_LABELS = ("Total", "Totais", "Resultado", "Saldo final", "Resultado consolidado",
-              "Resultado previsto do mês", "Total em aberto", "Total previsto", "Total previsto (boleto)", "Total em aberto (boleto)")
+              "Resultado previsto do mês", "Total em aberto", "Total previsto", "Total previsto (boleto)", "Total em aberto (boleto)",
+              "Total de Receitas", "Total de Despesas")
 
 def aba(nome, linhas, larguras, pct_from=None):
     ws = wb.create_sheet(nome[:31])
@@ -474,17 +475,19 @@ def aba(nome, linhas, larguras, pct_from=None):
 r_ = lambda v: v / 100
 
 aba("Comparativo 13 meses",
-    [("Série",) + tuple(lab for _, _, lab in meses_13) + ("Total",),
-     ("Entrada realizada",) + tuple(r_(e) for _, e, _, _ in serie_13) + (r_(sum(e for _, e, _, _ in serie_13)),),
-     ("Saída realizada",) + tuple(r_(s) for _, _, s, _ in serie_13) + (r_(sum(s for _, _, s, _ in serie_13)),),
-     ("Saldo realizado",) + tuple(r_(x) for _, _, _, x in serie_13) + (r_(sum(x for _, _, _, x in serie_13)),)],
-    [20] + [11]*13 + [13])
+    [("Série",) + tuple(lab for _, _, lab in meses_13) + ("Média", "Total"),
+     ("Entrada realizada",) + tuple(r_(e) for _, e, _, _ in serie_13) + (r_(round(sum(e for _, e, _, _ in serie_13)/13)), r_(sum(e for _, e, _, _ in serie_13))),
+     ("Saída realizada",) + tuple(r_(s) for _, _, s, _ in serie_13) + (r_(round(sum(s for _, _, s, _ in serie_13)/13)), r_(sum(s for _, _, s, _ in serie_13))),
+     ("Saldo realizado",) + tuple(r_(x) for _, _, _, x in serie_13) + (r_(round(sum(x for _, _, _, x in serie_13)/13)), r_(sum(x for _, _, _, x in serie_13)))],
+    [20] + [11]*13 + [11, 13])
 
 aba("Consolidado do mês",
     [("Categoria", "Lançamentos", "Valor")] +
     [(n, n2, r_(v)) for n, (v, n2) in sorted(cons_rec.items())] +
+    [("Total de Receitas", sum(n for _, n in cons_rec.values()), r_(cons_entradas))] +
     [(n, n2, r_(v)) for n, (v, n2) in sorted(cons_desp.items())] +
-    [("Resultado consolidado", len(setembro_pago), r_(cons_resultado))],
+    [("Total de Despesas", sum(n for _, n in cons_desp.values()), r_(cons_saidas)),
+     ("Resultado consolidado", len(setembro_pago), r_(cons_resultado))],
     [45, 14, 16])
 
 aba("Despesas em aberto",
@@ -496,7 +499,8 @@ aba("Despesas em aberto",
 aba("Inadimplência",
     [("Categoria", "Lançamentos", "Valor")] +
     [(n, n2, r_(v)) for n, (v, n2) in sorted(g_inad.items())] +
-    [("Total em aberto", len(inad), r_(total_inad))],
+    [("Total em aberto", len(inad), r_(total_inad))] +
+    ([("Somatório considerando Negociação Judicial", "", r_(total_inad + sum(v for n, (v, _) in g_inad.items() if "Judicial" in n)))] if any("Judicial" in n for n in g_inad) else []),
     [45, 14, 16])
 
 aba("Inadimplência Boleto",
