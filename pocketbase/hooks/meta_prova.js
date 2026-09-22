@@ -12,13 +12,26 @@ routerAdd(
     const CONTA_APROVADA = 'act_629165959070277' // B4-101: confirmada por escrito pelo champion (22/09)
     const JANELA_DIAS = 30 // B4-104: amostra sugerida (confirmacao formal antes da ingestao)
 
-    const apiKey = $secrets.get('COMPOSIO_API')
+    const apiKeyBruta = $secrets.get('COMPOSIO_API')
+    // trim defensivo + remove aspas/espacos colados no valor (causa comum de header invalido)
+    const apiKey = apiKeyBruta
+      ? String(apiKeyBruta)
+          .trim()
+          .replace(/^["']+/g, '')
+          .replace(/["']+$/g, '')
+      : ''
     if (!apiKey) {
       return e.json(503, {
         status: 'pendente_configuracao',
         motivo: 'composio_api_key_ausente',
         prova_aprovada: false,
       })
+    }
+    // diagnostico de FORMA (nunca expõe o valor): comprimento, espaços/quebras, prefixo
+    const diagChave = {
+      comprimento: apiKey.length,
+      tem_espaco: /\s/.test(apiKey),
+      prefixo: apiKey.slice(0, 4) + '***',
     }
 
     function montarHeaders(tipo) {
@@ -72,6 +85,7 @@ routerAdd(
         http: contas ? contas.statusCode : 'transport_error',
         corpo_resumido: contas && contas.json ? JSON.stringify(contas.json).slice(0, 300) : '',
         tipo_chave_testado: tipoUsado || 'nenhum_autenticou',
+        diagnostico_chave: diagChave,
         prova_aprovada: false,
         lacuna: 'chave rejeitada pelo Composio ou nenhuma conta metaads conectada',
       })
