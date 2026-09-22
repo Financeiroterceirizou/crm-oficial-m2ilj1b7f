@@ -249,14 +249,14 @@ routerAdd(
 
     for (let i = 0; i < leadsAlvo.length; i++) {
       const lead = leadsAlvo[i]
-      const declarado = String(lead.anuncio_criativo || '').trim()
+      const declarado = String(lead.get('anuncio_criativo') || '').trim()
       const registro = {
-        lead_id: lead.lead_id,
+        lead_id: lead.get('lead_id'),
         declarado: declarado || null,
       }
       if (!declarado) {
         // lead meta_ads sem anúncio declarado: lacuna visível
-        if (lead.meta_status !== 'sem_dado_meta') {
+        if (lead.get('meta_status') !== 'sem_dado_meta') {
           lead.set('meta_status', 'sem_dado_meta')
           lead.set(
             'meta_proveniencia',
@@ -288,7 +288,7 @@ routerAdd(
         }
       }
       if (!achado) {
-        if (lead.meta_status !== 'sem_dado_meta') {
+        if (lead.get('meta_status') !== 'sem_dado_meta') {
           lead.set('meta_status', 'sem_dado_meta')
           lead.set(
             'meta_proveniencia',
@@ -312,7 +312,7 @@ routerAdd(
       const truncado = normalizar(declarado) !== normalizar(achado.name)
 
       // divergência: campanha declarada difere da campanha real do anúncio (RN-4-103)
-      const campDeclarada = normalizar(String(lead.campanha || ''))
+      const campDeclarada = normalizar(String(lead.get('campanha') || ''))
       let divergente = false
       if (campDeclarada && campanhaNome) {
         const campReal = normalizar(campanhaNome)
@@ -333,7 +333,7 @@ routerAdd(
           Object.assign({}, provenienciaBase, {
             match_por_prefixo: truncado,
             divergencia_campanha: divergente
-              ? { declarada: lead.campanha, real: campanhaNome }
+              ? { declarada: lead.get('campanha'), real: campanhaNome }
               : null,
           }),
         ),
