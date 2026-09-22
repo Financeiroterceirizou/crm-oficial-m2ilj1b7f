@@ -1,15 +1,27 @@
 #!/usr/bin/env python3
-# Relatórios Semanais — BEM VIVER (ILPI) — v1, 2026-09-21
+# Relatórios Semanais — BEM VIVER (ILPI) — v1.2, 2026-09-21
 # Uso: python3 relatorio_bemviver.py [YYYY-MM-DD]  (default: hoje)
-# Gera UM PDF + UM Excel com os 11 relatórios no padrão dos exemplos de 14/09.
+# Gera UM PDF + UM Excel com os 11 relatórios no padrão dos exemplos de 14/09
+#   + Comparativo 13 meses em PDF PRÓPRIO PAISAGEM.
 # Fonte: API Controlle v1 (token Bem Viver). Envio: segunda-feira 14:00 → financeirodabemviver@gmail.com
-# Token: scripts/relatorio_bemviver/.controlle_token_bemviver ou env CONTROLLE_TOKEN_BEMVIVER.
-# TAG "Boleto Emitido" id 130213 (específica da Bem Viver).
+#
+# v1.2 (feedback Vinícius 21/09):
+#   - Comparativo: valores SEM centavos e SEM R$ (inteiros), receitas VERDE / despesas VERMELHO
+#   - Consolidado/Previsões: ordem por descrição da categoria (não por valor) + cores verde/vermelho
+#   - Inadimplência (geral e boleto): além do resumo, TODOS os lançamentos por categoria + total da categoria
+#   - Títulos únicos (Despesas em aberto e Receitas da semana não repetem mais o título)
+#
+# v1.1 (feedback Vinícius 21/09):
+#   - TODOS os relatórios filtram centro de custo BEM VIVER (rateio cost_center_id == 169959)
+#   - Transferências entre contas fora (categoria 99.01 + ds_transaction "Transferência de")
+#   - Comparativo 13 meses em PDF próprio PAISAGEM
+#
+# v1.0 (2026-09-21): pacote original com 11 relatórios.
 import json, os, sys, urllib.request
 from collections import defaultdict
 from datetime import date, timedelta
 
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import cm
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -56,6 +68,12 @@ def brl(cents):
     s = f"{abs(v):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     return ("-" if v < 0 else "") + "R$ " + s
 
+def brl_int(cents):
+    """Sem centavos e sem R$ — matrizes largas (comparativo 13 meses)."""
+    v = int(round(cents / 100.0))
+    s = f"{abs(v):,}".replace(",", ".")
+    return ("-" if v < 0 else "") + s
+
 def add_months(d, n):
     m = d.month - 1 + n
     y = d.year + m // 12
@@ -71,6 +89,19 @@ def tem_tag(t, id_tag):
 def cat_nome(t):
     cats = t.get("apportionments_plan_account") or []
     return (cats[0].get("ds_category") or "?") if cats else "(sem categoria)"
+
+CC_BEM_VIVER = 169959  # centro de custo BEM VIVER — filtro obrigatório em todos os relatórios
+
+def ok_bv(t):
+    """Filtro padrão Bem Viver: rateio no centro de custo BEM VIVER e sem transferências entre contas."""
+    if not any(c.get("cost_center_id") == CC_BEM_VIVER for c in (t.get("apportionments_cost_center") or [])):
+        return False
+    for c in (t.get("apportionments_plan_account") or []):
+        if (c.get("ds_category") or "").startswith("99.01"):  # Transferência entre Contas
+            return False
+    if (t.get("ds_transaction") or "").startswith("Transferência de"):
+        return False
+    return True
 
 def agrupa_por_categoria(txs, so_negativas=False, so_positivas=False):
     g = defaultdict(lambda: [0, 0])
@@ -88,8 +119,10 @@ DIA_ANT = HOJE - timedelta(days=1)
 MES_REF = HOJE.replace(day=1)              # mês corrente
 MES_SEG = add_months(MES_REF, 1)           # mês seguinte
 FIM_MES_ANT = MES_REF - timedelta(days=1)  # último dia do mês anterior
-INI_SEM = HOJE - timedelta(days=HOJE.weekday())
-FIM_SEM = INI_SEM + timedelta(days=6)
+INI_SEM, FIM_SEM = HOJE, HOJE + timedelta(days=6 - HOJE.weekday())  # seg→dom
+if INI_SEM.weekday() != 0:  # garante segunda→domingo
+    INI_SEM = HOJE - timedelta(days=HOJE.weekday())
+    FIM_SEM = INI_SEM + timedelta(days=6)
 
 def label_mes(d):
     return f"{MES_PT[d.month].capitalize()} de {d.year}"
@@ -101,6 +134,7 @@ FIM_MES_ANT_LABEL = FIM_MES_ANT.strftime("%d/%m/%Y")
 SEM_LABEL = f"{INI_SEM.strftime('%d/%m/%Y')} até {FIM_SEM.strftime('%d/%m/%Y')}"
 
 # ===== dados =====
+# Filtro padrão em TODOS os relatórios: centro de custo BEM VIVER, sem transferências entre contas.
 # saldos por conta no dia anterior
 contas = [c for c in req(f"{BASE}/account/v1/accounts").get("results", []) if c.get("status") == 1]
 saldos_conta = []
@@ -122,12 +156,14 @@ for ini_m, fim_m, lab in meses_13:
     serie_13.append((lab, b["revenuesDone"], b["expensesDone"], b["balanceDone"]))
 matriz_13 = defaultdict(lambda: defaultdict(int))
 for t in tx_list(meses_13[0][0], min(meses_13[-1][1], DIA_ANT.isoformat()), **{"situation": "[1]"}):
+    if not ok_bv(t):
+        continue
     mes = bdate(t)[:7]
     for c in (t.get("apportionments_plan_account") or []):
         matriz_13[c.get("ds_category") or "?"][mes] += c.get("value") or 0
 
 # consolidado do mês (pago até agora)
-setembro_pago = tx_list(MES_REF.isoformat(), (add_months(MES_REF,1)-timedelta(days=1)).isoformat(), **{"situation": "[1]"})
+setembro_pago = [t for t in tx_list(MES_REF.isoformat(), (add_months(MES_REF,1)-timedelta(days=1)).isoformat(), **{"situation": "[1]"}) if ok_bv(t)]
 cons_rec = agrupa_por_categoria(setembro_pago, so_positivas=True)
 cons_desp = agrupa_por_categoria(setembro_pago, so_negativas=True)
 cons_entradas = sum(v for v, _ in cons_rec.values())
@@ -136,13 +172,13 @@ cons_resultado = cons_entradas + cons_saidas
 
 # despesas em aberto até fim do mês anterior
 desp_aberto = [t for t in tx_list(f"{FIM_MES_ANT.year}-01-01", FIM_MES_ANT.isoformat(), **{"activity_type": "0", "situation": "[0]"})
-               if bdate(t) <= FIM_MES_ANT.isoformat()]
+               if bdate(t) <= FIM_MES_ANT.isoformat() and ok_bv(t)]
 g_desp_aberto = agrupa_por_categoria(desp_aberto)
 total_desp_aberto = sum(v for v, _ in g_desp_aberto.values())
 
 # inadimplência até fim do mês anterior
 inad = [t for t in tx_list(f"{FIM_MES_ANT.year}-01-01", FIM_MES_ANT.isoformat(), **{"activity_type": "1", "situation": "[0]"})
-        if bdate(t) <= FIM_MES_ANT.isoformat()]
+        if bdate(t) <= FIM_MES_ANT.isoformat() and ok_bv(t)]
 g_inad = agrupa_por_categoria(inad)
 total_inad = sum(v for v, _ in g_inad.values())
 inad_boleto = [t for t in inad if tem_tag(t, TAG_BOLETO)]
@@ -150,13 +186,13 @@ g_inad_boleto = agrupa_por_categoria(inad_boleto)
 total_inad_boleto = sum(v for v, _ in g_inad_boleto.values())
 
 # previsão mês corrente (pago + pendente) e mês seguinte
-prev_mes = tx_list(MES_REF.isoformat(), (add_months(MES_REF,1)-timedelta(days=1)).isoformat())
+prev_mes = [t for t in tx_list(MES_REF.isoformat(), (add_months(MES_REF,1)-timedelta(days=1)).isoformat()) if ok_bv(t)]
 g_prev_rec = agrupa_por_categoria(prev_mes, so_positivas=True)
 g_prev_desp = agrupa_por_categoria(prev_mes, so_negativas=True)
 prev_entradas, prev_saidas = sum(v for v,_ in g_prev_rec.values()), sum(v for v,_ in g_prev_desp.values())
 prev_resultado = prev_entradas + prev_saidas
 
-prev_seg = tx_list(MES_SEG.isoformat(), (add_months(MES_SEG,1)-timedelta(days=1)).isoformat())
+prev_seg = [t for t in tx_list(MES_SEG.isoformat(), (add_months(MES_SEG,1)-timedelta(days=1)).isoformat()) if ok_bv(t)]
 g_seg_rec = agrupa_por_categoria(prev_seg, so_positivas=True)
 g_seg_desp = agrupa_por_categoria(prev_seg, so_negativas=True)
 seg_entradas, seg_saidas = sum(v for v,_ in g_seg_rec.values()), sum(v for v,_ in g_seg_desp.values())
@@ -164,7 +200,7 @@ seg_resultado = seg_entradas + seg_saidas
 
 # previsão de receitas da semana (não pagas) — geral e apenas boleto
 sem_rec = [t for t in tx_list(INI_SEM.isoformat(), FIM_SEM.isoformat(), **{"activity_type": "1", "situation": "[0]"})
-           if INI_SEM.isoformat() <= bdate(t) <= FIM_SEM.isoformat()]
+           if INI_SEM.isoformat() <= bdate(t) <= FIM_SEM.isoformat() and ok_bv(t)]
 g_sem = agrupa_por_categoria(sem_rec)
 total_sem = sum(v for v, _ in g_sem.values())
 sem_boleto = [t for t in sem_rec if tem_tag(t, TAG_BOLETO)]
@@ -190,6 +226,20 @@ cellb = ParagraphStyle("cellb", parent=styles["Normal"], fontSize=8, fontName="H
 cellr = ParagraphStyle("cellr", parent=cell, alignment=2)
 cellrb = ParagraphStyle("cellrb", parent=cellb, alignment=2)
 cellc = ParagraphStyle("cellc", parent=cell, alignment=1)
+VERDE = colors.HexColor("#1a7f37")   # receitas
+VERMELHO = colors.HexColor("#c0392b")  # despesas
+
+def P_val(cents, style):
+    """Valor colorido: verde se positivo (receita), vermelho se negativo (despesa)."""
+    s = ParagraphStyle("v", parent=style, textColor=(VERDE if cents > 0 else VERMELHO if cents < 0 else PRETO))
+    return P(brl(cents), s)
+
+def P_val_int(cents, style):
+    """Valor colorido sem centavos e sem R$ — matrizes largas (comparativo 13 meses)."""
+    s = ParagraphStyle("v", parent=style, textColor=(VERDE if cents > 0 else VERMELHO if cents < 0 else PRETO))
+    return P(brl_int(cents), s)
+
+# NOTE: o comparativo 13 meses é gerado em PDF próprio paisagem (definido após o PDF principal).
 
 def tabela(rows, widths, fs=7.5):
     t = Table(rows, colWidths=widths, repeatRows=1)
@@ -205,13 +255,13 @@ def tabela(rows, widths, fs=7.5):
     t.setStyle(TableStyle(style))
     return t
 
-def tabela_cat(titulo, grupos, total_label="Total"):
+def tabela_cat(titulo, grupos, positivo=True, total_label="Total"):
     E = [P(f"<b>{titulo}</b>", h2)]
     rows = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
-    for nome, (v, n) in sorted(grupos.items(), key=lambda x: x[1][0]):
-        rows.append([P(nome, cell), P(str(n), cellc), P(brl(v), cellr)])
+    for nome, (v, n) in sorted(grupos.items(), key=lambda x: x[0]):
+        rows.append([P(nome, cell), P(str(n), cellc), P_val(v, cellr)])
     tot = sum(v for v, _ in grupos.values())
-    rows.append([P(f"<b>{total_label}</b>", cellrb), P(f"<b>{sum(n for _, n in grupos.values())}</b>", cellc), P(f"<b>{brl(tot)}</b>", cellrb)])
+    rows.append([P(f"<b>{total_label}</b>", cellrb), P(f"<b>{sum(n for _, n in grupos.values())}</b>", cellc), P_val(tot, cellrb)])
     t = tabela(rows, [11*cm, 2.5*cm, 3*cm])
     t.setStyle(TableStyle([("BACKGROUND", (0,len(rows)-1), (-1,len(rows)-1), LARANJA_CLARO)]))
     E.append(t)
@@ -225,63 +275,98 @@ E = []
 E.append(P("<b>BEM VIVER — Relatórios Gerenciais Semanais</b>", h1))
 E.append(P(f"Gerado em {HOJE_LABEL} (segunda-feira) · Fonte: Controlle · Semana de {SEM_LABEL}", sub))
 
-# 1. Comparativo 13 meses
-E.append(P(f"Comparativo dos últimos 13 meses ({label_curto(INI_13)} a {label_curto(MES_REF)}) — apenas pago/recebido", h2))
+# 1. Comparativo 13 meses — PDF PRÓPRIO EM PAISAGEM
+ARQ_COMP = f"artifacts/{HOJE.strftime('%y%m%d')}_Comparativo_Bem_Viver.pdf"
+doc_comp = SimpleDocTemplate(ARQ_COMP, pagesize=landscape(A4), leftMargin=1.2*cm, rightMargin=1.2*cm, topMargin=1.2*cm, bottomMargin=1.2*cm)
+C = []
+C.append(P("<b>BEM VIVER — Comparativo dos últimos 13 meses</b>", h1))
+C.append(P(f"Gerado em {HOJE_LABEL} · Fonte: Controlle · {label_curto(INI_13)} a {label_curto(MES_REF)} · Apenas pago/recebido · Valores em R$ inteiros", sub))
 cm_rows = [[P("<b>Série</b>", cell)] + [P(f"<b>{lab}</b>", cellr) for _, _, lab in meses_13] + [P("<b>Total</b>", cellr)]]
 for idx, nome_serie in [(1, "Entrada realizada"), (2, "Saída realizada"), (3, "Saldo realizado")]:
     row = [P(nome_serie, cell)]
     for lab, e_m, s_m, saldo in serie_13:
-        row.append(P(brl([e_m, s_m, saldo][idx-1]), cellr))
-    row.append(P(brl(sum(([e_m, s_m, saldo][idx-1]) for _, e_m, s_m, saldo in serie_13)), cellr))
+        val = [e_m, s_m, saldo][idx-1]
+        row.append(P_val_int(val, cellr))
+    row.append(P_val_int(sum(([e_m, s_m, saldo][idx-1]) for _, e_m, s_m, saldo in serie_13), cellrb))
     cm_rows.append(row)
-E.append(tabela(cm_rows, [2.6*cm] + [1.06*cm]*13 + [1.7*cm], fs=6))
-E.append(Spacer(1, 4))
-E.append(P("Detalhamento por categoria (rateio da API; valores realizados):", body))
+C.append(tabela(cm_rows, [3.3*cm] + [1.73*cm]*13 + [2.2*cm], fs=7))
+C.append(Spacer(1, 10))
+C.append(P("Detalhamento por categoria (rateio da API; valores realizados; R$ inteiros):", body))
 cat_names_13 = sorted({c for c in matriz_13})
 mt_rows = [[P("<b>Categoria</b>", cell)] + [P(f"<b>{lab}</b>", cellr) for _, _, lab in meses_13]]
 for cat in cat_names_13:
     row = [P(cat, cell)]
-    for _, fim_m_iso, lab in meses_13:
+    for _, fim_m_iso, lab in [(a, b, l) for a, b, l in meses_13]:
         v = matriz_13[cat].get(fim_m_iso[:7], 0)
-        row.append(P(brl(v) if v else "—", cellr))
+        row.append(P_val_int(v, cellr) if v else P("—", cellr))
     mt_rows.append(row)
-E.append(tabela(mt_rows, [3.4*cm] + [0.99*cm]*13, fs=5.5))
-E.append(PageBreak())
+C.append(tabela(mt_rows, [3.3*cm] + [1.73*cm]*13, fs=6))
+C.append(Spacer(1, 10))
+C.append(P("Gerado automaticamente pela Terceirizou · dados do Controlle", sub))
+doc_comp.build(C)
+print(f"OK: {ARQ_COMP}")
 
 # 2. Consolidado do mês
 E.append(P(f"Consolidado do mês — {label_mes(MES_REF)} (pago/recebido até {HOJE_LABEL})", h2))
 E.append(P(f"{len(setembro_pago)} lançamentos pagos/recebidos no mês. Entradas {brl(cons_entradas)} · Saídas {brl(cons_saidas)} · <b>Resultado consolidado {brl(cons_resultado)}</b>", body))
 cd_rows = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
-for nome, (v, n) in sorted(cons_rec.items(), key=lambda x: -x[1][0]):
-    cd_rows.append([P(nome, cell), P(str(n), cellc), P(brl(v), cellr)])
-for nome, (v, n) in sorted(cons_desp.items(), key=lambda x: x[1][0]):
-    cd_rows.append([P(nome, cell), P(str(n), cellc), P(brl(v), cellr)])
-cd_rows.append([P("<b>Resultado consolidado</b>", cellrb), P(f"<b>{len(setembro_pago)}</b>", cellc), P(f"<b>{brl(cons_resultado)}</b>", cellrb)])
+for nome, (v, n) in sorted(cons_rec.items()):
+    cd_rows.append([P(nome, cell), P(str(n), cellc), P_val(v, cellr)])
+for nome, (v, n) in sorted(cons_desp.items()):
+    cd_rows.append([P(nome, cell), P(str(n), cellc), P_val(v, cellr)])
+cd_rows.append([P("<b>Resultado consolidado</b>", cellrb), P(f"<b>{len(setembro_pago)}</b>", cellc), P_val(cons_resultado, cellrb)])
 t = tabela(cd_rows, [11*cm, 2.5*cm, 3*cm])
 t.setStyle(TableStyle([("BACKGROUND", (0,len(cd_rows)-1), (-1,len(cd_rows)-1), LARANJA_CLARO)]))
 E.append(t)
 
 # 3. Despesas em aberto
-E.append(P(f"Despesas em aberto até {FIM_MES_ANT_LABEL}", h2))
 E += tabela_cat(f"Despesas em aberto até {FIM_MES_ANT_LABEL}", g_desp_aberto, total_label="Total em aberto")
 
-# 4. Inadimplência
+# 4. Inadimplência — por categoria + TODOS os lançamentos de cada categoria
 E.append(P(f"Inadimplência até {FIM_MES_ANT_LABEL}", h2))
-E += tabela_cat(f"Receitas em aberto até {FIM_MES_ANT_LABEL}", g_inad, total_label="Total em aberto")
+E += tabela_cat("Resumo por categoria", g_inad, total_label="Total em aberto")
+por_cat_inad = defaultdict(list)
+for t in inad:
+    por_cat_inad[cat_nome(t)].append(t)
+for cat in sorted(por_cat_inad):
+    txs = sorted(por_cat_inad[cat], key=bdate)
+    rows = [[P("<b>Vencimento</b>", cell), P("<b>Descrição</b>", cell), P("<b>Conta</b>", cell), P("<b>Situação</b>", cellc), P("<b>Valor</b>", cellr)]]
+    for t in txs:
+        rows.append([P(bdate(t)[8:10]+"/"+bdate(t)[5:7]+"/"+bdate(t)[:4], cell), P((t.get("ds_transaction") or "")[:70], cell),
+                     P(t.get("ds_account_main") or "", cell), P("Aberto", cellc), P_val(t["value_in_cent"], cellr)])
+    rows.append([P("<b>Total</b>", cellrb), P(f"<b>{cat}</b>", cellrb), P("", cell), P(f"<b>{len(txs)}</b>", cellc), P_val(sum(t["value_in_cent"] for t in txs), cellrb)])
+    tt = tabela(rows, [2.2*cm, 7.3*cm, 3.2*cm, 1.8*cm, 3*cm])
+    tt.setStyle(TableStyle([("BACKGROUND", (0,len(rows)-1), (-1,len(rows)-1), LARANJA_CLARO)]))
+    E.append(P(f"<b>{cat}</b>", h2))
+    E.append(tt)
 
-# 5. Inadimplência apenas boleto
+# 5. Inadimplência apenas boleto — por categoria + TODOS os lançamentos
 E.append(P(f"Inadimplência até {FIM_MES_ANT_LABEL} (Apenas Boleto)", h2))
-E += tabela_cat(f"Receitas em aberto até {FIM_MES_ANT_LABEL} — TAG Boleto Emitido", g_inad_boleto, total_label="Total em aberto (boleto)")
+E += tabela_cat("Resumo por categoria — TAG Boleto Emitido", g_inad_boleto, total_label="Total em aberto (boleto)")
+por_cat_inadb = defaultdict(list)
+for t in inad_boleto:
+    por_cat_inadb[cat_nome(t)].append(t)
+for cat in sorted(por_cat_inadb):
+    txs = sorted(por_cat_inadb[cat], key=bdate)
+    rows = [[P("<b>Vencimento</b>", cell), P("<b>Descrição</b>", cell), P("<b>Conta</b>", cell), P("<b>Situação</b>", cellc), P("<b>Valor</b>", cellr)]]
+    for t in txs:
+        rows.append([P(bdate(t)[8:10]+"/"+bdate(t)[5:7]+"/"+bdate(t)[:4], cell), P((t.get("ds_transaction") or "")[:70], cell),
+                     P(t.get("ds_account_main") or "", cell), P("Aberto", cellc), P_val(t["value_in_cent"], cellr)])
+    rows.append([P("<b>Total</b>", cellrb), P(f"<b>{cat}</b>", cellrb), P("", cell), P(f"<b>{len(txs)}</b>", cellc), P_val(sum(t["value_in_cent"] for t in txs), cellrb)])
+    tt = tabela(rows, [2.2*cm, 7.3*cm, 3.2*cm, 1.8*cm, 3*cm])
+    tt.setStyle(TableStyle([("BACKGROUND", (0,len(rows)-1), (-1,len(rows)-1), LARANJA_CLARO)]))
+    E.append(P(f"<b>{cat}</b>", h2))
+    E.append(tt)
 
 # 6. Previsão do mês corrente
 E.append(P(f"Previsão do mês corrente — {label_mes(MES_REF)} (pago + pendente)", h2))
 pv_rows = [[P("<b>Categoria</b>", cell), P("<b>Entradas</b>", cellr), P("<b>Saídas</b>", cellr)]]
-for nome, (v, n) in sorted(g_prev_rec.items(), key=lambda x: -x[1][0]):
-    pv_rows.append([P(nome, cell), P(brl(v), cellr), P("—", cellr)])
-for nome, (v, n) in sorted(g_prev_desp.items(), key=lambda x: x[1][0]):
-    pv_rows.append([P(nome, cell), P("—", cellr), P(brl(v), cellr)])
-pv_rows.append([P("<b>Totais</b>", cellrb), P(f"<b>{brl(prev_entradas)}</b>", cellrb), P(f"<b>{brl(prev_saidas)}</b>", cellrb)])
-pv_rows.append([P("<b>Resultado previsto do mês</b>", cellrb), P(""), P(f"<b>{brl(prev_resultado)}</b>", cellrb)])
+for nome, (v, n) in sorted(g_prev_rec.items()):
+    pv_rows.append([P(nome, cell), P_val(v, cellr), P("—", cellr)])
+for nome, (v, n) in sorted(g_prev_desp.items()):
+    pv_rows.append([P(nome, cell), P("—", cellr), P_val(v, cellr)])
+pv_rows.append([P("<b>Totais</b>", cellrb), P_val(prev_entradas, cellrb), P_val(prev_saidas, cellrb)])
+pv_rows.append([P("<b>Resultado previsto do mês</b>", cellrb), P(""), P_val(prev_resultado, cellrb)])
 t = tabela(pv_rows, [9*cm, 3.75*cm, 3.75*cm])
 t.setStyle(TableStyle([("BACKGROUND", (0,len(pv_rows)-2), (-1,len(pv_rows)-1), LARANJA_CLARO)]))
 E.append(t)
@@ -289,24 +374,22 @@ E.append(t)
 # 7. Previsão do mês seguinte
 E.append(P(f"Previsão do mês seguinte — {label_mes(MES_SEG)} (não pagos e não recebidos)", h2))
 ps_rows = [[P("<b>Categoria</b>", cell), P("<b>Entradas</b>", cellr), P("<b>Saídas</b>", cellr)]]
-for nome, (v, n) in sorted(g_seg_rec.items(), key=lambda x: -x[1][0]):
-    ps_rows.append([P(nome, cell), P(brl(v), cellr), P("—", cellr)])
-for nome, (v, n) in sorted(g_seg_desp.items(), key=lambda x: x[1][0]):
-    ps_rows.append([P(nome, cell), P("—", cellr), P(brl(v), cellr)])
-ps_rows.append([P("<b>Totais</b>", cellrb), P(f"<b>{brl(seg_entradas)}</b>", cellrb), P(f"<b>{brl(seg_saidas)}</b>", cellrb)])
-ps_rows.append([P("<b>Resultado previsto do mês</b>", cellrb), P(""), P(f"<b>{brl(seg_resultado)}</b>", cellrb)])
+for nome, (v, n) in sorted(g_seg_rec.items()):
+    ps_rows.append([P(nome, cell), P_val(v, cellr), P("—", cellr)])
+for nome, (v, n) in sorted(g_seg_desp.items()):
+    ps_rows.append([P(nome, cell), P("—", cellr), P_val(v, cellr)])
+ps_rows.append([P("<b>Totais</b>", cellrb), P_val(seg_entradas, cellrb), P_val(seg_saidas, cellrb)])
+ps_rows.append([P("<b>Resultado previsto do mês</b>", cellrb), P(""), P_val(seg_resultado, cellrb)])
 t = tabela(ps_rows, [9*cm, 3.75*cm, 3.75*cm])
 t.setStyle(TableStyle([("BACKGROUND", (0,len(ps_rows)-2), (-1,len(ps_rows)-1), LARANJA_CLARO)]))
 E.append(t)
 E.append(PageBreak())
 
 # 8. Previsão de receitas da semana
-E.append(P(f"Previsão de Receitas da semana corrente ({SEM_LABEL})", h2))
-E += tabela_cat(f"Receitas previstas de {SEM_LABEL}", g_sem, total_label="Total previsto")
+E += tabela_cat(f"Previsão de Receitas da semana corrente ({SEM_LABEL})", g_sem, total_label="Total previsto")
 
 # 9. Previsão de receitas da semana (apenas boleto)
-E.append(P(f"Previsão de Receitas da semana corrente ({SEM_LABEL}) — Apenas Boleto", h2))
-E += tabela_cat(f"Receitas previstas de {SEM_LABEL} — TAG Boleto Emitido", g_sem_boleto, total_label="Total previsto (boleto)")
+E += tabela_cat(f"Previsão de Receitas da semana corrente ({SEM_LABEL}) — Apenas Boleto (TAG Boleto Emitido)", g_sem_boleto, total_label="Total previsto (boleto)")
 
 # 10. Saldo nas contas dia anterior
 E.append(P(f"Saldo nas contas em {DIA_ANT.strftime('%d/%m/%Y')}", h2))
@@ -322,7 +405,7 @@ E.append(t)
 E.append(P("Previsão de Fluxo de Caixa — próximos 12 meses", h2))
 pj_rows = [[P("<b>Mês</b>", cell), P("<b>Entradas previstas</b>", cellr), P("<b>Saídas previstas</b>", cellr), P("<b>Saldo projetado</b>", cellr)]]
 for lab, e_p, s_p, saldo in proj:
-    pj_rows.append([P(lab, cell), P(brl(e_p), cellr), P(brl(s_p), cellr), P(brl(saldo), cellr)])
+    pj_rows.append([P(lab, cell), P_val(e_p, cellr), P_val(s_p, cellr), P_val(saldo, cellr)])
 E.append(tabela(pj_rows, [3*cm, 4.6*cm, 4.6*cm, 4.6*cm]))
 d = Drawing(17*cm, 5*cm)
 chart = VerticalBarChart()
@@ -342,7 +425,7 @@ chart.bars[0].fillColor = LARANJA
 chart.bars[0].strokeColor = None
 d.add(chart)
 for i, (lab, _, _, saldo) in enumerate(proj):
-    d.add(String(48 + i*36.2, 133, f"{saldo/100:,.0f}".replace(",", ".")[:-1] + "k", fontSize=5.5, fillColor=colors.HexColor("#555555")))
+    d.add(String(48 + i*36.2, 133, f"{saldo/100:,.0f}".replace(",", "..")[:-1] + "k", fontSize=5.5, fillColor=colors.HexColor("#555555")))
 E.append(d)
 
 E.append(Spacer(1, 10))
@@ -365,7 +448,7 @@ FB = Font(bold=True)
 TOT_LABELS = ("Total", "Totais", "Resultado", "Saldo final", "Resultado consolidado",
               "Resultado previsto do mês", "Total em aberto", "Total previsto", "Total previsto (boleto)", "Total em aberto (boleto)")
 
-def aba(nome, linhas, larguras):
+def aba(nome, linhas, larguras, pct_from=None):
     ws = wb.create_sheet(nome[:31])
     for r in linhas:
         ws.append(list(r))
@@ -378,9 +461,12 @@ def aba(nome, linhas, larguras):
             for c in row:
                 c.font = FB
                 c.fill = FILL_T
-        for c in row[1:]:
+        for j, c in enumerate(row[1:], 2):
             if isinstance(c.value, (int, float)):
-                c.number_format = '"R$" #,##0.00'
+                if pct_from and j >= pct_from:
+                    c.number_format = "0.0%"
+                else:
+                    c.number_format = '"R$" #,##0.00'
     for j, w in enumerate(larguras, 1):
         ws.column_dimensions[get_column_letter(j)].width = w
     ws.freeze_panes = "A2"
@@ -396,54 +482,54 @@ aba("Comparativo 13 meses",
 
 aba("Consolidado do mês",
     [("Categoria", "Lançamentos", "Valor")] +
-    [(n, n2, r_(v)) for n, (v, n2) in sorted(cons_rec.items(), key=lambda x: -x[1][0])] +
-    [(n, n2, r_(v)) for n, (v, n2) in sorted(cons_desp.items(), key=lambda x: x[1][0])] +
+    [(n, n2, r_(v)) for n, (v, n2) in sorted(cons_rec.items())] +
+    [(n, n2, r_(v)) for n, (v, n2) in sorted(cons_desp.items())] +
     [("Resultado consolidado", len(setembro_pago), r_(cons_resultado))],
     [45, 14, 16])
 
 aba("Despesas em aberto",
     [("Categoria", "Lançamentos", "Valor")] +
-    [(n, n2, r_(v)) for n, (v, n2) in sorted(g_desp_aberto.items(), key=lambda x: x[1][0])] +
+    [(n, n2, r_(v)) for n, (v, n2) in sorted(g_desp_aberto.items())] +
     [("Total em aberto", len(desp_aberto), r_(total_desp_aberto))],
     [45, 14, 16])
 
 aba("Inadimplência",
     [("Categoria", "Lançamentos", "Valor")] +
-    [(n, n2, r_(v)) for n, (v, n2) in sorted(g_inad.items(), key=lambda x: x[1][0])] +
+    [(n, n2, r_(v)) for n, (v, n2) in sorted(g_inad.items())] +
     [("Total em aberto", len(inad), r_(total_inad))],
     [45, 14, 16])
 
 aba("Inadimplência Boleto",
     [("Categoria", "Lançamentos", "Valor")] +
-    [(n, n2, r_(v)) for n, (v, n2) in sorted(g_inad_boleto.items(), key=lambda x: x[1][0])] +
+    [(n, n2, r_(v)) for n, (v, n2) in sorted(g_inad_boleto.items())] +
     [("Total em aberto (boleto)", len(inad_boleto), r_(total_inad_boleto))],
     [45, 14, 16])
 
 aba("Previsão mês corrente",
     [("Categoria", "Entradas", "Saídas")] +
-    [(n, r_(v), None) for n, (v, n2) in sorted(g_prev_rec.items(), key=lambda x: -x[1][0])] +
-    [(n, None, r_(v)) for n, (v, n2) in sorted(g_prev_desp.items(), key=lambda x: x[1][0])] +
+    [(n, r_(v), None) for n, (v, n2) in sorted(g_prev_rec.items())] +
+    [(n, None, r_(v)) for n, (v, n2) in sorted(g_prev_desp.items())] +
     [("Totais", r_(prev_entradas), r_(prev_saidas)),
      ("Resultado previsto do mês", None, r_(prev_resultado))],
     [45, 16, 16])
 
 aba("Previsão mês seguinte",
     [("Categoria", "Entradas", "Saídas")] +
-    [(n, r_(v), None) for n, (v, n2) in sorted(g_seg_rec.items(), key=lambda x: -x[1][0])] +
-    [(n, None, r_(v)) for n, (v, n2) in sorted(g_seg_desp.items(), key=lambda x: x[1][0])] +
+    [(n, r_(v), None) for n, (v, n2) in sorted(g_seg_rec.items())] +
+    [(n, None, r_(v)) for n, (v, n2) in sorted(g_seg_desp.items())] +
     [("Totais", r_(seg_entradas), r_(seg_saidas)),
      ("Resultado previsto do mês", None, r_(seg_resultado))],
     [45, 16, 16])
 
 aba("Receitas semana",
     [("Categoria", "Lançamentos", "Valor")] +
-    [(n, n2, r_(v)) for n, (v, n2) in sorted(g_sem.items(), key=lambda x: -x[1][0])] +
+    [(n, n2, r_(v)) for n, (v, n2) in sorted(g_sem.items())] +
     [("Total previsto", len(sem_rec), r_(total_sem))],
     [45, 14, 16])
 
 aba("Receitas semana Boleto",
     [("Categoria", "Lançamentos", "Valor")] +
-    [(n, n2, r_(v)) for n, (v, n2) in sorted(g_sem_boleto.items(), key=lambda x: x[1][0])] +
+    [(n, n2, r_(v)) for n, (v, n2) in sorted(g_sem_boleto.items())] +
     [("Total previsto (boleto)", len(sem_boleto), r_(total_sem_boleto))],
     [45, 14, 16])
 
