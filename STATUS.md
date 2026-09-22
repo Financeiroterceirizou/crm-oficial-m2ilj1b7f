@@ -1,37 +1,37 @@
 # STATUS — Projeto Terceirizou Terceirização Empresarial
 
-> **Atualizado em:** 2026-09-04 · **Fonte técnica:** Skip projectId 51268
+> **Atualizado em:** 2026-09-22 20:02 · **Fonte técnica:** Skip projectId 51268
 
 ## Onde estamos
 
-- **Fase 1:** concluída — 10/10 tasks
-- **Fase 2:** concluída — 5/5 tasks
-- **Skip:** CRM Oficial, v0.0.35, hash `e4ae9f5`
+- **Fase 1:** concluída — 10/10 tasks.
+- **Fase 2:** concluída — 5/5 tasks.
+- **Fase 3:** concluída — 7/7 tasks, aceite final do champion em 2026-09-16.
+- **Fase 4:** em andamento — **2/8 tasks concluídas** (`e4c77e80`, `cd704a1c`); prazo 30/09/2026.
+- **Task `cd704a1c`:** concluída após QA técnico, verificação no preview e aceite humano do champion em 22/09/2026.
+- **Skip:** CRM Oficial, v0.0.79, hash `b2e260c` (QA 5/5).
 - **Preview:** https://crm-oficial-65bb8--preview.goskip.app
 - **Produção:** https://crm-oficial-65bb8.goskip.app
-- **GitHub:** artefatos da Fase 2 sincronizados neste commit
+- **GitHub:** implementação e interface sincronizadas no commit `91f36b3`; documentação de fechamento será sincronizada neste ciclo.
 
-## Resultado da Fase 2
+## Resultado da Fase 4 até aqui
 
-- Regra v1 de qualificação determinística registrada
-- Campos de score, decisão, motivo e próxima ação adicionados à collection `leads`
-- Qualificação automática na criação e reclassificação quando respostas mudam
-- Fila autenticada para leads pendentes e exceções
-- Revisão humana auditável, com preservação do histórico
-- Regressão CA-2-001..004 aprovada
-- Acesso sem autenticação bloqueado no teste CA-2-005
-- Rollback validado sem apagar histórico
+- `e4c77e80`: conta Meta confirmada e credencial mantida no secret manager, fora do Git.
+- `cd704a1c`: espelho Meta de leitura implementado sem escrita no Meta.
+- Prova técnica: 76 anúncios, 12 conjuntos e 6 campanhas lidos; espelhamento idempotente validado.
+- Dados no CRM: 50 leads Meta avaliados, 44 espelhados, 6 sem dado Meta e 0 divergentes.
+- Interface nova: seção `Leads reais — espelho Meta` lê a collection real `leads` via PocketBase e exibe campanha, anúncio, status, busca, filtros e proveniência.
+- Ausência preservada como `sem dado Meta`; dados originais do lead não são sobrescritos.
+- Teste humano do champion: aprovado no preview — “testei no preview e funcionou”.
 
-## Inventário Fase 2
+## Inventário Fase 4
 
-- `pocketbase/migrations/0006_add_qualificacao_fields.js`
-- `pocketbase/hooks/qualificar_lead_create.js`
-- `pocketbase/hooks/qualificar_lead_update.js`
-- `pocketbase/hooks/fila_revisao.js`
-- `pocketbase/hooks/revisar_lead.js`
-- `04-fase-atual/fase-2.md`
-- `04-fase-atual/specs/spec-2-001-qualificacao.md`
+- `pocketbase/migrations/0012_add_meta_espelho_fields.js`
+- `pocketbase/hooks/meta_espelho.js`
+- `src/components/dashboard/MetaLeadsRealCard.tsx`
+- `src/pages/Index.tsx`
+- `04_fase-atual/specs/spec-4-001-conector-meta-leitura.md`
 
 ## Próximo passo
 
-Validação formal do consultor para encerrar administrativamente a Fase 2 e decidir o escopo da Fase 3 (frontend).
+A próxima task elegível é `b7c2faea` — comparação de quantidade e qualidade de leads por campanha. Ela não foi iniciada automaticamente; exige nova análise e autorização do champion.
