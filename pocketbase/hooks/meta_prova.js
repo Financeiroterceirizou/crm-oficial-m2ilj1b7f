@@ -21,23 +21,42 @@ routerAdd(
       })
     }
 
-    const headers = {
-      'x-api-key': apiKey,
-      'Content-Type': 'application/json',
-      'User-Agent': 'terceirizou-crm-fase4/1.0',
+    function montarHeaders(tipo) {
+      const h = {
+        'Content-Type': 'application/json',
+        'User-Agent': 'terceirizou-crm-fase4/1.0',
+      }
+      if (tipo === 'org') h['x-org-api-key'] = apiKey
+      else h['x-api-key'] = apiKey
+      return h
+    }
+    // tipo de chave detectado na primeira chamada (projeto x-api-key ou organização x-org-api-key)
+    let TIPO_CHAVE = null
+    function headers() {
+      return montarHeaders(TIPO_CHAVE || 'projeto')
     }
 
     // --- 1. conexão ativa no toolkit metaads ---
+    // tenta header de projeto (x-api-key); se 401, tenta header de organização (x-org-api-key)
     let contas = null
-    try {
-      contas = $http.send({
-        url: 'https://backend.composio.dev/api/v3.1/connected_accounts?toolkit_slug=metaads',
-        method: 'GET',
-        headers: headers,
-        timeout: 20,
-      })
-    } catch (_) {
-      contas = null
+    let tipoUsado = null
+    for (const tipo of ['projeto', 'org']) {
+      try {
+        contas = $http.send({
+          url: 'https://backend.composio.dev/api/v3.1/connected_accounts?toolkit_slug=metaads',
+          method: 'GET',
+          headers: montarHeaders(tipo),
+          timeout: 20,
+        })
+      } catch (_) {
+        contas = null
+      }
+      if (contas && contas.statusCode >= 200 && contas.statusCode < 300) {
+        tipoUsado = tipo
+        TIPO_CHAVE = tipo
+        break
+      }
+      if (contas && contas.statusCode !== 401) break // erro real (não é tipo errado de chave)
     }
     if (
       !contas ||
@@ -51,8 +70,10 @@ routerAdd(
         status: 'falha',
         etapa: 'connected_accounts',
         http: contas ? contas.statusCode : 'transport_error',
+        corpo_resumido: contas && contas.json ? JSON.stringify(contas.json).slice(0, 300) : '',
+        tipo_chave_testado: tipoUsado || 'nenhum_autenticou',
         prova_aprovada: false,
-        lacuna: 'nenhuma conta metaads conectada no Composio ou API indisponivel',
+        lacuna: 'chave rejeitada pelo Composio ou nenhuma conta metaads conectada',
       })
     }
     const conta = contas.json.items[0]
@@ -64,7 +85,7 @@ routerAdd(
       tools = $http.send({
         url: 'https://backend.composio.dev/api/v3.1/tools?toolkit_slug=metaads',
         method: 'GET',
-        headers: headers,
+        headers: headers(),
         timeout: 20,
       })
     } catch (_) {
@@ -93,7 +114,7 @@ routerAdd(
         r = $http.send({
           url: 'https://backend.composio.dev/api/v3.1/tools/execute/' + toolSlug,
           method: 'POST',
-          headers: headers,
+          headers: headers(),
           body: JSON.stringify(payload),
           timeout: 25,
         })
@@ -156,6 +177,7 @@ routerAdd(
 
     return e.json(aprovada ? 200 : 502, {
       status: aprovada ? 'prova_aprovada' : 'prova_falhou',
+      tipo_chave: TIPO_CHAVE,
       connected_account_id: connectedAccountId,
       conta_aprovada_encontrada: contaAprovadaEncontrada,
       tools_leitura_disponiveis: slugs,
