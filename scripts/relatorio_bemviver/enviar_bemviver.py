@@ -3,16 +3,17 @@
 # Uso: python3 enviar_bemviver.py [caminho-do-pdf]
 #   Sem argumento: usa o PDF de hoje (artifacts/YYMMDD_Relatorios_Bem_Viver.pdf).
 # Chave Resend: scripts/95b7f382c0a1ba1d/resend_key.txt (fora do repo) ou env RESEND_API_KEY.
-# Destinatários: financeirodabemviver@gmail.com (to) + financeiro@terceirizou.com.br (bcc).
+# Destinatários: financeirodabemviver@gmail.com + raulroliveira@hotmail.com (to)
+#   + financeiro@terceirizou.com.br (bcc).
 # Anexos: Comparativo (paisagem) + Relatórios (retrato) + Excel.
-# Idempotência: relatorio-bemviver-AAAAMMDD-mtime-anexos — regeneração do PDF = reenvio legítimo;
-# mesmo arquivo = bloqueado (409).
+# Idempotência: relatorio-bemviver-AAAAMMDD-mtime-anexos-destinos — regeneração do PDF OU mudança
+# de destinatários = reenvio legítimo; mesmo arquivo para os mesmos destinos = bloqueado (409).
 import base64, json, os, sys, urllib.request
 from datetime import date
 
 API = "https://api.resend.com/emails"
 FROM = "Terceirizou <financeiro@terceirizou.com.br>"
-TO = ["financeirodabemviver@gmail.com"]
+TO = ["financeirodabemviver@gmail.com", "raulroliveira@hotmail.com"]
 BCC = ["financeiro@terceirizou.com.br"]
 
 _key_path = os.environ.get("RESEND_KEY_PATH") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "95b7f382c0a1ba1d", "resend_key.txt")
@@ -41,8 +42,9 @@ if os.path.exists(comp_path):
     with open(comp_path, "rb") as f:
         anexos.insert(0, {"filename": os.path.basename(comp_path), "content": base64.b64encode(f.read()).decode()})
 
-# idempotência inclui a hora do PDF (regeneração = reenvio legítimo; mesmo arquivo = bloqueado)
+# idempotência inclui a hora do PDF e os destinatários (regeneração ou mudança de destino = reenvio legítimo)
 hora_pdf = date.today().strftime("%Y%m%d") + "-" + str(int(os.path.getmtime(pdf_path)) % 100000)
+destinos = "-".join((TO + BCC))
 
 html = """<p>Boa tarde!</p>
 <p>Segue em anexo o <b>pacote de relatórios gerenciais semanais da BEM VIVER</b> (fonte Controlle).</p>
@@ -65,7 +67,7 @@ payload = {
 req = urllib.request.Request(API, data=json.dumps(payload).encode(), method="POST")
 req.add_header("Authorization", f"Bearer {KEY}")
 req.add_header("User-Agent", "terceirizou-relatorio-bemviver/1.0")
-req.add_header("Idempotency-Key", f"relatorio-bemviver-{hora_pdf}-{len(anexos)}")
+req.add_header("Idempotency-Key", f"relatorio-bemviver-{hora_pdf}-{len(anexos)}-{destinos}")
 req.add_header("Content-Type", "application/json")
 
 with urllib.request.urlopen(req, timeout=60) as resp:
