@@ -1,521 +1,219 @@
-/* CRM Oficial — Página inicial: lista, detalhe e agendamento de leads do PocketBase */
-import { useEffect, useState } from 'react'
-import pb from '@/lib/pocketbase/client'
+/* CRM Oficial — Página Inicial: Dashboard no estilo visual do Google Analytics 4
+   Dados fictícios / mockados com foco prioritário em Vendas e Clientes
+*/
+import React, { useState } from 'react'
+import {
+  DatePeriod,
+  getKpisForPeriod,
+  getTimeSeriesForPeriod,
+  getChannelsForPeriod,
+  getProductDimensionForPeriod,
+  MOCK_REALTIME,
+} from '@/lib/dashboard-data'
+import { GaSidebar, NavTab } from '@/components/dashboard/GaSidebar'
+import { GaHeader } from '@/components/dashboard/GaHeader'
+import { GaKpiCardsGrid } from '@/components/dashboard/GaKpiCardsGrid'
+import { GaMainChartCard } from '@/components/dashboard/GaMainChartCard'
+import { GaDataTableCard } from '@/components/dashboard/GaDataTableCard'
+import { GaRealtimeCard } from '@/components/dashboard/GaRealtimeCard'
+import {
+  TrendingUp,
+  Target,
+  Sparkles,
+  Info,
+  Clock,
+  ExternalLink,
+  ChevronRight,
+  ShieldCheck,
+} from 'lucide-react'
 
-interface Lead {
-  id: string
-  lead_id: string
-  opportunity_id: string
-  nome: string
-  email: string
-  telefone: string
-  origem: string
-  campanha: string
-  estagio: string
-  responsavel: string
-  estado_qualificacao: string
-  score: number | null
-  motivo_decisao: string
-  proxima_acao: string
-  estado_agendamento: string
-  agendamento_situacao: string
-  calendar_event_id: string
-  created: string
-  updated: string
-}
+const Index: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<NavTab>('overview')
+  const [period, setPeriod] = useState<DatePeriod>('28d')
+  const [compareEnabled, setCompareEnabled] = useState(true)
+  const [selectedMetric, setSelectedMetric] = useState<
+    'vendas' | 'clientes' | 'conversao' | 'ticketMedio'
+  >('vendas')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
-const estagioColors: Record<string, string> = {
-  capturado: 'bg-blue-100 text-blue-800',
-  aguardando_dados: 'bg-yellow-100 text-yellow-800',
-  encerrado_entrada_invalida: 'bg-red-100 text-red-800',
-}
+  // Reactive data computed from current period selection
+  const kpiCards = getKpisForPeriod(period)
+  const timeSeries = getTimeSeriesForPeriod(period)
+  const channelData = getChannelsForPeriod(period)
+  const productData = getProductDimensionForPeriod(period)
 
-const origemColors: Record<string, string> = {
-  meta_ads: 'bg-purple-100 text-purple-800',
-  cora: 'bg-green-100 text-green-800',
-  indicacao: 'bg-orange-100 text-orange-800',
-  manual: 'bg-gray-100 text-gray-800',
-}
-
-const Index = () => {
-  const [leads, setLeads] = useState<Lead[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [user, setUser] = useState<any>(null)
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
-  const [scheduleDate, setScheduleDate] = useState('')
-  const [scheduleTime, setScheduleTime] = useState('')
-  const scheduleStart = scheduleDate && scheduleTime ? `${scheduleDate}T${scheduleTime}` : ''
-  const [scheduleMessage, setScheduleMessage] = useState('')
-  const [scheduleLoading, setScheduleLoading] = useState(false)
-
-  useEffect(() => {
-    // Verificar se há usuário logado
-    const currentUser = pb.authStore.model
-    if (currentUser) {
-      setUser(currentUser)
-    }
-
-    // Buscar leads
-    fetchLeads()
-  }, [])
-
-  const fetchLeads = async () => {
-    try {
-      setLoading(true)
-      const records = await pb.collection('leads').getFullList({
-        sort: '-created',
-      })
-      setLeads(records as unknown as Lead[])
-      setError(null)
-    } catch (err: any) {
-      setError(err.message || 'Erro ao carregar leads')
-    } finally {
-      setLoading(false)
-    }
+  const handleRefresh = () => {
+    setIsRefreshing(true)
+    setTimeout(() => {
+      setIsRefreshing(false)
+    }, 600)
   }
 
-  const handleLogin = async () => {
-    try {
-      await pb
-        .collection('users')
-        .authWithPassword('vinicius@terceirizou.com.br', 'Terceirizou@2026')
-      setUser(pb.authStore.model)
-      fetchLeads()
-    } catch (err: any) {
-      setError(err.message || 'Erro ao fazer login')
-    }
-  }
-
-  const handleLogout = () => {
-    pb.authStore.clear()
-    setUser(null)
-    setLeads([])
-  }
-
-  const handleSchedule = async () => {
-    if (!selectedLead || !scheduleStart) {
-      setScheduleMessage('Selecione um horário para continuar.')
-      return
-    }
-    const [data, hora] = scheduleStart.split('T')
-    const [h, m] = hora.split(':').map(Number)
-    if (m !== 0 && m !== 30) {
-      setScheduleMessage('Selecione um horário de 30 em 30 minutos (ex.: 10:00 ou 10:30).')
-      return
-    }
-    const min = h * 60 + m
-    const dentroManha = min >= 8 * 60 && min <= 11 * 60 + 30
-    const dentroTarde = min >= 13 * 60 + 30 && min <= 17 * 60 + 30
-    if (!dentroManha && !dentroTarde) {
-      setScheduleMessage('Horário fora do atendimento (08:00–12:00 e 13:30–18:00).')
-      return
-    }
-    const inicio = `${data}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00-03:00`
-    // fim = 30 min depois, mantendo o fuso America/Sao_Paulo (-03:00) sem passar por UTC
-    const totalMin = h * 60 + m + 30
-    const fh = Math.floor(totalMin / 60) % 24
-    const fm = totalMin % 60
-    const fim = `${data}T${String(fh).padStart(2, '0')}:${String(fm).padStart(2, '0')}:00-03:00`
-    setScheduleLoading(true)
-    setScheduleMessage('')
-    const enviar = async () => {
-      return fetch(pb.baseUrl + '/backend/v1/agendar-lead', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: pb.authStore.token,
-        },
-        body: JSON.stringify({
-          lead_id: selectedLead.id,
-          inicio,
-          fim,
-          email: selectedLead.email,
-        }),
-      })
-    }
-    const tratar = async (response: Response) => {
-      const result = await response.json()
-      if (response.ok) {
-        setScheduleMessage('Solicitação enviada: ' + (result.status || 'ok'))
-        fetchLeads()
-      } else {
-        setScheduleMessage(
-          'Solicitação não concluída: ' +
-            (result.motivo || result.error || result.message || 'verifique a configuração'),
-        )
-      }
-    }
-    try {
-      let response = await enviar()
-      if (response.status === 401) {
-        // token expirado/inválido (chave JWT muda a cada deploy) — refaz login e tenta de novo
-        await pb
-          .collection('users')
-          .authWithPassword('vinicius@terceirizou.com.br', 'Terceirizou@2026')
-        setUser(pb.authStore.model)
-        response = await enviar()
-      }
-      await tratar(response)
-    } catch (err: any) {
-      setScheduleMessage('Erro de conexão: ' + err.message)
-    } finally {
-      setScheduleLoading(false)
-    }
-  }
-
-  const handleBorda = async (acao: 'cancelar' | 'no_show') => {
-    if (!selectedLead) return
-    const operador = user?.name || user?.email || 'operador'
-    const motivo = acao === 'cancelar' ? 'cancelado pelo champion' : 'lead nao compareceu'
-    setScheduleLoading(true)
-    setScheduleMessage('')
-    const enviar = async () => {
-      return fetch(pb.baseUrl + '/backend/v1/agendar-borda', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: pb.authStore.token,
-        },
-        body: JSON.stringify({
-          lead_id: selectedLead.id,
-          acao,
-          operador,
-          motivo,
-        }),
-      })
-    }
-    const tratar = async (response: Response) => {
-      const result = await response.json()
-      if (response.ok) {
-        setScheduleMessage(
-          acao === 'cancelar'
-            ? 'Agendamento cancelado: ' + (result.status || 'ok')
-            : 'No-show registrado: ' + (result.status || 'ok'),
-        )
-        fetchLeads()
-      } else {
-        setScheduleMessage(
-          'Não concluído: ' +
-            (result.motivo || result.error || result.message || 'verifique a configuração'),
-        )
-      }
-    }
-    try {
-      let response = await enviar()
-      if (response.status === 401) {
-        // token expirado/inválido — refaz login e tenta de novo
-        await pb
-          .collection('users')
-          .authWithPassword('vinicius@terceirizou.com.br', 'Terceirizou@2026')
-        setUser(pb.authStore.model)
-        response = await enviar()
-      }
-      await tratar(response)
-    } catch (err: any) {
-      setScheduleMessage('Erro de conexão: ' + err.message)
-    } finally {
-      setScheduleLoading(false)
-    }
-  }
-
-  // Tela de login
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="max-w-md w-full space-y-8 p-8">
-          <div className="text-center">
-            <h1 className="text-3xl font-bold text-gray-900">CRM Oficial</h1>
-            <p className="mt-2 text-gray-600">Terceirizou — BPO Financeiro</p>
-          </div>
-          <div className="mt-8 space-y-4">
-            <button
-              onClick={handleLogin}
-              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              Entrar como Administrador
-            </button>
-            {error && <div className="text-red-600 text-sm text-center">{error}</div>}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Tela principal — lista de leads
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">CRM Oficial</h1>
-            <p className="text-sm text-gray-500">Terceirizou — BPO Financeiro</p>
-          </div>
-          <div className="flex items-center space-x-4">
-            <span className="text-sm text-gray-600">{user.name || user.email}</span>
-            <button onClick={handleLogout} className="text-sm text-red-600 hover:text-red-800">
-              Sair
-            </button>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-[#f8fafc] flex flex-col lg:flex-row font-sans text-slate-800 antialiased selection:bg-blue-100 selection:text-blue-900">
+      {/* Google Analytics Dark Left Sidebar */}
+      <GaSidebar
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        isOpenMobile={mobileMenuOpen}
+        onCloseMobile={() => setMobileMenuOpen(false)}
+      />
 
-      {/* Conteúdo */}
-      <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        {/* Resumo */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white rounded-lg shadow p-4">
-            <div className="text-sm font-medium text-gray-500">Total de Leads</div>
-            <div className="text-2xl font-bold text-gray-900">{leads.length}</div>
-          </div>
-          <div className="bg-white rounded-lg shadow p-4">
-            <div className="text-sm font-medium text-gray-500">Capturados</div>
-            <div className="text-2xl font-bold text-blue-600">
-              {leads.filter((l) => l.estagio === 'capturado').length}
-            </div>
-          </div>
-          <div className="bg-white rounded-lg shadow p-4">
-            <div className="text-sm font-medium text-gray-500">Aguardando Dados</div>
-            <div className="text-2xl font-bold text-yellow-600">
-              {leads.filter((l) => l.estagio === 'aguardando_dados').length}
-            </div>
-          </div>
-          <div className="bg-white rounded-lg shadow p-4">
-            <div className="text-sm font-medium text-gray-500">Encerrados</div>
-            <div className="text-2xl font-bold text-red-600">
-              {leads.filter((l) => l.estagio === 'encerrado_entrada_invalida').length}
-            </div>
-          </div>
-        </div>
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Sticky GA4 Top Header with Date Selectors */}
+        <GaHeader
+          period={period}
+          onChangePeriod={setPeriod}
+          compareEnabled={compareEnabled}
+          onToggleCompare={() => setCompareEnabled(!compareEnabled)}
+          onOpenMobileMenu={() => setMobileMenuOpen(true)}
+          isRefreshing={isRefreshing}
+          onRefresh={handleRefresh}
+        />
 
-        {/* Tabela de leads */}
-        <div className="bg-white shadow rounded-lg">
-          <div className="px-4 py-5 sm:px-6 border-b border-gray-200 flex justify-between items-center">
-            <h2 className="text-lg font-medium text-gray-900">Leads</h2>
-            <button onClick={fetchLeads} className="text-sm text-indigo-600 hover:text-indigo-800">
-              Atualizar
-            </button>
-          </div>
-
-          {loading ? (
-            <div className="p-8 text-center text-gray-500">Carregando...</div>
-          ) : error ? (
-            <div className="p-8 text-center text-red-500">{error}</div>
-          ) : leads.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">Nenhum lead encontrado</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full border-separate border-spacing-0 divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Nome
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Email
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Telefone
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Origem
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Estágio
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Responsável
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Qualificação
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Criado em
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky right-0 bg-gray-50 z-10 shadow-[inset_2px_0_0_0_rgba(0,0,0,0.06)]">
-                      Ação
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {leads.map((lead) => (
-                    <tr key={lead.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {lead.nome}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {lead.email || '—'}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {lead.telefone || '—'}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <span
-                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${origemColors[lead.origem] || 'bg-gray-100 text-gray-800'}`}
-                        >
-                          {lead.origem}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <span
-                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${estagioColors[lead.estagio] || 'bg-gray-100 text-gray-800'}`}
-                        >
-                          {lead.estagio}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {lead.responsavel}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm">
-                        <span className="font-medium text-gray-900">
-                          {lead.estado_qualificacao || '—'}
-                        </span>
-                        {lead.score !== null && (
-                          <span className="ml-2 text-gray-500">({lead.score})</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(lead.created).toLocaleDateString('pt-BR')}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm sticky right-0 bg-white z-[1]">
-                        <button
-                          onClick={() => {
-                            setSelectedLead(lead)
-                            setScheduleMessage('')
-                            setScheduleDate('')
-                            setScheduleTime('')
-                          }}
-                          className="text-indigo-600 hover:text-indigo-800"
-                        >
-                          Abrir
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </main>
-
-      {selectedLead && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
-            <div className="flex justify-between items-start">
+        {/* Dashboard Body */}
+        <main className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
+          {/* Quick Notice Banner: Pure GA4 Interface Info */}
+          <div className="bg-white rounded-xl border border-blue-200/80 p-3.5 sm:p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-blue-50/50 via-white to-white">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                <Sparkles className="w-4 h-4" />
+              </div>
               <div>
-                <h3 className="text-lg font-medium text-gray-900">{selectedLead.nome}</h3>
-                <p className="text-sm text-gray-500">{selectedLead.lead_id}</p>
-              </div>
-              <button
-                onClick={() => setSelectedLead(null)}
-                className="text-gray-500 hover:text-gray-900"
-              >
-                Fechar
-              </button>
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              <p>
-                <strong>Email:</strong> {selectedLead.email || '—'}
-              </p>
-              <p>
-                <strong>Telefone:</strong> {selectedLead.telefone || '—'}
-              </p>
-              <p>
-                <strong>Qualificação:</strong> {selectedLead.estado_qualificacao || '—'}
-              </p>
-              <p>
-                <strong>Score:</strong> {selectedLead.score ?? '—'}
-              </p>
-              <p className="col-span-2">
-                <strong>Motivo:</strong> {selectedLead.motivo_decisao || '—'}
-              </p>
-              <p className="col-span-2">
-                <strong>Próxima ação:</strong> {selectedLead.proxima_acao || '—'}
-              </p>
-            </div>
-            {selectedLead.estado_qualificacao === 'qualificado' ? (
-              <div className="mt-6 border-t pt-4">
-                <h4 className="font-medium text-gray-900">Solicitar agendamento</h4>
-                <p className="text-sm text-gray-500 mt-1">
-                  Escolha o início da reunião de 30 minutos.
-                </p>
-                <div className="mt-3 grid grid-cols-2 gap-3">
-                  <input
-                    type="date"
-                    value={scheduleDate}
-                    onChange={(event) => {
-                      setScheduleDate(event.target.value)
-                      setScheduleTime('')
-                    }}
-                    className="block w-full border border-gray-300 rounded-md p-2"
-                  />
-                  <select
-                    value={scheduleTime}
-                    onChange={(event) => setScheduleTime(event.target.value)}
-                    className="block w-full border border-gray-300 rounded-md p-2"
-                  >
-                    <option value="">Horário</option>
-                    {Array.from({ length: 48 }, (_, i) => {
-                      const h = String(Math.floor(i / 2)).padStart(2, '0')
-                      const m = i % 2 === 0 ? '00' : '30'
-                      // Horário de atendimento: 08:00–12:00 e 13:30–18:00
-                      const min = h * 60 + Number(m)
-                      const dentroManha = min >= 8 * 60 && min <= 11 * 60 + 30
-                      const dentroTarde = min >= 13 * 60 + 30 && min <= 17 * 60 + 30
-                      if (!dentroManha && !dentroTarde) return null
-                      return (
-                        <option key={`${h}:${m}`} value={`${h}:${m}`}>
-                          {h}:{m}
-                        </option>
-                      )
-                    })}
-                  </select>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-blue-900">
+                    Painel Executivo — Estilo Google Analytics 4
+                  </span>
+                  <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded font-semibold uppercase">
+                    Modo Simulação
+                  </span>
                 </div>
-                <button
-                  onClick={handleSchedule}
-                  disabled={scheduleLoading}
-                  className="mt-3 w-full px-4 py-2 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded-md disabled:opacity-50"
-                >
-                  {scheduleLoading ? 'Enviando...' : 'Solicitar agendamento'}
-                </button>
-                {scheduleMessage && <p className="mt-3 text-sm text-gray-700">{scheduleMessage}</p>}
-                {selectedLead.estado_agendamento === 'agendado' &&
-                selectedLead.agendamento_situacao !== 'cancelado' &&
-                selectedLead.agendamento_situacao !== 'no_show' ? (
-                  <div className="mt-4 border-t pt-4">
-                    <h4 className="font-medium text-gray-900">Operar agendamento</h4>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Evento: {selectedLead.calendar_event_id || '—'}
-                    </p>
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        onClick={() => handleBorda('cancelar')}
-                        disabled={scheduleLoading}
-                        className="flex-1 px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 rounded-md disabled:opacity-50"
-                      >
-                        {scheduleLoading ? 'Enviando...' : 'Cancelar agendamento'}
-                      </button>
-                      <button
-                        onClick={() => handleBorda('no_show')}
-                        disabled={scheduleLoading}
-                        className="flex-1 px-4 py-2 text-sm text-white bg-amber-600 hover:bg-amber-700 rounded-md disabled:opacity-50"
-                      >
-                        {scheduleLoading ? 'Enviando...' : 'Marcar no-show'}
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
+                <p className="text-xs text-slate-600 mt-0.5">
+                  Métricas em destaque: <strong>Vendas e Clientes</strong> (conforme recomendação).
+                  Todos os seletores e gráficos reagem dinamicamente à navegação.
+                </p>
               </div>
-            ) : (
-              <p className="mt-6 text-sm text-gray-500">
-                Este lead não está qualificado para agendamento.
-              </p>
-            )}
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs text-slate-500 font-mono hidden sm:inline">
+                Fuso: America/Sao_Paulo (GMT-3)
+              </span>
+            </div>
           </div>
-        </div>
-      )}
+
+          {/* 1. TOP CARDS GRID: Vendas e Clientes em destaque absoluto */}
+          <section aria-label="Cartões de Métricas Principais">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Target className="w-4 h-4 text-blue-600" />
+                <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  KPIs Principais & Variação do Período
+                </h2>
+              </div>
+              <span className="text-xs text-slate-400">
+                Clique em um cartão para projetar no gráfico
+              </span>
+            </div>
+
+            <GaKpiCardsGrid
+              cards={kpiCards}
+              selectedMetric={selectedMetric}
+              onSelectMetric={setSelectedMetric}
+              compareEnabled={compareEnabled}
+            />
+          </section>
+
+          {/* 2. MAIN TIME SERIES LINE CHART + REALTIME SIDEBAR WIDGET */}
+          <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            {/* Main Area / Line Chart (spans 2 columns on desktop) */}
+            <div className="lg:col-span-2">
+              <GaMainChartCard
+                data={timeSeries}
+                selectedMetric={selectedMetric}
+                compareEnabled={compareEnabled}
+              />
+            </div>
+
+            {/* Realtime Snapshot Widget (GA4 real-time panel) */}
+            <div className="lg:col-span-1">
+              <GaRealtimeCard realtime={MOCK_REALTIME} />
+            </div>
+          </section>
+
+          {/* 3. GA4 DATA TABLE: Dimension Breakdown (Acquisition Channels & Services) */}
+          <section aria-label="Relatório de Dimensões e Conversões">
+            <GaDataTableCard channelData={channelData} productData={productData} />
+          </section>
+
+          {/* 4. Secondary Analytics Insight Cards */}
+          <section className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            {/* Insight 1 */}
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600 shrink-0">
+                <TrendingUp className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-semibold text-slate-900">Melhor canal em taxa de conversão</h4>
+                <p className="text-slate-500 mt-1 leading-relaxed">
+                  <strong>Indicações e Parcerias</strong> atingiram <strong>6,90%</strong> de taxa
+                  de conversão neste período, gerando o maior ticket médio unitário.
+                </p>
+              </div>
+            </div>
+
+            {/* Insight 2 */}
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-blue-50 text-blue-600 shrink-0">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-semibold text-slate-900">
+                  Produto mais vendido: BPO Financeiro
+                </h4>
+                <p className="text-slate-500 mt-1 leading-relaxed">
+                  O plano completo de BPO representa <strong>45,9%</strong> do faturamento total
+                  recorrente, com retenção superior a 94%.
+                </p>
+              </div>
+            </div>
+
+            {/* Insight 3 */}
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-amber-50 text-amber-600 shrink-0">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-semibold text-slate-900">Horário de pico de fechamentos</h4>
+                <p className="text-slate-500 mt-1 leading-relaxed">
+                  Terças e quintas-feiras entre as <strong>10h00 e 15h30</strong> concentram 58% dos
+                  contratos assinados pela equipe comercial.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* Footer note GA4 style */}
+          <footer className="pt-6 pb-8 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-2">
+            <div className="flex items-center gap-2">
+              <span>Google Analytics 4 — Interface de Demonstração</span>
+              <span>•</span>
+              <span>Propriedade: CRM Oficial Terceirizou</span>
+            </div>
+            <div className="flex items-center gap-4">
+              <a
+                href="/fila"
+                className="text-slate-500 hover:text-blue-600 flex items-center gap-1"
+              >
+                <span>Acessar Fila de Recuperação</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          </footer>
+        </main>
+      </div>
     </div>
   )
 }

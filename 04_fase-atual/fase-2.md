@@ -7,13 +7,13 @@
 
 ## Tasks realizadas
 
-| ID | Task | Evidência sincronizada | Status |
-|---|---|---|---|
-| F2-T01 | Definir e validar regra v1 de qualificação | Regra determinística: carteira de serviços, exclusões comércio/indústria, receita, cargo decisor, limiar 4, estados e SLA de revisão | ✅ CONCLUÍDA |
-| F2-T02 | Adicionar campos de qualificação ao CRM | Migration `pocketbase/migrations/0006_add_qualificacao_fields.js`; 6 campos aditivos em `leads`; rollback limitado aos campos novos | ✅ CONCLUÍDA |
+| ID     | Task                                               | Evidência sincronizada                                                                                                                                            | Status       |
+| ------ | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| F2-T01 | Definir e validar regra v1 de qualificação         | Regra determinística: carteira de serviços, exclusões comércio/indústria, receita, cargo decisor, limiar 4, estados e SLA de revisão                              | ✅ CONCLUÍDA |
+| F2-T02 | Adicionar campos de qualificação ao CRM            | Migration `pocketbase/migrations/0006_add_qualificacao_fields.js`; 6 campos aditivos em `leads`; rollback limitado aos campos novos                               | ✅ CONCLUÍDA |
 | F2-T03 | Automatizar classificação na criação e atualização | Hooks `qualificar_lead_create.js` e `qualificar_lead_update.js`; classificação determinística, score explicável e reclassificação somente quando `respostas` muda | ✅ CONCLUÍDA |
-| F2-T04 | Criar fila de revisão e correção humana auditável | Hooks `fila_revisao.js` e `revisar_lead.js`; rotas `/backend/v1/fila-revisao` e `/backend/v1/revisar-lead`; histórico preservado | ✅ CONCLUÍDA |
-| F2-T05 | Provar regressão, acesso, rollback e histórico | Regressão CA-2-001..004; acesso por papel CA-2-005 com 404; rollback preservando histórico; 2 eventos auditáveis; aceite do champion no commit `1fbf13b` | ✅ CONCLUÍDA |
+| F2-T04 | Criar fila de revisão e correção humana auditável  | Hooks `fila_revisao.js` e `revisar_lead.js`; rotas `/backend/v1/fila-revisao` e `/backend/v1/revisar-lead`; histórico preservado                                  | ✅ CONCLUÍDA |
+| F2-T05 | Provar regressão, acesso, rollback e histórico     | Regressão CA-2-001..004; acesso por papel CA-2-005 com 404; rollback preservando histórico; 2 eventos auditáveis; aceite do champion no commit `1fbf13b`          | ✅ CONCLUÍDA |
 
 ## Regra v1
 
