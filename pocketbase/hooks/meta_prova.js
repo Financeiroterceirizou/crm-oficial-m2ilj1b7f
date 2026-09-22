@@ -1,8 +1,10 @@
 // F4 cd704a1c - Prova tecnica timeboxed do conector Meta via Composio (SPEC-4-001, B4-103).
 // POST /backend/v1/meta-prova
-// Nao ingere nada no CRM: autentica, lista escopos/tools, valida a conta aprovada,
-// le amostra (campanhas + insights da janela) e registra limites. Falha = lacuna visivel,
-// sem falso sucesso (CA-4-101/104). Somente leitura - nunca escreve no Meta.
+// Nao ingere nada no CRM: valida chave, conexão ativa, conta aprovada, amostra de campanhas
+// e insights da janela. Falha = lacuna visivel, sem falso sucesso (CA-4-101/104).
+// Somente leitura - nunca escreve no Meta.
+// v0.0.70: schemas reais do Composio — argumentos ad_account_id (LIST_CAMPAIGNS/LIST_ADS),
+// object_id + time_range{since,until} (GET_INSIGHTS); user_id obrigatorio no execute.
 // NOTA runtime Skip: tudo declarado DENTRO do callback (escopo de modulo nao visivel ao handler).
 
 routerAdd(
@@ -13,7 +15,6 @@ routerAdd(
     const JANELA_DIAS = 30 // B4-104: amostra sugerida (confirmacao formal antes da ingestao)
 
     const apiKeyBruta = $secrets.get('COMPOSIO_API')
-    // trim defensivo + remove aspas/espacos colados no valor (causa comum de header invalido)
     const apiKey = apiKeyBruta
       ? String(apiKeyBruta)
           .trim()
@@ -27,108 +28,21 @@ routerAdd(
         prova_aprovada: false,
       })
     }
-    // diagnostico de FORMA (nunca expõe o valor): comprimento, espaços/quebras, prefixo
-    const diagChave = {
-      comprimento: apiKey.length,
-      tem_espaco: /\s/.test(apiKey),
-      prefixo: apiKey.slice(0, 4) + '***',
+    const H = {
+      'x-api-key': apiKey,
+      'Content-Type': 'application/json',
+      'User-Agent': 'terceirizou-crm-fase4/1.0',
     }
 
-    function montarHeaders(tipo) {
-      const h = {
-        'Content-Type': 'application/json',
-        'User-Agent': 'terceirizou-crm-fase4/1.0',
-      }
-      if (tipo === 'org') h['x-org-api-key'] = apiKey
-      else h['x-api-key'] = apiKey
-      return h
-    }
-    // tipo de chave detectado na primeira chamada (projeto x-api-key ou organização x-org-api-key)
-    let TIPO_CHAVE = null
-    function headers() {
-      return montarHeaders(TIPO_CHAVE || 'projeto')
-    }
-
-    // --- 1. conexão ativa no toolkit metaads ---
-    // tenta header de projeto (x-api-key); se 401, tenta header de organização (x-org-api-key)
-    let contas = null
-    let tipoUsado = null
-    for (const tipo of ['projeto', 'org']) {
-      try {
-        contas = $http.send({
-          url: 'https://backend.composio.dev/api/v3.1/connected_accounts?toolkit_slug=metaads',
-          method: 'GET',
-          headers: montarHeaders(tipo),
-          timeout: 20,
-        })
-      } catch (_) {
-        contas = null
-      }
-      if (contas && contas.statusCode >= 200 && contas.statusCode < 300) {
-        tipoUsado = tipo
-        TIPO_CHAVE = tipo
-        break
-      }
-      if (contas && contas.statusCode !== 401) break // erro real (não é tipo errado de chave)
-    }
-    if (
-      !contas ||
-      contas.statusCode < 200 ||
-      contas.statusCode >= 300 ||
-      !contas.json ||
-      !contas.json.items ||
-      contas.json.items.length === 0
-    ) {
-      return e.json(502, {
-        status: 'falha',
-        etapa: 'connected_accounts',
-        http: contas ? contas.statusCode : 'transport_error',
-        corpo_resumido: contas && contas.json ? JSON.stringify(contas.json).slice(0, 300) : '',
-        tipo_chave_testado: tipoUsado || 'nenhum_autenticou',
-        diagnostico_chave: diagChave,
-        prova_aprovada: false,
-        lacuna: 'chave rejeitada pelo Composio ou nenhuma conta metaads conectada',
-      })
-    }
-    const conta = contas.json.items[0]
-    const connectedAccountId = conta.id
-
-    // --- 2. tools disponiveis (diagnostico de slugs reais) ---
-    let tools = null
-    try {
-      tools = $http.send({
-        url: 'https://backend.composio.dev/api/v3.1/tools?toolkit_slug=metaads',
-        method: 'GET',
-        headers: headers(),
-        timeout: 20,
-      })
-    } catch (_) {
-      tools = null
-    }
-    const slugs = []
-    if (tools && tools.json && tools.json.items) {
-      for (let i = 0; i < tools.json.items.length; i++) {
-        const s = String(tools.json.items[i].slug || '')
-        if (
-          s.indexOf('ACCOUNT') !== -1 ||
-          s.indexOf('CAMPAIGN') !== -1 ||
-          s.indexOf('INSIGHT') !== -1 ||
-          s.indexOf('ADS') !== -1
-        ) {
-          slugs.push(s)
-        }
-      }
-    }
-
-    // --- 3. executa METAADS_GET_AD_ACCOUNTS (leitura) ---
-    function executar(toolSlug, args) {
-      const payload = { arguments: args || {}, connectedAccountId: connectedAccountId }
+    // --- helper: executa tool Composio (leitura) ---
+    function executar(toolSlug, args, connectedAccountId, userId) {
+      const payload = { arguments: args, connectedAccountId: connectedAccountId, user_id: userId }
       let r = null
       try {
         r = $http.send({
           url: 'https://backend.composio.dev/api/v3.1/tools/execute/' + toolSlug,
           method: 'POST',
-          headers: headers(),
+          headers: H,
           body: JSON.stringify(payload),
           timeout: 25,
         })
@@ -148,54 +62,141 @@ routerAdd(
       }
     }
 
-    const provaContas = executar('METAADS_GET_AD_ACCOUNTS', {})
-    let contaAprovadaEncontrada = false
-    if (provaContas.ok && provaContas.data) {
-      const texto = JSON.stringify(provaContas.data)
-      if (texto.indexOf(CONTA_APROVADA) !== -1) contaAprovadaEncontrada = true
+    // --- 1. conexão ativa no toolkit metaads (pega userId do dono) ---
+    let contas = null
+    try {
+      contas = $http.send({
+        url: 'https://backend.composio.dev/api/v3.1/connected_accounts?toolkit_slug=metaads',
+        method: 'GET',
+        headers: H,
+        timeout: 20,
+      })
+    } catch (_) {
+      contas = null
     }
-
-    // --- 4. amostra: campanhas da conta aprovada ---
-    let amostraCampanhas = null
-    if (contaAprovadaEncontrada) {
-      const r = executar('METAADS_LIST_CAMPAIGNS', { account_id: CONTA_APROVADA, limit: 10 })
-      amostraCampanhas = r.ok ? r.data : { falha: r.http }
+    if (
+      !contas ||
+      contas.statusCode < 200 ||
+      contas.statusCode >= 300 ||
+      !contas.json ||
+      !contas.json.items ||
+      contas.json.items.length === 0
+    ) {
+      return e.json(502, {
+        status: 'falha',
+        etapa: 'connected_accounts',
+        http: contas ? contas.statusCode : 'transport_error',
+        prova_aprovada: false,
+        lacuna: 'nenhuma conta metaads ativa no Composio ou API indisponivel',
+      })
     }
-
-    // --- 5. insights da janela (B4-104) na primeira campanha da amostra ---
-    let amostraInsights = null
-    if (amostraCampanhas && !amostraCampanhas.falha) {
-      let primeira = null
-      const arr =
-        amostraCampanhas && typeof amostraCampanhas === 'object'
-          ? amostraCampanhas.data || amostraCampanhas
-          : null
-      if (Array.isArray(arr) && arr.length > 0) primeira = arr[0]
-      else if (arr && arr.data && Array.isArray(arr.data) && arr.length === undefined)
-        primeira = arr.data[0]
-      if (primeira && (primeira.id || primeira.campaign_id)) {
-        const hoje = new Date()
-        const ini = new Date(hoje.getTime() - JANELA_DIAS * 24 * 3600 * 1000)
-        const fmt = (d) => d.toISOString().slice(0, 10)
-        const r = executar('METAADS_GET_INSIGHTS', {
-          object_id: primeira.id || primeira.campaign_id,
-          date_range: { since: fmt(ini), until: fmt(hoje) },
-        })
-        amostraInsights = r.ok ? r.data : { falha: r.http }
-      } else {
-        amostraInsights = { nota: 'sem campanha na amostra para insights' }
+    // primeira conta ACTIVE (pode haver contas EXPIRED na lista)
+    let conta = null
+    for (let i = 0; i < contas.json.items.length; i++) {
+      if (contas.json.items[i].status === 'ACTIVE') {
+        conta = contas.json.items[i]
+        break
       }
     }
+    if (!conta) {
+      return e.json(502, {
+        status: 'falha',
+        etapa: 'connected_accounts',
+        prova_aprovada: false,
+        lacuna: 'nenhuma conta metaads com status ACTIVE (todas expiradas)',
+      })
+    }
+    const connectedAccountId = conta.id
 
-    const aprovada = contaAprovadaEncontrada && amostraCampanhas && !amostraCampanhas.falha
+    // --- 2. userId do dono da conexão (obrigatorio no execute) ---
+    let detalhe = null
+    try {
+      detalhe = $http.send({
+        url: 'https://backend.composio.dev/api/v3.1/connected_accounts/' + connectedAccountId,
+        method: 'GET',
+        headers: H,
+        timeout: 20,
+      })
+    } catch (_) {
+      detalhe = null
+    }
+    const userId = detalhe && detalhe.json ? detalhe.json.userId || detalhe.json.user_id : null
+    if (!userId) {
+      return e.json(502, {
+        status: 'falha',
+        etapa: 'user_id',
+        prova_aprovada: false,
+        lacuna: 'nao foi possivel obter o userId da conexao Composio',
+      })
+    }
+
+    // --- 3. conta de anúncios aprovada acessivel (B4-101) ---
+    const provaContas = executar('METAADS_GET_AD_ACCOUNTS', {}, connectedAccountId, userId)
+    let contaAprovadaEncontrada = false
+    if (provaContas.ok && provaContas.data) {
+      if (JSON.stringify(provaContas.data).indexOf(CONTA_APROVADA) !== -1) {
+        contaAprovadaEncontrada = true
+      }
+    }
+    if (!contaAprovadaEncontrada) {
+      return e.json(502, {
+        status: 'falha',
+        etapa: 'conta_aprovada',
+        connected_account_id: connectedAccountId,
+        prova_aprovada: false,
+        lacuna: 'conta ' + CONTA_APROVADA + ' nao acessivel pela conexao (RN-4-101: zero ingestao)',
+      })
+    }
+
+    // --- 4. amostra: campanhas (schema real: ad_account_id + fields) ---
+    const amostra = executar(
+      'METAADS_LIST_CAMPAIGNS',
+      {
+        ad_account_id: CONTA_APROVADA,
+        limit: 10,
+        fields: ['id', 'name', 'objective', 'status', 'effective_status'],
+      },
+      connectedAccountId,
+      userId,
+    )
+    let campanhas = []
+    if (amostra.ok && amostra.data && amostra.data.data) {
+      campanhas = amostra.data.data
+    }
+
+    // --- 5. insights da campanha mais recente (schema real: object_id + time_range) ---
+    let amostraInsights = null
+    if (campanhas.length > 0) {
+      const hoje = new Date()
+      const ini = new Date(hoje.getTime() - JANELA_DIAS * 24 * 3600 * 1000)
+      const fmt = (d) => d.toISOString().slice(0, 10)
+      const r = executar(
+        'METAADS_GET_INSIGHTS',
+        {
+          object_id: campanhas[0].id,
+          time_range: { since: fmt(ini), until: fmt(hoje) },
+        },
+        connectedAccountId,
+        userId,
+      )
+      amostraInsights = r.ok ? r.data : { falha: r.http }
+    } else {
+      amostraInsights = { nota: 'sem campanhas na conta para insights' }
+    }
+
+    const aprovada = campanhas.length > 0
 
     return e.json(aprovada ? 200 : 502, {
       status: aprovada ? 'prova_aprovada' : 'prova_falhou',
-      tipo_chave: TIPO_CHAVE,
       connected_account_id: connectedAccountId,
+      conta_aprovada: CONTA_APROVADA,
       conta_aprovada_encontrada: contaAprovadaEncontrada,
-      tools_leitura_disponiveis: slugs,
-      amostra_campanhas: amostraCampanhas,
+      campanhas_na_amostra: campanhas.length,
+      campanhas_resumo: campanhas.slice(0, 6).map((c) => ({
+        id: c.id,
+        nome: c.name,
+        status: c.status,
+      })),
       amostra_insights: amostraInsights,
       janela_dias: JANELA_DIAS,
       prova_aprovada: aprovada,
