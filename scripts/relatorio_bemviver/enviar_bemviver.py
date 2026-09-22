@@ -5,6 +5,8 @@
 # Chave Resend: scripts/95b7f382c0a1ba1d/resend_key.txt (fora do repo) ou env RESEND_API_KEY.
 # Destinatários: financeirodabemviver@gmail.com (to) + financeiro@terceirizou.com.br (bcc).
 # Anexos: Comparativo (paisagem) + Relatórios (retrato) + Excel.
+# Idempotência: relatorio-bemviver-AAAAMMDD-mtime-anexos — regeneração do PDF = reenvio legítimo;
+# mesmo arquivo = bloqueado (409).
 import base64, json, os, sys, urllib.request
 from datetime import date
 
@@ -39,11 +41,15 @@ if os.path.exists(comp_path):
     with open(comp_path, "rb") as f:
         anexos.insert(0, {"filename": os.path.basename(comp_path), "content": base64.b64encode(f.read()).decode()})
 
+# idempotência inclui a hora do PDF (regeneração = reenvio legítimo; mesmo arquivo = bloqueado)
+hora_pdf = date.today().strftime("%Y%m%d") + "-" + str(int(os.path.getmtime(pdf_path)) % 100000)
+
 html = """<p>Boa tarde!</p>
 <p>Segue em anexo o <b>pacote de relatórios gerenciais semanais da BEM VIVER</b> (fonte Controlle).</p>
 <p>Inclui: Comparativo dos últimos 13 meses, Consolidado do mês, Despesas em aberto, Inadimplência
-(geral e apenas boleto), Previsão do mês corrente e do mês seguinte, Previsão de receitas da semana
-(geral e apenas boleto), Saldo nas contas e Previsão de fluxo de caixa para os próximos 12 meses.</p>
+(geral e apenas boleto, com todos os lançamentos por categoria), Previsão do mês corrente e do mês
+seguinte, Previsão de receitas da semana (geral e apenas boleto), Saldo nas contas e Previsão de fluxo
+de caixa para os próximos 12 meses.</p>
 <p>PDF e Excel em anexo. Qualquer dúvida estamos à disposição.</p>
 <p>Att,<br>Terceirizou — mais do que terceirizar o financeiro</p>"""
 
@@ -59,7 +65,7 @@ payload = {
 req = urllib.request.Request(API, data=json.dumps(payload).encode(), method="POST")
 req.add_header("Authorization", f"Bearer {KEY}")
 req.add_header("User-Agent", "terceirizou-relatorio-bemviver/1.0")
-req.add_header("Idempotency-Key", f"relatorio-bemviver-{date.today().strftime('%Y%m%d')}-{len(anexos)}")
+req.add_header("Idempotency-Key", f"relatorio-bemviver-{hora_pdf}-{len(anexos)}")
 req.add_header("Content-Type", "application/json")
 
 with urllib.request.urlopen(req, timeout=60) as resp:
