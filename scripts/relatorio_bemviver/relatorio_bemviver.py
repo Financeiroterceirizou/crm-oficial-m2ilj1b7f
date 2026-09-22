@@ -1,38 +1,24 @@
 #!/usr/bin/env python3
-# Relatórios Semanais — BEM VIVER (ILPI) — v1.3, 2026-09-21
+# Relatórios Semanais — BEM VIVER (ILPI) — v1.4, 2026-09-21
 # Uso: python3 relatorio_bemviver.py [YYYY-MM-DD]  (default: hoje)
 # Gera UM PDF + UM Excel com os 11 relatórios no padrão dos exemplos de 14/09
 #   + Comparativo 13 meses em PDF PRÓPRIO PAISAGEM.
 # Fonte: API Controlle v1 (token Bem Viver). Envio: segunda-feira 14:00 → financeirodabemviver@gmail.com
 #
-# v1.3 (feedback Vinícius 21/09 22:35 e 23:04):
-#   PDF:
-#   - Comparativo: coluna MÉDIA (série e matriz por categoria); série "Resultado do mês" (entradas+saídas)
-#   - Consolidado: linhas Total de Receitas / Total de Despesas / Resultado
-#   - Despesas em aberto: resumo + demonstrativo dos lançamentos (igual Inadimplência)
-#   - Inadimplência: somatório considerando Negociação Judicial
-#   - Saldo nas contas: verde positivo / vermelho negativo
-#   - Previsão Fluxo de Caixa: entradas verde / saídas vermelho, saldo projetado negrito colorido, SEM gráfico
-#   - Layout: título (h1 16) / subtítulo (h2 12 laranja) / sub-subtítulo (h3 10) / nota (sub itálico cinza)
-#   Excel:
-#   - Comparativo: "Resultado do mês" no lugar de Saldo realizado + coluna Média
-#   - Consolidado: Total de Receitas / Total de Despesas / Resultado
-#   - Detalhe consolidado do mês: agrupado por categoria com total por categoria
-#   - Detalhe Previsão do mês: agrupado por categoria, dt_billing com fallback dt_due
-#   - Coluna Lançamentos: número inteiro sem R$; valores positivos VERDE / negativos VERMELHO
-#   - Títulos e linhas de resultado: negrito e centralizados
+# v1.4 (feedback Vinícius 21/09 23:25 — ÚLTIMO AJUSTE):
+#   - Comparativo PDF: série "Resultado do mês" (entradas+saídas) no lugar de Saldo realizado
+#   - Inadimplência: dois somatórios — TOTAL e EXCLUINDO Negociação Judicial (01.97) e
+#     Possível Perda de Receita (01.99)
+#   - Layout: KeepTogether — relatório completo numa página (título + tabela juntos;
+#     demonstrativos quebram por bloco de categoria, nunca no meio de um bloco)
+#   - Excel: abas separadas "Detalhe Previsão mês corrente" e "Detalhe Previsão mês seguinte"
 #
-# v1.2 (feedback Vinícius 21/09):
-#   - Comparativo: valores SEM centavos e SEM R$ (inteiros), receitas VERDE / despesas VERMELHO
-#   - Consolidado/Previsões: ordem por descrição da categoria (não por valor) + cores verde/vermelho
-#   - Inadimplência (geral e boleto): além do resumo, TODOS os lançamentos por categoria + total da categoria
-#   - Títulos únicos (Despesas em aberto e Receitas da semana não repetem mais o título)
-#
-# v1.1 (feedback Vinícius 21/09):
-#   - TODOS os relatórios filtram centro de custo BEM VIVER (rateio cost_center_id == 169959)
-#   - Transferências entre contas fora (categoria 99.01 + ds_transaction "Transferência de")
-#   - Comparativo 13 meses em PDF próprio PAISAGEM
-#
+# v1.3 (feedback 21/09 22:35 e 23:04): Média no comparativo (PDF+Excel); Consolidado com
+#   Total de Receitas/Despesas/Resultado; Despesas em aberto com demonstrativo; Saldo colorido;
+#   Fluxo 12m sem gráfico; Excel com cores/negrito/centralizado; detalhes agrupados por categoria.
+# v1.2 (feedback 21/09): comparativo inteiro sem R$ + verde/vermelho; ordem por categoria;
+#   inadimplência com todos os lançamentos; títulos únicos.
+# v1.1 (feedback 21/09): filtro centro de custo BEM VIVER + transferências fora; comparativo paisagem.
 # v1.0 (2026-09-21): pacote original com 11 relatórios.
 import json, os, sys, urllib.request
 from collections import defaultdict
@@ -43,7 +29,7 @@ from reportlab.lib.units import cm
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-                                PageBreak)
+                                PageBreak, KeepTogether)
 
 BASE = "https://api-v1.controlle.com"
 _token = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".controlle_token_bemviver")
@@ -272,7 +258,6 @@ def tabela(rows, widths, fs=7.5):
     return t
 
 def tabela_cat(titulo, grupos, positivo=True, total_label="Total"):
-    E = [P(f"<b>{titulo}</b>", h2)]
     rows = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
     for nome, (v, n) in sorted(grupos.items(), key=lambda x: x[0]):
         rows.append([P(nome, cell), P(str(n), cellc), P_val(v, cellr)])
@@ -280,14 +265,13 @@ def tabela_cat(titulo, grupos, positivo=True, total_label="Total"):
     rows.append([P(f"<b>{total_label}</b>", cellrb), P(f"<b>{sum(n for _, n in grupos.values())}</b>", cellc), P_val(tot, cellrb)])
     t = tabela(rows, [11*cm, 2.5*cm, 3*cm])
     t.setStyle(TableStyle([("BACKGROUND", (0,len(rows)-1), (-1,len(rows)-1), LARANJA_CLARO)]))
-    E.append(t)
-    return E
+    # título + tabela juntos: o relatório completo não quebra no meio
+    return [KeepTogether([P(f"<b>{titulo}</b>", h2), t])]
 
 def tabela_lancamentos(txs, titulo=None, total_label="Total"):
     """Demonstrativo dos lançamentos (um bloco por categoria, com total por categoria)."""
     E = []
-    if titulo:
-        E.append(P(f"<b>{titulo}</b>", h2))
+    primeiro = True
     por_cat = defaultdict(list)
     for t in txs:
         por_cat[cat_nome(t)].append(t)
@@ -301,8 +285,11 @@ def tabela_lancamentos(txs, titulo=None, total_label="Total"):
         rows.append([P("<b>Total</b>", cellrb), P(f"<b>{cat}</b>", cellrb), P("", cell), P(f"<b>{len(txs_cat)}</b>", cellc), P_val(sum(t["value_in_cent"] for t in txs_cat), cellrb)])
         tt = tabela(rows, [2.2*cm, 7.3*cm, 3.2*cm, 1.8*cm, 3*cm])
         tt.setStyle(TableStyle([("BACKGROUND", (0,len(rows)-1), (-1,len(rows)-1), LARANJA_CLARO)]))
-        E.append(P(f"<b>{cat}</b>", h3))
-        E.append(tt)
+        if primeiro and titulo:
+            E.append(KeepTogether([P(f"<b>{titulo}</b>", h2), P(f"<b>{cat}</b>", h3), tt]))
+            primeiro = False
+        else:
+            E.append(KeepTogether([P(f"<b>{cat}</b>", h3), tt]))
     return E
 
 P = Paragraph
@@ -349,8 +336,6 @@ doc_comp.build(C)
 print(f"OK: {ARQ_COMP}")
 
 # 2. Consolidado do mês
-E.append(P(f"Consolidado do mês — {label_mes(MES_REF)} (pago/recebido até {HOJE_LABEL})", h2))
-E.append(P(f"{len(setembro_pago)} lançamentos pagos/recebidos no mês.", sub))
 cd_rows = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
 for nome, (v, n) in sorted(cons_rec.items()):
     cd_rows.append([P(nome, cell), P(str(n), cellc), P_val(v, cellr)])
@@ -361,32 +346,30 @@ cd_rows.append([P("<b>Total de Despesas</b>", cellrb), P(f"<b>{sum(n for _, n in
 cd_rows.append([P("<b>Resultado consolidado</b>", cellrb), P(f"<b>{len(setembro_pago)}</b>", cellc), P_val(cons_resultado, cellrb)])
 t = tabela(cd_rows, [11*cm, 2.5*cm, 3*cm])
 t.setStyle(TableStyle([("BACKGROUND", (0,len(cd_rows)-3), (-1,len(cd_rows)-1), LARANJA_CLARO)]))
-E.append(t)
+E.append(KeepTogether([P(f"Consolidado do mês — {label_mes(MES_REF)} (pago/recebido até {HOJE_LABEL})", h2),
+                       P(f"{len(setembro_pago)} lançamentos pagos/recebidos no mês.", sub), t]))
 
 # 3. Despesas em aberto — resumo por categoria + demonstrativo dos lançamentos
 E += tabela_cat(f"Despesas em aberto até {FIM_MES_ANT_LABEL}", g_desp_aberto, total_label="Total em aberto")
 E += tabela_lancamentos(desp_aberto, titulo="Demonstrativo dos lançamentos")
 
-# 4. Inadimplência — resumo + demonstrativo + somatório considerando Negociação Judicial
+# 4. Inadimplência — resumo + demonstrativo + somatórios (total e excluindo Negociação Judicial / Possível Perda de Receita)
 E.append(P(f"Inadimplência até {FIM_MES_ANT_LABEL}", h2))
 E += tabela_cat("Resumo por categoria", g_inad, total_label="Total em aberto")
-jud = [v for nome, (v, _) in g_inad.items() if "Judicial" in nome]
-if jud:
-    rows = [[P("<b>Composição do total</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)],
-            [P("Total em aberto (todas as categorias)", cell), P(f"<b>{len(inad)}</b>", cellc), P_val(total_inad, cellr)],
-            [P("Somatório considerando Negociação Judicial", cell), P("", cell), P_val(total_inad + sum(jud), cellrb)]]
-    tj = tabela(rows, [11*cm, 2.5*cm, 3*cm])
-    tj.setStyle(TableStyle([("BACKGROUND", (0,len(rows)-1), (-1,len(rows)-1), LARANJA_CLARO)]))
-    E.append(tj)
+excluir = [v for nome, (v, _) in g_inad.items() if nome.startswith(("01.97", "01.99")) or "Judicial" in nome or "Perda" in nome]
+rows = [[P("<b>Composição do total</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)],
+        [P("Somatório total (todas as categorias)", cell), P(f"<b>{len(inad)}</b>", cellc), P_val(total_inad, cellr)],
+        [P("Somatório excluindo Negociação Judicial e Possível Perda de Receita", cell), P(f"<b>{len(inad) - sum(n for nome, (_, n) in g_inad.items() if nome.startswith(('01.97', '01.99')) or 'Judicial' in nome or 'Perda' in nome)}</b>", cellc), P_val(total_inad - sum(excluir), cellrb)]]
+tj = tabela(rows, [11*cm, 2.5*cm, 3*cm])
+tj.setStyle(TableStyle([("BACKGROUND", (0,len(rows)-1), (-1,len(rows)-1), LARANJA_CLARO)]))
+E.append(tj)
 E += tabela_lancamentos(inad, titulo="Demonstrativo dos lançamentos")
 
 # 5. Inadimplência apenas boleto — resumo + demonstrativo
-E.append(P(f"Inadimplência até {FIM_MES_ANT_LABEL} (Apenas Boleto)", h2))
-E += tabela_cat("Resumo por categoria — TAG Boleto Emitido", g_inad_boleto, total_label="Total em aberto (boleto)")
+E += tabela_cat(f"Inadimplência até {FIM_MES_ANT_LABEL} (Apenas Boleto) — Resumo por categoria (TAG Boleto Emitido)", g_inad_boleto, total_label="Total em aberto (boleto)")
 E += tabela_lancamentos(inad_boleto, titulo="Demonstrativo dos lançamentos")
 
 # 6. Previsão do mês corrente
-E.append(P(f"Previsão do mês corrente — {label_mes(MES_REF)} (pago + pendente)", h2))
 pv_rows = [[P("<b>Categoria</b>", cell), P("<b>Entradas</b>", cellr), P("<b>Saídas</b>", cellr)]]
 for nome, (v, n) in sorted(g_prev_rec.items()):
     pv_rows.append([P(nome, cell), P_val(v, cellr), P("—", cellr)])
@@ -396,10 +379,9 @@ pv_rows.append([P("<b>Totais</b>", cellrb), P_val(prev_entradas, cellrb), P_val(
 pv_rows.append([P("<b>Resultado previsto do mês</b>", cellrb), P(""), P_val(prev_resultado, cellrb)])
 t = tabela(pv_rows, [9*cm, 3.75*cm, 3.75*cm])
 t.setStyle(TableStyle([("BACKGROUND", (0,len(pv_rows)-2), (-1,len(pv_rows)-1), LARANJA_CLARO)]))
-E.append(t)
+E.append(KeepTogether([P(f"Previsão do mês corrente — {label_mes(MES_REF)} (pago + pendente)", h2), t]))
 
 # 7. Previsão do mês seguinte
-E.append(P(f"Previsão do mês seguinte — {label_mes(MES_SEG)} (não pagos e não recebidos)", h2))
 ps_rows = [[P("<b>Categoria</b>", cell), P("<b>Entradas</b>", cellr), P("<b>Saídas</b>", cellr)]]
 for nome, (v, n) in sorted(g_seg_rec.items()):
     ps_rows.append([P(nome, cell), P_val(v, cellr), P("—", cellr)])
@@ -409,7 +391,7 @@ ps_rows.append([P("<b>Totais</b>", cellrb), P_val(seg_entradas, cellrb), P_val(s
 ps_rows.append([P("<b>Resultado previsto do mês</b>", cellrb), P(""), P_val(seg_resultado, cellrb)])
 t = tabela(ps_rows, [9*cm, 3.75*cm, 3.75*cm])
 t.setStyle(TableStyle([("BACKGROUND", (0,len(ps_rows)-2), (-1,len(ps_rows)-1), LARANJA_CLARO)]))
-E.append(t)
+E.append(KeepTogether([P(f"Previsão do mês seguinte — {label_mes(MES_SEG)} (não pagos e não recebidos)", h2), t]))
 E.append(PageBreak())
 
 # 8. Previsão de receitas da semana
@@ -419,22 +401,20 @@ E += tabela_cat(f"Previsão de Receitas da semana corrente ({SEM_LABEL})", g_sem
 E += tabela_cat(f"Previsão de Receitas da semana corrente ({SEM_LABEL}) — Apenas Boleto (TAG Boleto Emitido)", g_sem_boleto, total_label="Total previsto (boleto)")
 
 # 10. Saldo nas contas dia anterior
-E.append(P(f"Saldo nas contas em {DIA_ANT.strftime('%d/%m/%Y')}", h2))
 sc_rows = [[P("<b>Conta</b>", cell), P(f"<b>Saldo em {DIA_ANT.strftime('%d/%m/%Y')}</b>", cellr)]]
 for nome, v in saldos_conta:
     sc_rows.append([P(nome, cell), P_val(v, cellr)])
 sc_rows.append([P("<b>Total</b>", cellrb), P_val(sum(v for _, v in saldos_conta), cellrb)])
 t = tabela(sc_rows, [11*cm, 5*cm])
 t.setStyle(TableStyle([("BACKGROUND", (0,len(sc_rows)-1), (-1,len(sc_rows)-1), LARANJA_CLARO)]))
-E.append(t)
+E.append(KeepTogether([P(f"Saldo nas contas em {DIA_ANT.strftime('%d/%m/%Y')}", h2), t]))
 
 # 11. Previsão de fluxo de caixa 12 meses
-E.append(P("Previsão de Fluxo de Caixa — próximos 12 meses", h2))
 cellrb_big = ParagraphStyle("cellrb_big", parent=cellrb, fontSize=8.5)
 pj_rows = [[P("<b>Mês</b>", cell), P("<b>Entradas previstas</b>", cellr), P("<b>Saídas previstas</b>", cellr), P("<b>Saldo projetado</b>", cellr)]]
 for lab, e_p, s_p, saldo in proj:
     pj_rows.append([P(lab, cell), P_val(e_p, cellr), P_val(s_p, cellr), P_val(saldo, cellrb_big)])
-E.append(tabela(pj_rows, [3*cm, 4.6*cm, 4.6*cm, 4.6*cm]))
+E.append(KeepTogether([P("Previsão de Fluxo de Caixa — próximos 12 meses", h2), tabela(pj_rows, [3*cm, 4.6*cm, 4.6*cm, 4.6*cm])]))
 
 E.append(Spacer(1, 10))
 E.append(P("Gerado automaticamente pela Terceirizou · dados do Controlle", sub))
@@ -587,7 +567,8 @@ aba("Projeção 12 meses",
     [12, 18, 18, 18])
 
 aba("Detalhe consolidado do mês", detalhe_agrupado(setembro_pago), [12, 9, 55, 20, 35, 10, 14])
-aba("Detalhe Previsão do mês", detalhe_agrupado(prev_mes + prev_seg), [12, 9, 55, 20, 35, 10, 14])
+aba("Detalhe Previsão mês corrente", detalhe_agrupado(prev_mes), [12, 9, 55, 20, 35, 10, 14])
+aba("Detalhe Previsão mês seguinte", detalhe_agrupado(prev_seg), [12, 9, 55, 20, 35, 10, 14])
 
 wb.save(ARQ_XLSX)
 print(f"OK: {ARQ_XLSX}")
