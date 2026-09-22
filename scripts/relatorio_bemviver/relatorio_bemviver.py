@@ -5,14 +5,22 @@
 #   + Comparativo 13 meses em PDF PRÓPRIO PAISAGEM.
 # Fonte: API Controlle v1 (token Bem Viver). Envio: segunda-feira 14:00 → financeirodabemviver@gmail.com
 #
-# v1.3 (feedback Vinícius 21/09 22:35):
-#   - Comparativo: coluna MÉDIA (série e matriz por categoria)
+# v1.3 (feedback Vinícius 21/09 22:35 e 23:04):
+#   PDF:
+#   - Comparativo: coluna MÉDIA (série e matriz por categoria); série "Resultado do mês" (entradas+saídas)
 #   - Consolidado: linhas Total de Receitas / Total de Despesas / Resultado
 #   - Despesas em aberto: resumo + demonstrativo dos lançamentos (igual Inadimplência)
 #   - Inadimplência: somatório considerando Negociação Judicial
 #   - Saldo nas contas: verde positivo / vermelho negativo
 #   - Previsão Fluxo de Caixa: entradas verde / saídas vermelho, saldo projetado negrito colorido, SEM gráfico
 #   - Layout: título (h1 16) / subtítulo (h2 12 laranja) / sub-subtítulo (h3 10) / nota (sub itálico cinza)
+#   Excel:
+#   - Comparativo: "Resultado do mês" no lugar de Saldo realizado + coluna Média
+#   - Consolidado: Total de Receitas / Total de Despesas / Resultado
+#   - Detalhe consolidado do mês: agrupado por categoria com total por categoria
+#   - Detalhe Previsão do mês: agrupado por categoria, dt_billing com fallback dt_due
+#   - Coluna Lançamentos: número inteiro sem R$; valores positivos VERDE / negativos VERMELHO
+#   - Títulos e linhas de resultado: negrito e centralizados
 #
 # v1.2 (feedback Vinícius 21/09):
 #   - Comparativo: valores SEM centavos e SEM R$ (inteiros), receitas VERDE / despesas VERMELHO
@@ -312,9 +320,9 @@ C = []
 C.append(P("<b>BEM VIVER — Comparativo dos últimos 13 meses</b>", h1))
 C.append(P(f"Gerado em {HOJE_LABEL} · Fonte: Controlle · {label_curto(INI_13)} a {label_curto(MES_REF)} · Apenas pago/recebido · Valores em R$ inteiros", sub))
 cm_rows = [[P("<b>Série</b>", cell)] + [P(f"<b>{lab}</b>", cellr) for _, _, lab in meses_13] + [P("<b>Média</b>", cellr), P("<b>Total</b>", cellr)]]
-for idx, nome_serie in [(1, "Entrada realizada"), (2, "Saída realizada"), (3, "Saldo realizado")]:
+for idx, nome_serie in [(1, "Entrada realizada"), (2, "Saída realizada"), (3, "Resultado do mês")]:
     row = [P(nome_serie, cell)]
-    vals = [[e_m, s_m, saldo][idx-1] for _, e_m, s_m, saldo in serie_13]
+    vals = [[e_m, s_m, e_m + s_m][idx-1] for _, e_m, s_m, _ in serie_13]
     for val in vals:
         row.append(P_val_int(val, cellr))
     row.append(P_val_int(round(sum(vals) / len(vals)), cellrb))
@@ -435,7 +443,7 @@ print(f"OK: {ARQ_PDF}")
 
 # ===== Excel =====
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill
+from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 
 ARQ_XLSX = f"artifacts/{HOJE.strftime('%y%m%d')}_Relatorios_Bem_Viver.xlsx"
@@ -445,6 +453,8 @@ FILL_H = PatternFill("solid", fgColor="FF501C")
 FILL_T = PatternFill("solid", fgColor="FFE3D6")
 FH = Font(bold=True, color="FFFFFF")
 FB = Font(bold=True)
+VERDE_XL = "1A7F37"    # receitas / positivos
+VERMELHO_XL = "C0392B" # despesas / negativos
 TOT_LABELS = ("Total", "Totais", "Resultado", "Saldo final", "Resultado consolidado",
               "Resultado previsto do mês", "Total em aberto", "Total previsto", "Total previsto (boleto)", "Total em aberto (boleto)",
               "Total de Receitas", "Total de Despesas")
@@ -453,33 +463,62 @@ def aba(nome, linhas, larguras, pct_from=None):
     ws = wb.create_sheet(nome[:31])
     for r in linhas:
         ws.append(list(r))
+    headers = [str(c.value or "") for c in ws[1]]
+    # cabeçalho (título): negrito, branco, centralizado
     for c in ws[1]:
         c.fill = FILL_H
         c.font = FH
+        c.alignment = Alignment(horizontal="center", vertical="center")
     for row in ws.iter_rows(min_row=2):
         label = str(row[0].value or "")
-        if label.startswith(TOT_LABELS):
+        is_total = label.startswith(TOT_LABELS)
+        if is_total:  # linhas de resultado: negrito e centralizado
             for c in row:
-                c.font = FB
                 c.fill = FILL_T
+                c.alignment = Alignment(horizontal="center", vertical="center")
+            row[0].font = FB
         for j, c in enumerate(row[1:], 2):
             if isinstance(c.value, (int, float)):
-                if pct_from and j >= pct_from:
+                hdr = headers[j-1] if j-1 < len(headers) else ""
+                if "Lançamentos" in hdr:  # contagem: sem vírgula e sem R$
+                    c.number_format = "0"
+                    c.font = Font(bold=is_total)
+                elif pct_from and j >= pct_from:
                     c.number_format = "0.0%"
                 else:
                     c.number_format = '"R$" #,##0.00'
+                    cor = VERDE_XL if c.value > 0 else (VERMELHO_XL if c.value < 0 else "1A1A1A")
+                    c.font = Font(bold=is_total or hdr in ("Média", "Total", "Totais"), color=cor)
     for j, w in enumerate(larguras, 1):
         ws.column_dimensions[get_column_letter(j)].width = w
     ws.freeze_panes = "A2"
 
 r_ = lambda v: v / 100
 
+def detalhe_agrupado(txs):
+    """Lançamentos agrupados por categoria, com total por categoria."""
+    por_cat = defaultdict(list)
+    for t in txs:
+        por_cat[cat_nome(t)].append(t)
+    rows = [("Data", "Tipo", "Descrição", "Conta", "Categoria", "Situação", "Valor")]
+    for cat in sorted(por_cat):
+        for t in sorted(por_cat[cat], key=bdate):
+            d = (t.get("dt_billing") or t.get("dt_due") or "")[:10]
+            rows.append((d, "Entrada" if t["activity_type"] == 1 else "Saída",
+                         (t["ds_transaction"] or "")[:60], t.get("ds_account_main") or "", cat,
+                         "Pago" if t["situation"] == 1 else "Pendente", r_(t["value_in_cent"])))
+        rows.append(("Total", "", "", "", cat, "", r_(sum(t["value_in_cent"] for t in por_cat[cat]))))
+    return rows
+
 aba("Comparativo 13 meses",
     [("Série",) + tuple(lab for _, _, lab in meses_13) + ("Média", "Total"),
-     ("Entrada realizada",) + tuple(r_(e) for _, e, _, _ in serie_13) + (r_(round(sum(e for _, e, _, _ in serie_13)/13)), r_(sum(e for _, e, _, _ in serie_13))),
-     ("Saída realizada",) + tuple(r_(s) for _, _, s, _ in serie_13) + (r_(round(sum(s for _, _, s, _ in serie_13)/13)), r_(sum(s for _, _, s, _ in serie_13))),
-     ("Saldo realizado",) + tuple(r_(x) for _, _, _, x in serie_13) + (r_(round(sum(x for _, _, _, x in serie_13)/13)), r_(sum(x for _, _, _, x in serie_13)))],
-    [20] + [11]*13 + [11, 13])
+     ("Entrada realizada",) + tuple(r_(e) for _, e, _, _ in serie_13)
+        + (r_(round(sum(e for _, e, _, _ in serie_13) / 13)), r_(sum(e for _, e, _, _ in serie_13))),
+     ("Saída realizada",) + tuple(r_(s) for _, _, s, _ in serie_13)
+        + (r_(round(sum(s for _, _, s, _ in serie_13) / 13)), r_(sum(s for _, _, s, _ in serie_13))),
+     ("Resultado do mês",) + tuple(r_(e + s) for _, e, s, _ in serie_13)
+        + (r_(round(sum(e + s for _, e, s, _ in serie_13) / 13)), r_(sum(e + s for _, e, s, _ in serie_13)))],
+    [20] + [11] * 13 + [11, 13])
 
 aba("Consolidado do mês",
     [("Categoria", "Lançamentos", "Valor")] +
@@ -499,8 +538,7 @@ aba("Despesas em aberto",
 aba("Inadimplência",
     [("Categoria", "Lançamentos", "Valor")] +
     [(n, n2, r_(v)) for n, (v, n2) in sorted(g_inad.items())] +
-    [("Total em aberto", len(inad), r_(total_inad))] +
-    ([("Somatório considerando Negociação Judicial", "", r_(total_inad + sum(v for n, (v, _) in g_inad.items() if "Judicial" in n)))] if any("Judicial" in n for n in g_inad) else []),
+    [("Total em aberto", len(inad), r_(total_inad))],
     [45, 14, 16])
 
 aba("Inadimplência Boleto",
@@ -548,22 +586,8 @@ aba("Projeção 12 meses",
     [(lab, r_(e), r_(s), r_(x)) for lab, e, s, x in proj],
     [12, 18, 18, 18])
 
-# detalhamento de lançamentos (consolidado + previsões)
-aba("Detalhe Consolidado",
-    [("Data", "Tipo", "Descrição", "Conta", "Categoria", "Situação", "Valor")] +
-    [((t.get("dt_billing") or "")[:10], "Entrada" if t["activity_type"]==1 else "Saída",
-      (t["ds_transaction"] or "")[:60], t.get("ds_account_main") or "", cat_nome(t),
-      "Pago" if t["situation"]==1 else "Pendente", r_(t["value_in_cent"]))
-     for t in sorted(setembro_pago, key=lambda x: bdate(x))],
-    [12, 9, 55, 20, 35, 10, 14])
-
-aba("Detalhe Previsões",
-    [("Data", "Tipo", "Descrição", "Conta", "Categoria", "Situação", "Valor")] +
-    [((t.get("dt_billing") or "")[:10], "Entrada" if t["activity_type"]==1 else "Saída",
-      (t["ds_transaction"] or "")[:60], t.get("ds_account_main") or "", cat_nome(t),
-      "Pago" if t["situation"]==1 else "Pendente", r_(t["value_in_cent"]))
-     for t in sorted(prev_mes + prev_seg, key=lambda x: bdate(x))],
-    [12, 9, 55, 20, 35, 10, 14])
+aba("Detalhe consolidado do mês", detalhe_agrupado(setembro_pago), [12, 9, 55, 20, 35, 10, 14])
+aba("Detalhe Previsão do mês", detalhe_agrupado(prev_mes + prev_seg), [12, 9, 55, 20, 35, 10, 14])
 
 wb.save(ARQ_XLSX)
 print(f"OK: {ARQ_XLSX}")
