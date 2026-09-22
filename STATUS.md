@@ -9,10 +9,10 @@
 - **Fase 3:** concluída — 7/7 tasks, aceite final do champion em 2026-09-16.
 - **Fase 4:** em andamento — **2/8 tasks concluídas** (`e4c77e80`, `cd704a1c`); prazo 30/09/2026.
 - **Task `cd704a1c`:** concluída após QA técnico, verificação no preview e aceite humano do champion em 22/09/2026.
-- **Skip:** CRM Oficial; implementação em v0.0.79 (`b2e260c`) e fechamento documental final em v0.0.83 (`a238409`), todos com QA 5/5.
+- **Skip:** CRM Oficial; implementação em v0.0.79 (`b2e260c`) e fechamento documental final em v0.0.84 (`0ef865c`), todos com QA 5/5.
 - **Preview:** https://crm-oficial-65bb8--preview.goskip.app
 - **Produção:** https://crm-oficial-65bb8.goskip.app (não atualizada neste ciclo; aceite realizado no preview)
-- **GitHub:** implementação sincronizada no commit `91f36b3`; documentação de fechamento será sincronizada neste ciclo.
+- **GitHub:** sincronização final do código e da documentação registrada neste ciclo após o cruzamento Skip → GitHub.
 
 ## Resultado da Fase 4 até aqui
 
@@ -30,7 +30,7 @@
 - `pocketbase/hooks/meta_espelho.js`
 - `src/components/dashboard/MetaLeadsRealCard.tsx`
 - `src/pages/Index.tsx`
-- `04_fase-atual/specs/spec-4-001-conector-meta-leitura.md`
+- `04-fase-atual/specs/spec-4-001-conector-meta-leitura.md`
 
 ## Próximo passo
 
