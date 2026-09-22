@@ -17,6 +17,7 @@ import { GaMainChartCard } from '@/components/dashboard/GaMainChartCard'
 import { GaDataTableCard } from '@/components/dashboard/GaDataTableCard'
 import { GaRealtimeCard } from '@/components/dashboard/GaRealtimeCard'
 import { MetaLeadsRealCard } from '@/components/dashboard/MetaLeadsRealCard'
+import { LeadScheduleCard } from '@/components/dashboard/LeadScheduleCard'
 import {
   TrendingUp,
   Target,
@@ -147,12 +148,15 @@ const Index: React.FC = () => {
           {/* 3. DADOS REAIS: leads Meta espelhados no CRM */}
           <MetaLeadsRealCard />
 
-          {/* 4. GA4 DATA TABLE: Dimension Breakdown (Acquisition Channels & Services) */}
+          {/* 4. DADOS REAIS: leads, detalhe e agendamento */}
+          <LeadScheduleCard />
+
+          {/* 5. GA4 DATA TABLE: Dimension Breakdown (Acquisition Channels & Services) */}
           <section aria-label="Relatório de Dimensões e Conversões">
             <GaDataTableCard channelData={channelData} productData={productData} />
           </section>
 
-          {/* 5. Secondary Analytics Insight Cards */}
+          {/* 6. Secondary Analytics Insight Cards */}
           <section className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
             {/* Insight 1 */}
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-start gap-3">
