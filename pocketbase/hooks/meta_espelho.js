@@ -308,7 +308,7 @@ routerAdd(
 
       const adsetId = achado.adset_id
       const campanhaId = adsetCampanha[adsetId] || null
-      const campanhaNome = campanhaId ? campanhaNome[campanhaId] || null : null
+      const nomeCampanha = campanhaId ? campanhaNome[campanhaId] || null : null
       const truncado = normalizar(declarado) !== normalizar(achado.name)
 
       // divergência: campanha declarada difere da campanha real do anúncio (RN-4-103)
@@ -325,7 +325,7 @@ routerAdd(
       lead.set('meta_anuncio_id', achado.id)
       lead.set('meta_anuncio_nome', achado.name)
       lead.set('meta_campanha_id', campanhaId || '')
-      lead.set('meta_campanha_nome', campanhaNome || '')
+      lead.set('meta_campanha_nome', nomeCampanha || '')
       lead.set('meta_status', divergente ? 'divergente' : 'espelhado')
       lead.set(
         'meta_proveniencia',
@@ -333,7 +333,7 @@ routerAdd(
           Object.assign({}, provenienciaBase, {
             match_por_prefixo: truncado,
             divergencia_campanha: divergente
-              ? { declarada: lead.get('campanha'), real: campanhaNome }
+              ? { declarada: lead.get('campanha'), real: nomeCampanha }
               : null,
           }),
         ),
@@ -344,7 +344,7 @@ routerAdd(
       else espelhados++
       registro.resultado = divergente ? 'divergente' : 'espelhado'
       registro.meta_anuncio = achado.name
-      registro.meta_campanha = campanhaNome
+      registro.meta_campanha = nomeCampanha
       detalhes.push(registro)
     }
 
