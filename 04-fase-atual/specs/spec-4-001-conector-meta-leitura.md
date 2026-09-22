@@ -1,7 +1,7 @@
 # SPEC-4-001 — Conector Meta Ads de leitura e origem do lead
 
 **Fase:** 4 — Sistema de inteligência de campanhas e operação assistida  
-**Status:** concluída para `cd704a1c` após prova técnica e aceite humano em 22/09/2026  
+**Status:** concluída para `cd704a1c` após correção de regressão, prova técnica e aceite humano em 22/09/2026  
 **Dono:** administrador armazena credencial e prova acesso; responsável técnico implementa; marketing consome  
 **Origem no escopo:** `02-Escopo-Definitivo.md`, Fase 4, seção "Sistema de inteligência de campanhas e operação assistida"; decisão Navaar de 17/09/2026 (formulário de transição): incluir Meta Ads com prova técnica timeboxed.  
 **Degrau da solução:** conector compartilhado de leitura — espelha dados de campanha/anúncio/origem do Meta para dentro do CRM; nenhuma escrita no Meta, nenhuma alteração de campanha, orçamento ou público.
@@ -66,8 +66,9 @@ Um lead do CRM exibe, quando existir correspondência, a campanha/anúncio/orige
 - Espelhamento: 50 leads Meta avaliados; 44 espelhados; 6 sem dado Meta; 0 divergentes.
 - Idempotência: duas rodadas idênticas sem duplicidade.
 - Interface: `MetaLeadsRealCard` lê a collection real `leads` via PocketBase e exibe campanha, anúncio, status, filtros e proveniência.
+- Correção de regressão: `LeadScheduleCard` recupera lista real, detalhe e formulário autenticado de agendamento; aceite humano no preview em 22/09/2026 — "Aparece o formulário"; nenhum evento real enviado ao Calendar.
 - QA Skip: 5/5 nas versões do ciclo; fechamento documental final no Skip após o aceite humano.
-- Aceite do champion: em 22/09/2026 — "testei no preview e funcionou".
+- Aceite do champion: espelho Meta em 22/09/2026 — "testei no preview e funcionou"; correção de acesso a leads/agendamento em 22/09/2026 — "Aparece o formulário".
 
 ## Tasks vinculadas
 

@@ -1,6 +1,6 @@
 # AP-2026-09-22-2055 — Preservar fluxos operacionais ao trocar a interface
 
-- Status: candidato
+- Status: validado após aceite humano do champion em 22/09/2026
 - Escopo: projeto do cliente
 - Task/SPEC: `cd704a1c` / `04-fase-atual/specs/spec-4-001-conector-meta-leitura.md`; dependência operacional F3-T02
 - Sinal: a tela nova validou o espelho Meta, mas removeu a lista de leads, o detalhe e o acesso ao agendamento que existiam na tela anterior.

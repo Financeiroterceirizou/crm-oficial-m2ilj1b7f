@@ -11,3 +11,4 @@ Registro da triagem interna de aprendizado. Esta rotina é silenciosa: nada aqui
 - 2026-09-06T11:35:00-03:00 · F3-T03 · capturado: 06_notas/aprendizado-continuo/AP-2026-09-06-1135-oauth-refresh-410-select.md
 - 2026-09-22T20:02:00-03:00 · task cd704a1c · capturado: 06_notas/aprendizado-continuo/AP-2026-09-22-2002-ui-fonte-real.md
 - 2026-09-22T20:55:00-03:00 · task cd704a1c · capturado: 06_notas/aprendizado-continuo/AP-2026-09-22-2055-regressao-fluxo-operacional.md
+- 2026-09-22T20:56:00-03:00 · task cd704a1c · aprendizado validado pelo aceite humano registrado no changelog e no estado atual

@@ -1,8 +1,8 @@
 # Fase 1 — Tarefas gerais
 
 **Fonte de verdade técnica:** projeto CRM Oficial no Skip, projectId 51268.  
-**Última atualização:** 2026-08-25.  
-**Status:** Fase 1 concluída — 10/10 tasks.
+**Última atualização:** 2026-09-22.  
+**Status:** Fase 4 em andamento — 3/8 tasks concluídas.
 
 ## Tasks
 
