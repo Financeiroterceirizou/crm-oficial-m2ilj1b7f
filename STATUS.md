@@ -1,13 +1,13 @@
 # STATUS — Projeto Terceirizou Terceirização Empresarial
 
-> **Atualizado em:** 2026-09-23 10:02 · **Fonte técnica:** Skip projectId 51268
+> **Atualizado em:** 2026-09-23 18:58 · **Fonte técnica:** Skip projectId 51268
 
 ## Onde estamos
 
 - **Fase 1:** concluída — 10/10 tasks.
 - **Fase 2:** concluída — 5/5 tasks.
 - **Fase 3:** concluída — 7/7 tasks, aceite final do champion em 2026-09-16.
-- **Fase 4:** em andamento — **2/8 tasks concluídas** (`e4c77e80`, `cd704a1c`); `b7c2faea` implementada e aguardando teste humano; prazo 30/09/2026.
+- **Fase 4:** em andamento — **3/8 tasks concluídas** (`e4c77e80`, `cd704a1c`, `b7c2faea`); prazo 30/09/2026.
 - **Task `cd704a1c`:** concluída após QA técnico, correção de regressão, verificação no preview e aceite humano do champion em 22/09/2026 — "Aparece o formulário".
 - **Skip:** CRM Oficial; correção funcional e fechamento documental aprovados com QA 5/5.
 - **Preview:** https://crm-oficial-65bb8--preview.goskip.app
@@ -29,19 +29,22 @@
 - `pocketbase/migrations/0012_add_meta_espelho_fields.js`
 - `pocketbase/hooks/meta_espelho.js`
 - `src/components/dashboard/MetaLeadsRealCard.tsx`
+- `src/components/dashboard/LeadQualityCard.tsx`
 - `src/pages/Index.tsx`
 - `04-fase-atual/specs/spec-4-001-conector-meta-leitura.md`
+- `04-fase-atual/specs/spec-4-002-qualidade-origem-reativacao.md`
 
-## `b7c2faea` — aguardando teste humano
+## `b7c2faea` — concluída
 
 - **Entrega:** `LeadQualityCard` lê a collection real `leads` e compara origem/campanha nos últimos 28 dias.
 - **Métrica aprovada B4-203:** qualificado = prestador de serviço + CNPJ; qualidade = qualificados ÷ recebidos × 100; conversão fora desta task.
 - **Proveniência:** mostra CRM, campanha declarada ou CRM + espelho Meta, além do período e das limitações.
 - **Regra de segurança:** campo ausente/incompleto aparece como `Sem dado`; não é convertido em zero.
+- **Evidência real:** preview carregado, atualização manual exercitada e champion confirmou "funcionou" em 23/09/2026.
 - **Limitação observada:** no snapshot real do preview havia 41 leads no período e nenhum CNPJ nas respostas disponíveis; por isso qualidade/qualificados aparecem como `Sem dado`, enquanto recebidos e agendados seguem visíveis.
-- **QA:** Skip v0.0.96 / `ea7a91c`; setup, análise estática, build, integrações e testes passaram.
-- **Produção:** não publicada; validação pendente no preview.
+- **QA:** Skip v0.0.97 / `bf15fcb`; setup, análise estática, build, integrações e testes passaram.
+- **Produção:** não publicada; a única alteração pendente no working tree é `.skip.config.json`, pré-existente e fora desta task.
 
 ## Próximo passo
 
-O champion deve testar a tela no preview e informar se o painel funcionou.
+Aguardar nova análise e autorização do champion para a próxima task; não iniciar automaticamente.

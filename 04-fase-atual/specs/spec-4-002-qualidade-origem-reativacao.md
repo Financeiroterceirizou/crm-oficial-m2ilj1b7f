@@ -75,7 +75,7 @@ O responsável comercial abre uma tela que compara origens/campanhas por leads r
 
 ## Critérios de aceite
 
-- [ ] **CA-4-201:** a tela de qualidade compara origens/campanhas com fonte, período e vazio ≠ zero.
+- [x] **CA-4-201:** a tela de qualidade compara origens/campanhas com fonte, período e vazio ≠ zero — validada no preview e aprovada pelo champion em 23/09/2026.
 - [ ] **CA-4-202:** fila de reativação só contém leads elegíveis pelo critério aprovado; descadastro/nao_contatar ficam permanentemente fora.
 - [ ] **CA-4-203:** nenhum contato/tarefa de reabordagem existe sem aprovação humana registrada no lote.
 - [ ] **CA-4-204:** a tela do lead exibe estado, score, motivo, próxima ação e a linha do tempo do follow-up.
@@ -146,6 +146,6 @@ Ciclo controlado: baseline (leads históricos conhecidos), montagem da fila, apr
 
 | ID          | Task                                                                    | Dono    | SPEC  | Critério     | Recorte da prova                             | Evidência esperada | Pré-condições                | Status                   |
 | ----------- | ----------------------------------------------------------------------- | ------- | ----- | ------------ | -------------------------------------------- | ------------------ | ---------------------------- | ------------------------ |
-| b7c2faea    | Criar uma tela que compare quantidade e qualidade de leads por campanha | Cliente | 4-002 | CA-4-201     | GREEN qualidade com fonte/período            | tela + registros   | cd704a1c ou fallback interno | AGUARDANDO TESTE HUMANO  |
+| b7c2faea    | Criar uma tela que compare quantidade e qualidade de leads por campanha | Cliente | 4-002 | CA-4-201     | GREEN qualidade com fonte/período            | tela + registros   | cd704a1c ou fallback interno | CONCLUÍDA 23/09/2026     |
 | 5ef4b7cd    | Criar uma lista de leads antigos que podem receber uma nova abordagem   | Cliente | 4-002 | CA-4-202/203 | RED sem critério + fila aprovada sem contato | fila + aceites     | b7c2faea                     | BLOQUEADA                |
 | id pendente | Exibir qualificação e follow-up na tela do lead                         | Cliente | 4-002 | CA-4-204/205 | GREEN tela + prova negativa RLS              | tela + logs        | b7c2faea                     | BLOQUEADA · aguarda UUID |
