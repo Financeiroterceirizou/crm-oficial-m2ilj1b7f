@@ -1,18 +1,18 @@
 # STATUS — Projeto Terceirizou Terceirização Empresarial
 
-> **Atualizado em:** 2026-09-22 20:56 · **Fonte técnica:** Skip projectId 51268
+> **Atualizado em:** 2026-09-23 10:02 · **Fonte técnica:** Skip projectId 51268
 
 ## Onde estamos
 
 - **Fase 1:** concluída — 10/10 tasks.
 - **Fase 2:** concluída — 5/5 tasks.
 - **Fase 3:** concluída — 7/7 tasks, aceite final do champion em 2026-09-16.
-- **Fase 4:** em andamento — **2/8 tasks concluídas** (`e4c77e80`, `cd704a1c`); a correção de regressão foi concluída dentro da `cd704a1c`; prazo 30/09/2026.
+- **Fase 4:** em andamento — **2/8 tasks concluídas** (`e4c77e80`, `cd704a1c`); `b7c2faea` implementada e aguardando teste humano; prazo 30/09/2026.
 - **Task `cd704a1c`:** concluída após QA técnico, correção de regressão, verificação no preview e aceite humano do champion em 22/09/2026 — "Aparece o formulário".
 - **Skip:** CRM Oficial; correção funcional e fechamento documental aprovados com QA 5/5.
 - **Preview:** https://crm-oficial-65bb8--preview.goskip.app
 - **Produção:** https://crm-oficial-65bb8.goskip.app (não atualizada neste ciclo; aceite realizado no preview)
-- **GitHub:** o frontend aceito permanece no Skip; o repositório ainda não está integralmente alinhado ao frontend novo. Resolver Skip → GitHub antes de iniciar `b7c2faea`.
+- **GitHub:** o frontend aceito permanece no Skip; o repositório ainda não está integralmente alinhado ao frontend novo. Resolver Skip → GitHub antes de iniciar a próxima task.
 
 ## Resultado da Fase 4 até aqui
 
@@ -32,13 +32,16 @@
 - `src/pages/Index.tsx`
 - `04-fase-atual/specs/spec-4-001-conector-meta-leitura.md`
 
-## Bloqueio atual — `b7c2faea`
+## `b7c2faea` — aguardando teste humano
 
-- **B4-203 aberto:** a SPEC-4-002 exige aprovação do champion para definição de qualificação, janela e fórmula da métrica de qualidade. Não vou inventar a fórmula.
-- **Fonte documental:** a SPEC canônica existe no GitHub em `04-fase-atual/specs/spec-4-002-qualidade-origem-reativacao.md`, mas não está no working tree do Skip, que é a fonte técnica do frontend aceito.
-- **Lacuna de dados:** o schema atual tem origem, campanha, qualificação e agendamento, mas não tem campo/collection de conversão. O painel não pode tratar conversão ausente como zero.
-- **Estado:** nenhum código da `b7c2faea` foi alterado.
+- **Entrega:** `LeadQualityCard` lê a collection real `leads` e compara origem/campanha nos últimos 28 dias.
+- **Métrica aprovada B4-203:** qualificado = prestador de serviço + CNPJ; qualidade = qualificados ÷ recebidos × 100; conversão fora desta task.
+- **Proveniência:** mostra CRM, campanha declarada ou CRM + espelho Meta, além do período e das limitações.
+- **Regra de segurança:** campo ausente/incompleto aparece como `Sem dado`; não é convertido em zero.
+- **Limitação observada:** no snapshot real do preview havia 41 leads no período e nenhum CNPJ nas respostas disponíveis; por isso qualidade/qualificados aparecem como `Sem dado`, enquanto recebidos e agendados seguem visíveis.
+- **QA:** Skip v0.0.96 / `ea7a91c`; setup, análise estática, build, integrações e testes passaram.
+- **Produção:** não publicada; validação pendente no preview.
 
 ## Próximo passo
 
-Resolver B4-203 e sincronizar a SPEC no Skip; depois disso, a implementação pode começar com nova confirmação do champion.
+O champion deve testar a tela no preview e informar se o painel funcionou.

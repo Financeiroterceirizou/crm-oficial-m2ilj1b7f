@@ -2,6 +2,8 @@
 
 > Registro de tudo que acontece no projeto, em ordem cronológica inversa.
 
+- 2026-09-23 · [Adapta/Ethos] · F4 `b7c2faea` IMPLEMENTADA: painel real de qualidade por origem/campanha nos últimos 28 dias; B4-203 aplicado (prestador de serviço + CNPJ; qualificados ÷ recebidos × 100); conversão fora da task; campo ausente/incompleto exibido como "Sem dado".
+- 2026-09-23 · [Adapta/Ethos] · F4 `b7c2faea` QA PASSOU no Skip v0.0.96 / `ea7a91c`: setup, análise estática, build, integrações e testes; preview carregado e atualização manual exercitada. Observação real: 41 leads no período e nenhum CNPJ disponível nas respostas, então qualidade permanece "Sem dado" sem falso zero. Aguardando teste humano.
 - 2026-09-23 · [Adapta/Ethos] · DÚVIDA/BLOQUEIO F4 `b7c2faea`: B4-203 ainda não define métrica, janela e fórmula de qualidade; SPEC-4-002 está no GitHub, mas ausente no working tree do Skip; schema não possui fonte de conversão. Nenhum código alterado.
 
 - 2026-09-22 · [Vinicius/Champion] · F4 `cd704a1c` TESTE HUMANO DA CORREÇÃO APROVADO: "Aparece o formulário"; confirmou acesso à lista, abertura de lead qualificado e exibição do formulário de agendamento no preview; nenhum evento real enviado.
