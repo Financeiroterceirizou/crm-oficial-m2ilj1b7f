@@ -1,13 +1,13 @@
 # Estado atual — Adapta Cliente
 
-- task_id: cd704a1c (Fase 4 — espelhar origem/campanha/anúncio no CRM; correção de regressão de agendamento)
+- task_id: b7c2faea (Fase 4 — comparar quantidade e qualidade de leads por campanha)
 - champion: Vinicius (CEO)
-- spec: 04-fase-atual/specs/spec-4-001-conector-meta-leitura.md
-- etapa: concluida
-- autorizacao_implementacao: confirmada + 2026-09-22T11:19 — "pode implementar este plano"
-- teste_humano: aprovado + 2026-09-22T20:56:00-03:00 — "Aparece o formulário"; confirmou acesso à lista, abertura de lead qualificado e exibição do formulário de agendamento no preview; nenhum evento real enviado
-- verificacao_automatica: passou — correção funcional e fechamento documental com QA 5/5; preview mostrou lista real, login administrativo, botão Abrir, detalhe e formulário Solicitar agendamento; backend de agendamento preservado; nenhuma chamada real ao Calendar
-- aprendizado: capturado:06_notas/aprendizado-continuo/AP-2026-09-22-2055-regressao-fluxo-operacional.md
-- ultima_acao: task concluída após revalidação independente, QA 5/5 e aceite humano explícito do champion; interface nova preserva espelho Meta e recupera acesso a leads/detalhe/agendamento
-- proxima_acao: aguardar nova análise e autorização do champion para iniciar a task b7c2faea; não abrir automaticamente
-- atualizado_em: 2026-09-22T20:56:00-03:00
+- spec: 04-fase-atual/specs/spec-4-002-qualidade-origem-reativacao.md
+- etapa: implementando
+- autorizacao_implementacao: confirmada + 2026-09-23T09:49:00-03:00 — "Registrar critério B4-203"; formulário respondeu e aprovou a implementação: prestador de serviço + CNPJ; últimos 28 dias; qualificados / recebidos × 100; conversão não usar nesta task
+- teste_humano: pendente — será solicitado após QA e preview
+- verificacao_automatica: pendente — implementação ainda não verificada
+- aprendizado: pendente
+- ultima_acao: B4-203 fechado pelo champion; critério registrado: qualidade = lead com prestador de serviço e CNPJ, dividido por leads recebidos, janela de 28 dias; conversão fora do escopo
+- proxima_acao: sincronizar a SPEC no Skip e implementar o painel de qualidade por campanha
+- atualizado_em: 2026-09-23T09:49:00-03:00

@@ -2,6 +2,8 @@
 
 > Registro de tudo que acontece no projeto, em ordem cronológica inversa.
 
+- 2026-09-23 · [Adapta/Ethos] · DÚVIDA/BLOQUEIO F4 `b7c2faea`: B4-203 ainda não define métrica, janela e fórmula de qualidade; SPEC-4-002 está no GitHub, mas ausente no working tree do Skip; schema não possui fonte de conversão. Nenhum código alterado.
+
 - 2026-09-22 · [Vinicius/Champion] · F4 `cd704a1c` TESTE HUMANO DA CORREÇÃO APROVADO: "Aparece o formulário"; confirmou acesso à lista, abertura de lead qualificado e exibição do formulário de agendamento no preview; nenhum evento real enviado.
 - 2026-09-22 · [Adapta/Ethos] · F4 `cd704a1c` CORREÇÃO CONCLUÍDA: restaurada a lista real de leads, detalhe e formulário de agendamento autenticado na interface nova; espelho Meta preservado; correção funcional e fechamento documental com QA 5/5; produção não publicada.
 - 2026-09-22 · [Vinicius/Champion] · F4 `cd704a1c` TESTE HUMANO APROVADO: "testei no preview e funcionou".

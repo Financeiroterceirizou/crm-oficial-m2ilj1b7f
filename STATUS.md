@@ -32,6 +32,13 @@
 - `src/pages/Index.tsx`
 - `04-fase-atual/specs/spec-4-001-conector-meta-leitura.md`
 
+## Bloqueio atual — `b7c2faea`
+
+- **B4-203 aberto:** a SPEC-4-002 exige aprovação do champion para definição de qualificação, janela e fórmula da métrica de qualidade. Não vou inventar a fórmula.
+- **Fonte documental:** a SPEC canônica existe no GitHub em `04-fase-atual/specs/spec-4-002-qualidade-origem-reativacao.md`, mas não está no working tree do Skip, que é a fonte técnica do frontend aceito.
+- **Lacuna de dados:** o schema atual tem origem, campanha, qualificação e agendamento, mas não tem campo/collection de conversão. O painel não pode tratar conversão ausente como zero.
+- **Estado:** nenhum código da `b7c2faea` foi alterado.
+
 ## Próximo passo
 
-A próxima task elegível é `b7c2faea` — comparação de quantidade e qualidade de leads por campanha. Ela não foi iniciada automaticamente; exige nova análise e autorização do champion.
+Resolver B4-203 e sincronizar a SPEC no Skip; depois disso, a implementação pode começar com nova confirmação do champion.
