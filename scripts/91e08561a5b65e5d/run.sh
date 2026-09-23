@@ -27,6 +27,16 @@ export ESTADO_PATH="$SCRIPTS/91e08561a5b65e5d/estado.json"
 export LEADS_INPUT_PATH="$SCRIPTS/91e08561a5b65e5d/leads_input.json"
 
 # Step 1: Transform raw MCP data → leads_input.json (isolado por job)
+# GUARDA (2026-09-23): o cron pode disparar sem a etapa de leitura MCP
+# (tmp/polling vazio). Rodar o transform com tmp vazio gravava leads_input.json
+# como {} e DESTRUIA o canônico (56 KB → 2 bytes), forçando reconstrução manual.
+# Se nenhum arquivo cru existe, aborta ANTES do transform (canônico preservado).
+if ! ls "$TMP"/cora.json "$TMP"/meta_ads_jun.json "$TMP"/meta_ads_cadastro.json >/dev/null 2>&1; then
+  echo "[$(date -Iseconds)] Polling SKIP: tmp/polling sem arquivos crus (cron sem leitura MCP); leads_input.json canônico preservado." >> "$LOG"
+  echo '{"skipped": true, "motivo": "tmp/polling vazio - leads_input canônico preservado"}'
+  exit 0
+fi
+
 python3 "$SCRIPTS/91e08561a5b65e5d/transform.py" 2>> "$LOG"
 
 # Step 2: Process leads → upsert to CRM
