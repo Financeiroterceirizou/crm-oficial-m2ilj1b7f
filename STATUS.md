@@ -42,7 +42,7 @@
 - **Regra de segurança:** campo ausente/incompleto aparece como `Sem dado`; não é convertido em zero.
 - **Evidência real:** preview carregado, atualização manual exercitada e champion confirmou "funcionou" em 23/09/2026.
 - **Limitação observada:** no snapshot real do preview havia 41 leads no período e nenhum CNPJ nas respostas disponíveis; por isso qualidade/qualificados aparecem como `Sem dado`, enquanto recebidos e agendados seguem visíveis.
-- **QA:** Skip v0.0.97 / `bf15fcb`; setup, análise estática, build, integrações e testes passaram.
+- **QA:** Skip v0.0.98 / `84e9323`; setup, análise estática, build, integrações e testes passaram.
 - **Produção:** não publicada; a única alteração pendente no working tree é `.skip.config.json`, pré-existente e fora desta task.
 
 ## Próximo passo
