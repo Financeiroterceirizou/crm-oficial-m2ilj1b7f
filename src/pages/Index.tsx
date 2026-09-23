@@ -160,7 +160,6 @@ const Index: React.FC = () => {
             <GaDataTableCard channelData={channelData} productData={productData} />
           </section>
 
-          {/* 7. Secondary Analytics Insight Cards */}
           <section className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
             {/* Insight 1 */}
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-start gap-3">
