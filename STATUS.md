@@ -9,7 +9,7 @@
 - **Fase 3:** concluída — 7/7 tasks, aceite final do champion em 2026-09-16.
 - **Fase 4:** em andamento — **2/8 tasks concluídas** (`e4c77e80`, `cd704a1c`); a correção de regressão foi concluída dentro da `cd704a1c`; prazo 30/09/2026.
 - **Task `cd704a1c`:** concluída após QA técnico, correção de regressão, verificação no preview e aceite humano do champion em 22/09/2026 — "Aparece o formulário".
-- **Skip:** CRM Oficial; correção funcional em v0.0.88 (`5920224`) e fechamento documental em v0.0.91 (`0f53bcd`), ambos com QA 5/5.
+- **Skip:** CRM Oficial; correção funcional e fechamento documental aprovados com QA 5/5.
 - **Preview:** https://crm-oficial-65bb8--preview.goskip.app
 - **Produção:** https://crm-oficial-65bb8.goskip.app (não atualizada neste ciclo; aceite realizado no preview)
 - **GitHub:** o frontend aceito permanece no Skip; o repositório ainda não está integralmente alinhado ao frontend novo. Resolver Skip → GitHub antes de iniciar `b7c2faea`.

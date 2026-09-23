@@ -3,7 +3,7 @@
 > Registro de tudo que acontece no projeto, em ordem cronológica inversa.
 
 - 2026-09-22 · [Vinicius/Champion] · F4 `cd704a1c` TESTE HUMANO DA CORREÇÃO APROVADO: "Aparece o formulário"; confirmou acesso à lista, abertura de lead qualificado e exibição do formulário de agendamento no preview; nenhum evento real enviado.
-- 2026-09-22 · [Adapta/Ethos] · F4 `cd704a1c` CORREÇÃO CONCLUÍDA: restaurada a lista real de leads, detalhe e formulário de agendamento autenticado na interface nova; espelho Meta preservado; correção em v0.0.88 (`5920224`) e fechamento em v0.0.91 (`0f53bcd`), ambos QA 5/5; produção não publicada.
+- 2026-09-22 · [Adapta/Ethos] · F4 `cd704a1c` CORREÇÃO CONCLUÍDA: restaurada a lista real de leads, detalhe e formulário de agendamento autenticado na interface nova; espelho Meta preservado; correção funcional e fechamento documental com QA 5/5; produção não publicada.
 - 2026-09-22 · [Vinicius/Champion] · F4 `cd704a1c` TESTE HUMANO APROVADO: "testei no preview e funcionou".
 - 2026-09-22 · [Adapta/Ethos] · F4 `cd704a1c` CONCLUÍDA: interface nova passou a ler leads reais via PocketBase e exibir campanha/anúncio Meta, status e proveniência; 50 leads avaliados, 44 espelhados, 6 sem dado Meta, 0 divergentes; implementação Skip v0.0.79 (`b2e260c`), fechamento documental final v0.0.84 (`0ef865c`), todos QA 5/5; commit de implementação `91f36b3`.
 - 2026-09-22 · [Adapta/Ethos] · F4 `cd704a1c` espelho Meta técnico validado: leitura de 76 anúncios, 12 conjuntos e 6 campanhas; idempotência confirmada e zero escrita no Meta.
