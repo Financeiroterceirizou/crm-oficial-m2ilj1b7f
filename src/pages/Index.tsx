@@ -19,16 +19,7 @@ import { GaRealtimeCard } from '@/components/dashboard/GaRealtimeCard'
 import { MetaLeadsRealCard } from '@/components/dashboard/MetaLeadsRealCard'
 import { LeadScheduleCard } from '@/components/dashboard/LeadScheduleCard'
 import { LeadQualityCard } from '@/components/dashboard/LeadQualityCard'
-import {
-  TrendingUp,
-  Target,
-  Sparkles,
-  Info,
-  Clock,
-  ExternalLink,
-  ChevronRight,
-  ShieldCheck,
-} from 'lucide-react'
+import { ChevronRight, Clock, ShieldCheck, Sparkles, Target, TrendingUp } from 'lucide-react'
 
 const Index: React.FC = () => {
   const [activeTab, setActiveTab] = useState<NavTab>('overview')
@@ -40,7 +31,6 @@ const Index: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
 
-  // Reactive data computed from current period selection
   const kpiCards = getKpisForPeriod(period)
   const timeSeries = getTimeSeriesForPeriod(period)
   const channelData = getChannelsForPeriod(period)
@@ -48,14 +38,11 @@ const Index: React.FC = () => {
 
   const handleRefresh = () => {
     setIsRefreshing(true)
-    setTimeout(() => {
-      setIsRefreshing(false)
-    }, 600)
+    setTimeout(() => setIsRefreshing(false), 600)
   }
 
   return (
     <div className="min-h-screen bg-[#f8fafc] flex flex-col lg:flex-row font-sans text-slate-800 antialiased selection:bg-blue-100 selection:text-blue-900">
-      {/* Google Analytics Dark Left Sidebar */}
       <GaSidebar
         activeTab={activeTab}
         onSelectTab={setActiveTab}
@@ -63,9 +50,7 @@ const Index: React.FC = () => {
         onCloseMobile={() => setMobileMenuOpen(false)}
       />
 
-      {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Sticky GA4 Top Header with Date Selectors */}
         <GaHeader
           period={period}
           onChangePeriod={setPeriod}
@@ -76,9 +61,7 @@ const Index: React.FC = () => {
           onRefresh={handleRefresh}
         />
 
-        {/* Dashboard Body */}
         <main className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
-          {/* Quick Notice Banner: Pure GA4 Interface Info */}
           <div className="bg-white rounded-xl border border-blue-200/80 p-3.5 sm:p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-blue-50/50 via-white to-white">
             <div className="flex items-start sm:items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm">
@@ -89,7 +72,7 @@ const Index: React.FC = () => {
                   <span className="text-xs font-bold text-blue-900">
                     Painel Executivo — Estilo Google Analytics 4
                   </span>
-                  <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded font-semibold uppercase">
+                  <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-semibold uppercase">
                     Modo Simulação
                   </span>
                 </div>
@@ -99,15 +82,11 @@ const Index: React.FC = () => {
                 </p>
               </div>
             </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs text-slate-500 font-mono hidden sm:inline">
-                Fuso: America/Sao_Paulo (GMT-3)
-              </span>
-            </div>
+            <span className="text-xs text-slate-500 font-mono hidden sm:inline">
+              Fuso: America/Sao_Paulo (GMT-3)
+            </span>
           </div>
 
-          {/* 1. TOP CARDS GRID: Vendas e Clientes em destaque absoluto */}
           <section aria-label="Cartões de Métricas Principais">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -120,7 +99,6 @@ const Index: React.FC = () => {
                 Clique em um cartão para projetar no gráfico
               </span>
             </div>
-
             <GaKpiCardsGrid
               cards={kpiCards}
               selectedMetric={selectedMetric}
@@ -129,9 +107,7 @@ const Index: React.FC = () => {
             />
           </section>
 
-          {/* 2. MAIN TIME SERIES LINE CHART + REALTIME SIDEBAR WIDGET */}
           <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-            {/* Main Area / Line Chart (spans 2 columns on desktop) */}
             <div className="lg:col-span-2">
               <GaMainChartCard
                 data={timeSeries}
@@ -139,29 +115,21 @@ const Index: React.FC = () => {
                 compareEnabled={compareEnabled}
               />
             </div>
-
-            {/* Realtime Snapshot Widget (GA4 real-time panel) */}
             <div className="lg:col-span-1">
               <GaRealtimeCard realtime={MOCK_REALTIME} />
             </div>
           </section>
 
-          {/* 3. DADOS REAIS: qualidade por campanha, conforme B4-203 */}
+          {/* F4 b7c2faea: qualidade real por campanha, com B4-203 aprovado */}
           <LeadQualityCard />
-
-          {/* 4. DADOS REAIS: leads Meta espelhados no CRM */}
           <MetaLeadsRealCard />
-
-          {/* 5. DADOS REAIS: leads, detalhe e agendamento */}
           <LeadScheduleCard />
 
-          {/* 6. GA4 DATA TABLE: Dimension Breakdown (Acquisition Channels & Services) */
           <section aria-label="Relatório de Dimensões e Conversões">
             <GaDataTableCard channelData={channelData} productData={productData} />
           </section>
 
           <section className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-            {/* Insight 1 */}
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-start gap-3">
               <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600 shrink-0">
                 <TrendingUp className="w-5 h-5" />
@@ -175,7 +143,6 @@ const Index: React.FC = () => {
               </div>
             </div>
 
-            {/* Insight 2 */}
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-start gap-3">
               <div className="p-2 rounded-lg bg-blue-50 text-blue-600 shrink-0">
                 <ShieldCheck className="w-5 h-5" />
@@ -191,7 +158,6 @@ const Index: React.FC = () => {
               </div>
             </div>
 
-            {/* Insight 3 */}
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-start gap-3">
               <div className="p-2 rounded-lg bg-amber-50 text-amber-600 shrink-0">
                 <Clock className="w-5 h-5" />
@@ -206,22 +172,16 @@ const Index: React.FC = () => {
             </div>
           </section>
 
-          {/* Footer note GA4 style */}
           <footer className="pt-6 pb-8 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-2">
             <div className="flex items-center gap-2">
               <span>Google Analytics 4 — Interface de Demonstração</span>
               <span>•</span>
               <span>Propriedade: CRM Oficial Terceirizou</span>
             </div>
-            <div className="flex items-center gap-4">
-              <a
-                href="/fila"
-                className="text-slate-500 hover:text-blue-600 flex items-center gap-1"
-              >
-                <span>Acessar Fila de Recuperação</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </a>
-            </div>
+            <a href="/fila" className="text-slate-500 hover:text-blue-600 flex items-center gap-1">
+              <span>Acessar Fila de Recuperação</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </a>
           </footer>
         </main>
       </div>
