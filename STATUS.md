@@ -1,6 +1,6 @@
 # STATUS — Projeto Terceirizou Terceirização Empresarial
 
-> **Atualizado em:** 2026-09-23 18:58 · **Fonte técnica:** Skip projectId 51268
+> **Atualizado em:** 2026-09-23 19:46 · **Fonte técnica:** Skip projectId 51268
 
 ## Onde estamos
 
@@ -11,7 +11,7 @@
 - **Task `cd704a1c`:** concluída após QA técnico, correção de regressão, verificação no preview e aceite humano do champion em 22/09/2026 — "Aparece o formulário".
 - **Skip:** CRM Oficial; correção funcional e fechamento documental aprovados com QA 5/5.
 - **Preview:** https://crm-oficial-65bb8--preview.goskip.app
-- **Produção:** https://crm-oficial-65bb8.goskip.app (não atualizada neste ciclo; aceite realizado no preview)
+- **Produção:** https://crm-oficial-65bb8.goskip.app — publicada em 23/09/2026, ref `c53c171` (v0.0.100); URL oficial respondendo e painel de qualidade visível.
 - **GitHub:** o frontend aceito permanece no Skip; o repositório ainda não está integralmente alinhado ao frontend novo. Resolver Skip → GitHub antes de iniciar a próxima task.
 
 ## Resultado da Fase 4 até aqui
@@ -42,8 +42,8 @@
 - **Regra de segurança:** campo ausente/incompleto aparece como `Sem dado`; não é convertido em zero.
 - **Evidência real:** preview carregado, atualização manual exercitada e champion confirmou "funcionou" em 23/09/2026.
 - **Limitação observada:** no snapshot real do preview havia 41 leads no período e nenhum CNPJ nas respostas disponíveis; por isso qualidade/qualificados aparecem como `Sem dado`, enquanto recebidos e agendados seguem visíveis.
-- **QA:** Skip v0.0.98 / `84e9323`; setup, análise estática, build, integrações e testes passaram.
-- **Produção:** não publicada; a única alteração pendente no working tree é `.skip.config.json`, pré-existente e fora desta task.
+- **QA:** Skip v0.0.100 / `c53c171`; setup, análise estática, build, integrações e testes passaram.
+- **Produção:** publicada em `https://crm-oficial-65bb8.goskip.app`; validação visual confirmou o painel e o período de 28 dias.
 
 ## Próximo passo
 

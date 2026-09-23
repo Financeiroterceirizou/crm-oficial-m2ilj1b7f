@@ -2,6 +2,7 @@
 
 > Registro de tudo que acontece no projeto, em ordem cronológica inversa.
 
+- 2026-09-23 · [Adapta/Ethos] · Produção publicada: `https://crm-oficial-65bb8.goskip.app`, ref `c53c171` / v0.0.100; QA 5/5 e painel de qualidade visível na URL oficial.
 - 2026-09-23 · [Vinicius/Champion] · Task `b7c2faea` concluída: "funcionou" no preview; painel de qualidade por campanha aprovado após QA 5/5 e validação do critério B4-203.
 - 2026-09-23 · [Adapta/Ethos] · Task `b7c2faea` fechada: 3/8 da Fase 4; Skip v0.0.98 / `84e9323`; recebidos, qualificação, qualidade, agendados, fonte e ausência sem falso zero verificados.
 
