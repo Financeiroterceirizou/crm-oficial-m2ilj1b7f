@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-# Relatório Mensal — SÃO LOURENÇO (L & R) VISTORIA — v1.0, 2026-09-29 (formato Uberlândia v1.2 + competência)
+# Relatório Mensal — SÃO LOURENÇO (L & R) VISTORIA — v1.1, 2026-09-29 (formato Uberlândia v1.2 + competência)
 # Uso: python3 relatorio_sao_lorenco.py [YYYY-MM-DD]  (default: hoje)
 # Gera UM PDF (logo Terceirizou na capa e símbolo no canto inferior direito das páginas seguintes) + UM Excel.
-# Estrutura (v1.0):
+# Estrutura (v1.1):
 #   Capa COMPACTA + 1. Receitas e Despesas por categoria do mês anterior NA MESMA PÁGINA
 #   (REGIME DE COMPETÊNCIA: janela larga + dt_competence, INCLUI NÃO PAGOS, sem transferências;
 #   06.01 Distribuição de Resultado em negrito) · 2. Comparativo 6 meses por categoria
 #   (REGIME DE COMPETÊNCIA: inclui não pagos; Média no lugar do Total, R$ inteiros, + linha Resultado do mês) ·
 #   3. Previsão de despesas do mês corrente (caixa) · 4. Saldo nas contas dia 31/08 ·
 #   5. Despesas em aberto até 31/08 (mesma página do saldo quando couber) · 6. Resumo "Previsão para <mês>"
-# Excel: título na 1ª linha de cada aba + Comparativo com coluna Média + aba "Previsão <mês>"
-#   + aba "Detalhe <mês>" (lançamentos do mês anterior por competência, agrupados por categoria).
+# Excel: título na 1ª linha de cada aba + Comparativo com coluna Média + linha "Resultado do mês"
+#   (média e total dos 6 meses) + aba "Previsão <mês>" + aba "Detalhe <mês>" (competência, por categoria).
 # Fonte: API Controlle v1 (token São Lourenço). Envio: MENSAL dia 04 14:00 → vinicius@terceirizou.com.br.
 import json, os, sys, urllib.request
 from collections import defaultdict
@@ -287,7 +287,7 @@ res_row = [P("<b>Resultado do mês</b>", cellb)]
 for _, fim_m_iso, lab in meses_6:
     tot_mes = sum(v[fim_m_iso[:7]] for v in matriz_6.values())
     res_row.append(P_val_int(tot_mes, cellrb))
-media_res = round(sum(v[fim_m_iso[:7]] for v in matriz_6.values()) / len(meses_6))
+media_res = round(sum(sum(v[fim_m_iso[:7]] for v in matriz_6.values()) for _, fim_m_iso, _ in meses_6) / len(meses_6))
 res_row.append(P_val_int(media_res, cellrb))
 cm_rows.append(res_row)
 E.append(tabela(cm_rows, [5.4*cm] + [1.55*cm]*6 + [1.9*cm], fs=6.5))
@@ -473,6 +473,28 @@ aba("Comparativo 6 meses",
      + (r_(round(sum(matriz_6[cat].values()) / len(meses_6))), r_(sum(matriz_6[cat].values())),)
      for cat in cat_names_6],
     [40] + [13]*6 + [13, 15], titulo=f"Comparativo dos Últimos 6 Meses por Categoria ({MES_AB[INI_6.month]}/{str(INI_6.year)[2:]} a {MES_AB[MES_ANT.month]}/{str(MES_ANT.year)[2:]}) — regime de competência")
+
+# linha de resultado do mês no Excel (igual ao PDF: entradas - saídas de cada mês, pela matriz)
+_ws_cmp = wb["Comparativo 6 meses"]
+_row_res = ["Resultado do mês"]
+for _, fim_m_iso, _ in meses_6:
+    _tot = sum(v[fim_m_iso[:7]] for v in matriz_6.values())
+    _row_res.append(int(round(_tot / 100)) if _tot else None)
+_res_mensais = [sum(v[fim_m_iso[:7]] for v in matriz_6.values()) for _, fim_m_iso, _ in meses_6]
+_row_res.append(int(round(sum(_res_mensais) / len(meses_6) / 100)))
+_row_res.append(int(round(sum(_res_mensais) / 100)))
+_ws_cmp.append(_row_res)
+_r = _ws_cmp.max_row
+for _j, _c in enumerate(_ws_cmp[_r], 1):
+    if _j == 1:
+        _c.font = Font(bold=True)
+        _c.fill = FILL_T
+    elif isinstance(_c.value, (int, float)):
+        _c.number_format = '"R$" #,##0.00'
+        _c.font = Font(bold=True, color=(VERDE_XL if _c.value > 0 else VERMELHO_XL if _c.value < 0 else "1A1A1A"))
+        _c.fill = FILL_T
+    else:
+        _c.fill = FILL_T
 
 aba("Previsão Despesas " + MES_AB[MES_COR.month],
     [("Categoria", "Lançamentos", "Valor")] +
