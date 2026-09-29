@@ -3,7 +3,7 @@
 # Uso: python3 enviar_uberlandia.py [caminho-do-pdf]
 #   Sem argumento: usa o PDF de hoje (artifacts/YYMMDD_Relatorio_Uberlandia.pdf).
 # Chave Resend: scripts/95b7f382c0a1ba1d/resend_key.txt (fora do repo) ou env RESEND_API_KEY.
-# Destinatário: vinicius@terceirizou.com.br (to).
+# Destinatário: vinicius@terceirizou.com.br (to). Periodicidade: MENSAL, dia 05 09:00 (cron 076665bcd2536493).
 # Anexos: Relatório (PDF) + Excel.
 # Idempotência: relatorio-uberlandia-AAAAMMDD-mtime-anexos — regeneração do PDF = reenvio legítimo;
 # mesmo arquivo = bloqueado (409).
@@ -41,9 +41,10 @@ hora_pdf = date.today().strftime("%Y%m%d") + "-" + str(int(os.path.getmtime(pdf_
 
 html = """<p>Boa tarde!</p>
 <p>Segue em anexo o <b>relatório gerencial mensal da UBERLÂNDIA (CORREA) VISTORIA</b> (fonte Controlle).</p>
-<p>Inclui: Receitas e Despesas por categoria do mês anterior, Comparativo dos últimos 6 meses,
-Previsão de despesas do mês corrente, Saldo nas contas em 31/08/2026, Despesas em aberto até 31/08/2026
-e Resumo com a Previsão de Resultado do mês.</p>
+<p>Inclui: Receitas e Despesas por categoria do mês anterior, Comparativo dos últimos 6 meses por
+categoria, Previsão de despesas do mês corrente, Saldo nas contas no último dia do mês anterior,
+Despesas em aberto até o último dia do mês anterior e Resumo com a Previsão de Resultado do mês
+(faturamento, despesa, resultado e saldo projetado).</p>
 <p>PDF e Excel em anexo. Qualquer dúvida estamos à disposição.</p>
 <p>Att,<br>Terceirizou — mais do que terceirizar o financeiro</p>"""
 
