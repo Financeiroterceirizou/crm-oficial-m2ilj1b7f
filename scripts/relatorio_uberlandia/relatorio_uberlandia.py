@@ -1,19 +1,17 @@
 #!/usr/bin/env python3
-# Relatório Mensal — UBERLÂNDIA (CORREA) VISTORIA — v1.2, 2026-09-29 (motor v1.4 Bem Viver + layout logo)
+# Relatório Mensal — UBERLÂNDIA (CORREA) VISTORIA — v1.3, 2026-09-29 (motor v1.4 Bem Viver + layout logo)
 # Uso: python3 relatorio_uberlandia.py [YYYY-MM-DD]  (default: hoje)
 # Gera UM PDF (logo Terceirizou na capa e símbolo no canto inferior direito das páginas seguintes) + UM Excel.
-# Estrutura (pedido Vinícius 29/09, ajustes v1.1 + v1.2):
+# Estrutura (pedido Vinícius 29/09, v1.3):
 #   Capa COMPACTA + 1. Receitas e Despesas por categoria do mês anterior NA MESMA PÁGINA
-#   (realizado, sem transferências; 06.01 Distribuição de Resultado em negrito) ·
-#   2. Comparativo 6 meses por categoria (Média no lugar do Total, R$ inteiros, 1 página,
-#   + linha Resultado do mês) · 3. Previsão de despesas do mês corrente · 4. Saldo nas contas
-#   dia 31/08 · 5. Despesas em aberto até 31/08 (mesma página do saldo quando couber) ·
-#   6. Resumo "Previsão para <mês>" (fontes maiores, centralizado)
-# Excel v1.2: título na 1ª linha de cada aba + Comparativo com coluna Média + aba "Previsão <mês>"
-#   + aba "Detalhe <mês>" (lançamentos do mês anterior agrupados por categoria com total por categoria
-#   e linha de resultado do mês).
+#   (REGIME DE COMPETÊNCIA: janela larga + dt_competence, INCLUI NÃO PAGOS, sem transferências;
+#   06.01 Distribuição de Resultado em negrito) · 2. Comparativo 6 meses por categoria (realizado
+#   caixa; Média no lugar do Total, R$ inteiros, 1 página, + linha Resultado do mês) ·
+#   3. Previsão de despesas do mês corrente (caixa) · 4. Saldo nas contas dia 31/08 ·
+#   5. Despesas em aberto até 31/08 (mesma página do saldo quando couber) · 6. Resumo "Previsão para <mês>"
+# Excel: título na 1ª linha de cada aba + Comparativo com coluna Média + aba "Previsão <mês>"
+#   + aba "Detalhe <mês>" (lançamentos do mês anterior por competência, agrupados por categoria).
 # Fonte: API Controlle v1 (token Uberlândia). Envio: MENSAL dia 04 14:00 → vinicius@terceirizou.com.br.
-# Realizado: situation in (1,2) — match exato com balances Done (validado ago: 34.184,73 / -39.773,13 sem transf).
 import json, os, sys, urllib.request
 from collections import defaultdict
 from datetime import date, timedelta
@@ -87,7 +85,7 @@ def ok_ub(t):
     for c in (t.get("apportionments_plan_account") or []):
         if (c.get("ds_category") or "").startswith("99.01"):
             return False
-    if (t.get("ds_transaction") or "").startswith("Transferência"):
+    if (t.get("ds_transaction") or "").upper().startswith("TRANSFERÊNCIA"):
         return False
     return True
 
@@ -128,15 +126,17 @@ HOJE_LABEL = HOJE.strftime("%d/%m/%Y")
 FIM_MES_ANT_LABEL = FIM_MES_ANT.strftime("%d/%m/%Y")
 
 # ===== dados =====
-# 1. Receitas e Despesas por categoria do mês anterior (realizado, sem transferências)
-mes_ant_tx = [t for t in tx_list(MES_ANT.isoformat(), FIM_MES_ANT.isoformat(), **{"situation": "[1,2]"}) if ok_ub(t)]
+# 1. Receitas e Despesas por categoria do mês anterior — REGIME DE COMPETÊNCIA
+# (janela larga + filtro dt_competence; inclui não pagos; sem transferências)
+_tx_janela = tx_list(f"{MES_ANT.year}-01-01", f"{MES_ANT.year + 1}-12-31")
+mes_ant_tx = [t for t in _tx_janela if (t.get("dt_competence") or "")[:7] == f"{MES_ANT.year}-{MES_ANT.month:02d}" and ok_ub(t)]
 ant_rec = agrupa_por_categoria(mes_ant_tx, so_positivas=True)
 ant_desp = agrupa_por_categoria(mes_ant_tx, so_negativas=True)
 ant_entradas = sum(v for v, _ in ant_rec.values())
 ant_saidas = sum(v for v, _ in ant_desp.values())
 ant_resultado = ant_entradas + ant_saidas
 
-# 2. Comparativo dos últimos 06 meses por categoria (realizado, sem transferências)
+# 2. Comparativo dos últimos 06 meses por categoria (realizado/caixa, sem transferências)
 INI_6 = add_months(MES_ANT, -5)
 meses_6 = []
 for i in range(0, 6):
@@ -171,7 +171,7 @@ desp_aberto = [t for t in tx_list(f"{FIM_MES_ANT.year}-01-01", FIM_MES_ANT.isofo
 g_desp_aberto = agrupa_por_categoria(desp_aberto)
 total_desp_aberto = sum(v for v, _ in g_desp_aberto.values())
 
-# 6. Resumo — Previsão para o mês corrente
+# 6. Resumo — Previsão de Resultado do Mês corrente (faturamento pela COMPETÊNCIA do mês anterior)
 DU_ANT = dias_uteis(MES_ANT, FIM_MES_ANT, FERIADOS)
 DU_COR = dias_uteis(MES_COR, FIM_MES_COR, FERIADOS)
 FAT_ANT = ant_entradas
@@ -249,9 +249,9 @@ E.append(P("Relatório Gerencial Mensal", h2c))
 E.append(P(f"Gerado em {HOJE_LABEL} · Fonte: Controlle · Ref.: {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year}", subc))
 E.append(Spacer(1, 8))
 
-# ===== 1. Receitas e Despesas por categoria do mês anterior (mesma página da capa) =====
+# ===== 1. Receitas e Despesas por categoria do mês anterior (competência) =====
 bloco = []
-bloco.append(P(f"Receitas e Despesas por Categoria — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (realizado)", h2))
+bloco.append(P(f"Receitas e Despesas por Categoria — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (regime de competência)", h2))
 rd_rows = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
 for nome, (v, n) in sorted(ant_rec.items()):
     rd_rows.append([P(nome, cell), P(str(n), cellc), P_val(v, cellr)])
@@ -353,7 +353,7 @@ t = tabela(rs_rows, [12*cm, 4.5*cm], fs=11)
 t.setStyle(TableStyle([("BACKGROUND", (0,2), (-1,2), LARANJA_CLARO), ("BACKGROUND", (0,5), (-1,5), LARANJA_CLARO)]))
 E.append(t)
 E.append(Spacer(1, 10))
-E.append(P(f"Base do cálculo: faturamento de {MES_PT[MES_ANT.month].capitalize()} foi {brl(FAT_ANT)} em {DU_ANT} dias úteis "
+E.append(P(f"Base do cálculo: faturamento de {MES_PT[MES_ANT.month].capitalize()} (competência) foi {brl(FAT_ANT)} em {DU_ANT} dias úteis "
            f"(média de {brl(int(round(MEDIA_DIA)))} por dia útil). Previsão de setembro: média/dia × {DU_COR} dias úteis. "
            f"Previsão de saldo final = previsão de resultado − despesas em aberto + saldo nas contas.", sub))
 
@@ -463,7 +463,7 @@ aba("Receitas e Despesas " + MES_AB[MES_ANT.month],
     [(n, n2, r_(v)) for n, (v, n2) in sorted(ant_desp.items())] +
     [("Total de Despesas", sum(n for _, n in ant_desp.values()), r_(ant_saidas)),
      ("Resultado do mês", len(mes_ant_tx), r_(ant_resultado))],
-    [45, 14, 16], titulo=f"Receitas e Despesas por Categoria — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (realizado)")
+    [45, 14, 16], titulo=f"Receitas e Despesas por Categoria — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (regime de competência)")
 
 aba("Comparativo 6 meses",
     [("Categoria",) + tuple(lab for _, _, lab in meses_6) + ("Média", "Total")] +
@@ -500,7 +500,7 @@ aba("Previsão " + MES_AB[MES_COR.month],
      (f"Previsão de Saldo em {FIM_MES_COR.strftime('%d/%m/%Y')}", r_(SALDO_PREV_FIM))],
     [55, 18], titulo=f"Previsão para {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year}")
 
-# lançamentos do mês anterior agrupados por categoria (receitas + despesas, com total por categoria)
+# lançamentos do mês anterior (competência) agrupados por categoria, com total por categoria
 def detalhe_agrupado(txs):
     por_cat = defaultdict(list)
     for t in txs:
@@ -518,7 +518,7 @@ def detalhe_agrupado(txs):
 aba("Detalhe " + MES_AB[MES_ANT.month],
     detalhe_agrupado(mes_ant_tx) + [(f"Resultado do mês ({MES_PT[MES_ANT.month].capitalize()})", "", "", "", "", "", r_(ant_resultado))],
     [12, 9, 55, 20, 35, 10, 14],
-    titulo=f"Lançamentos de {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} por categoria")
+    titulo=f"Lançamentos de {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} por categoria (competência)")
 
 wb.save(ARQ_XLSX)
 print(f"OK: {ARQ_XLSX}")
