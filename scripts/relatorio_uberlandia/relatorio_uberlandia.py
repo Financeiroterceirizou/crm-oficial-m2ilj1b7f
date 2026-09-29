@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-# Relatório Mensal — UBERLÂNDIA (CORREA) VISTORIA — v1.1, 2026-09-29 (motor v1.4 Bem Viver + layout logo)
+# Relatório Mensal — UBERLÂNDIA (CORREA) VISTORIA — v1.2, 2026-09-29 (motor v1.4 Bem Viver + layout logo)
 # Uso: python3 relatorio_uberlandia.py [YYYY-MM-DD]  (default: hoje)
-# Gera UM PDF (um relatório por folha, logo Terceirizou na capa e símbolo no canto inferior
-# direito das páginas seguintes) + UM Excel.
-# Estrutura (pedido Vinícius 29/09, ajustes v1.1):
-#   Capa centralizada (logo + título) · 1. Receitas e Despesas por categoria do mês anterior
-#   (realizado, sem transferências) · 2. Comparativo 6 meses por categoria (Média no lugar do Total,
-#   R$ inteiros, cabe em 1 página) · 3. Previsão de despesas do mês corrente · 4. Saldo nas contas
+# Gera UM PDF (logo Terceirizou na capa e símbolo no canto inferior direito das páginas seguintes) + UM Excel.
+# Estrutura (pedido Vinícius 29/09, ajustes v1.1 + v1.2):
+#   Capa COMPACTA + 1. Receitas e Despesas por categoria do mês anterior NA MESMA PÁGINA
+#   (realizado, sem transferências; 06.01 Distribuição de Resultado em negrito) ·
+#   2. Comparativo 6 meses por categoria (Média no lugar do Total, R$ inteiros, 1 página,
+#   + linha Resultado do mês) · 3. Previsão de despesas do mês corrente · 4. Saldo nas contas
 #   dia 31/08 · 5. Despesas em aberto até 31/08 (mesma página do saldo quando couber) ·
 #   6. Resumo "Previsão para <mês>" (fontes maiores, centralizado)
-# Excel v1.1: título na 1ª linha de cada aba + Comparativo com coluna Média + aba Detalhe <mês>
-#   (lançamentos do mês anterior agrupados por categoria com total).
-# Fonte: API Controlle v1 (token Uberlândia). Envio: MENSAL dia 05 09:00 → vinicius@terceirizou.com.br.
+# Excel v1.2: título na 1ª linha de cada aba + Comparativo com coluna Média + aba "Previsão <mês>"
+#   + aba "Detalhe <mês>" (lançamentos do mês anterior agrupados por categoria com total por categoria
+#   e linha de resultado do mês).
+# Fonte: API Controlle v1 (token Uberlândia). Envio: MENSAL dia 04 14:00 → vinicius@terceirizou.com.br.
 # Realizado: situation in (1,2) — match exato com balances Done (validado ago: 34.184,73 / -39.773,13 sem transf).
 import json, os, sys, urllib.request
 from collections import defaultdict
@@ -234,21 +235,21 @@ doc = SimpleDocTemplate(ARQ_PDF, pagesize=A4, leftMargin=1.5*cm, rightMargin=1.5
                         title="Relatório Gerencial — Uberlândia (Correa) Vistoria")
 E = []
 
-# ===== capa: logo + título (centralizados) =====
-h1c = ParagraphStyle("h1c", parent=h1, alignment=1)
-h2c = ParagraphStyle("h2c", parent=h2, alignment=1)
-subc = ParagraphStyle("subc", parent=sub, alignment=1, spaceAfter=0)
+# ===== capa compacta + 1º relatório na MESMA página =====
+h1c = ParagraphStyle("h1c", parent=h1, fontSize=13, alignment=1, spaceAfter=1)
+h2c = ParagraphStyle("h2c", parent=h2, fontSize=11, alignment=1, spaceBefore=2, spaceAfter=2)
+subc = ParagraphStyle("subc", parent=sub, fontSize=8, alignment=1, spaceAfter=0)
 if os.path.exists(LOGO):
-    img = RLImage(LOGO, width=9*cm, height=9*cm*561/1600)
+    img = RLImage(LOGO, width=5.5*cm, height=5.5*cm*561/1600)
     img.hAlign = "CENTER"
     E.append(img)
-E.append(Spacer(1, 24))
+E.append(Spacer(1, 10))
 E.append(P("<b>UBERLÂNDIA (CORREA) VISTORIA</b>", h1c))
 E.append(P("Relatório Gerencial Mensal", h2c))
 E.append(P(f"Gerado em {HOJE_LABEL} · Fonte: Controlle · Ref.: {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year}", subc))
-E.append(PageBreak())
+E.append(Spacer(1, 8))
 
-# ===== 1. Receitas e Despesas por categoria do mês anterior (primeira página após a capa) =====
+# ===== 1. Receitas e Despesas por categoria do mês anterior (mesma página da capa) =====
 bloco = []
 bloco.append(P(f"Receitas e Despesas por Categoria — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (realizado)", h2))
 rd_rows = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
@@ -256,16 +257,18 @@ for nome, (v, n) in sorted(ant_rec.items()):
     rd_rows.append([P(nome, cell), P(str(n), cellc), P_val(v, cellr)])
 rd_rows.append([P("<b>Total de Receitas</b>", cellrb), P(f"<b>{sum(n for _, n in ant_rec.values())}</b>", cellc), P_val(ant_entradas, cellrb)])
 for nome, (v, n) in sorted(ant_desp.items()):
-    rd_rows.append([P(nome, cell), P(str(n), cellc), P_val(v, cellr)])
+    if nome.startswith("06.01"):  # Distribuição de Resultado: negrito, cor padrão das categorias
+        rd_rows.append([P(f"<b>{nome}</b>", cell), P(f"<b>{n}</b>", cellc), P_val(v, cellb)])
+    else:
+        rd_rows.append([P(nome, cell), P(str(n), cellc), P_val(v, cellr)])
 rd_rows.append([P("<b>Total de Despesas</b>", cellrb), P(f"<b>{sum(n for _, n in ant_desp.values())}</b>", cellc), P_val(ant_saidas, cellrb)])
 rd_rows.append([P("<b>Resultado do mês</b>", cellrb), P(f"<b>{len(mes_ant_tx)}</b>", cellc), P_val(ant_resultado, cellrb)])
 t = tabela(rd_rows, [11*cm, 2.5*cm, 3*cm])
 t.setStyle(TableStyle([("BACKGROUND", (0,len(rd_rows)-3), (-1,len(rd_rows)-1), LARANJA_CLARO)]))
 bloco.append(t)
-E.append(PageBreak())
 E.extend(bloco)
 
-# ===== 2. Comparativo dos últimos 06 meses por categoria (1 página, Média, R$ inteiros) =====
+# ===== 2. Comparativo dos últimos 06 meses por categoria (1 página, Média, R$ inteiros, + resultado) =====
 E.append(PageBreak())
 E.append(P(f"Comparativo dos Últimos 6 Meses por Categoria ({MES_AB[INI_6.month]}/{str(INI_6.year)[2:]} a {MES_AB[MES_ANT.month]}/{str(MES_ANT.year)[2:]})", h2))
 cat_names_6 = sorted({c for c in matriz_6})
@@ -277,6 +280,14 @@ for cat in cat_names_6:
         row.append(P_val_int(v, cellr) if v else P("—", cellr))
     row.append(P_val_int(round(sum(vals6) / len(vals6)), cellrb))
     cm_rows.append(row)
+# linha de resultado do mês (entradas − saídas de cada mês, pela matriz)
+res_row = [P("<b>Resultado do mês</b>", cellb)]
+for _, fim_m_iso, lab in meses_6:
+    tot_mes = sum(v[fim_m_iso[:7]] for v in matriz_6.values())
+    res_row.append(P_val_int(tot_mes, cellrb))
+media_res = round(sum(v[fim_m_iso[:7]] for v in matriz_6.values()) / len(meses_6))
+res_row.append(P_val_int(media_res, cellrb))
+cm_rows.append(res_row)
 E.append(tabela(cm_rows, [5.4*cm] + [1.55*cm]*6 + [1.9*cm], fs=6.5))
 
 # ===== 3. Previsão de despesas para o mês corrente por categoria =====
@@ -479,7 +490,7 @@ aba("Despesas em aberto",
     [("Total em aberto", len(desp_aberto), r_(total_desp_aberto))],
     [45, 14, 16], titulo=f"Despesas em aberto até {FIM_MES_ANT_LABEL}")
 
-aba("Resumo Previsão " + MES_AB[MES_COR.month],
+aba("Previsão " + MES_AB[MES_COR.month],
     [("Item", "Valor"),
      (f"Previsão Faturamento {MES_PT[MES_COR.month].capitalize()} ({DU_COR} dias úteis)", r_(FAT_PREV)),
      (f"Previsão Despesa {MES_PT[MES_COR.month].capitalize()}", r_(DESP_PREV)),
@@ -504,7 +515,9 @@ def detalhe_agrupado(txs):
         rows.append(("Total", "", "", "", cat, "", r_(sum(t["value_in_cent"] for t in por_cat[cat]))))
     return rows
 
-aba("Detalhe " + MES_AB[MES_ANT.month], detalhe_agrupado(mes_ant_tx), [12, 9, 55, 20, 35, 10, 14],
+aba("Detalhe " + MES_AB[MES_ANT.month],
+    detalhe_agrupado(mes_ant_tx) + [(f"Resultado do mês ({MES_PT[MES_ANT.month].capitalize()})", "", "", "", "", "", r_(ant_resultado))],
+    [12, 9, 55, 20, 35, 10, 14],
     titulo=f"Lançamentos de {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} por categoria")
 
 wb.save(ARQ_XLSX)
