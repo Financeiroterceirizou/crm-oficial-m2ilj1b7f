@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-# Relatório Mensal — UNAÍ 1 (DM) VISTORIA — v1.1, 2026-09-29 (formato Uberlândia v1.2 + competência)
+# Relatório Mensal — UNAÍ 1 (DM) VISTORIA — v1.2, 2026-09-29 (formato Uberlândia v1.2 + competência)
 # Uso: python3 relatorio_unai.py [YYYY-MM-DD]  (default: hoje)
 # Gera UM PDF (logo Terceirizou na capa e símbolo no canto inferior direito das páginas seguintes) + UM Excel.
-# Estrutura (v1.1):
+# Estrutura (v1.2):
 #   Capa COMPACTA + 1. Receitas e Despesas por categoria do mês anterior NA MESMA PÁGINA
 #   (REGIME DE COMPETÊNCIA: janela larga + dt_competence, INCLUI NÃO PAGOS, sem transferências;
-#   06.01 Distribuição de Resultado em negrito) · 2. Comparativo 6 meses por categoria (realizado
-#   caixa; Média no lugar do Total, R$ inteiros, 1 página, + linha Resultado do mês) ·
+#   06.01 Distribuição de Resultado em negrito) · 2. Comparativo 6 meses por categoria
+#   (REGIME DE COMPETÊNCIA: inclui não pagos; Média no lugar do Total, R$ inteiros, + linha Resultado do mês) ·
 #   3. Previsão de despesas do mês corrente (caixa) · 4. Saldo nas contas dia 31/08 ·
 #   5. Despesas em aberto até 31/08 (mesma página do saldo quando couber) · 6. Resumo "Previsão para <mês>"
 # Excel: título na 1ª linha de cada aba + Comparativo com coluna Média + aba "Previsão <mês>"
@@ -136,18 +136,20 @@ ant_entradas = sum(v for v, _ in ant_rec.values())
 ant_saidas = sum(v for v, _ in ant_desp.values())
 ant_resultado = ant_entradas + ant_saidas
 
-# 2. Comparativo dos últimos 06 meses por categoria (realizado/caixa, sem transferências)
+# 2. Comparativo dos últimos 06 meses por categoria — REGIME DE COMPETÊNCIA (inclui não pagos, sem transferências)
 INI_6 = add_months(MES_ANT, -5)
 meses_6 = []
 for i in range(0, 6):
     ini_m = add_months(INI_6, i)
     fim_m = add_months(ini_m, 1) - timedelta(days=1)
     meses_6.append((ini_m.isoformat(), fim_m.isoformat(), f"{MES_AB[ini_m.month]}/{str(ini_m.year)[2:]}"))
+# REGIME DE COMPETÊNCIA: janela larga + filtro dt_competence; inclui não pagos
+_tx_janela_6 = tx_list(f"{INI_6.year}-01-01", f"{MES_ANT.year + 1}-12-31")
 matriz_6 = defaultdict(lambda: defaultdict(int))
-for t in tx_list(meses_6[0][0], min(meses_6[-1][1], HOJE.isoformat()), **{"situation": "[1,2]"}):
+for t in _tx_janela_6:
     if not ok_ub(t):
         continue
-    mes = bdate(t)[:7]
+    mes = (t.get("dt_competence") or "")[:7]
     for c in (t.get("apportionments_plan_account") or []):
         matriz_6[c.get("ds_category") or "?"][mes] += c.get("value") or 0
 
@@ -268,9 +270,9 @@ t.setStyle(TableStyle([("BACKGROUND", (0,len(rd_rows)-3), (-1,len(rd_rows)-1), L
 bloco.append(t)
 E.extend(bloco)
 
-# ===== 2. Comparativo dos últimos 06 meses por categoria (1 página, Média, R$ inteiros, + resultado) =====
+# ===== 2. Comparativo dos últimos 06 meses por categoria (competência) =====
 E.append(PageBreak())
-E.append(P(f"Comparativo dos Últimos 6 Meses por Categoria ({MES_AB[INI_6.month]}/{str(INI_6.year)[2:]} a {MES_AB[MES_ANT.month]}/{str(MES_ANT.year)[2:]})", h2))
+E.append(P(f"Comparativo dos Últimos 6 Meses por Categoria ({MES_AB[INI_6.month]}/{str(INI_6.year)[2:]} a {MES_AB[MES_ANT.month]}/{str(MES_ANT.year)[2:]}) — regime de competência", h2))
 cat_names_6 = sorted({c for c in matriz_6})
 cm_rows = [[P("<b>Categoria</b>", cell)] + [P(f"<b>{lab}</b>", cellr) for _, _, lab in meses_6] + [P("<b>Média</b>", cellr)]]
 for cat in cat_names_6:
@@ -470,7 +472,7 @@ aba("Comparativo 6 meses",
     [(cat,) + tuple((r_(v) if (v := matriz_6[cat].get(fim_m_iso[:7], 0)) else None) for _, fim_m_iso, _ in meses_6)
      + (r_(round(sum(matriz_6[cat].values()) / len(meses_6))), r_(sum(matriz_6[cat].values())),)
      for cat in cat_names_6],
-    [40] + [13]*6 + [13, 15], titulo=f"Comparativo dos Últimos 6 Meses por Categoria ({MES_AB[INI_6.month]}/{str(INI_6.year)[2:]} a {MES_AB[MES_ANT.month]}/{str(MES_ANT.year)[2:]})")
+    [40] + [13]*6 + [13, 15], titulo=f"Comparativo dos Últimos 6 Meses por Categoria ({MES_AB[INI_6.month]}/{str(INI_6.year)[2:]} a {MES_AB[MES_ANT.month]}/{str(MES_ANT.year)[2:]}) — regime de competência")
 
 aba("Previsão Despesas " + MES_AB[MES_COR.month],
     [("Categoria", "Lançamentos", "Valor")] +
