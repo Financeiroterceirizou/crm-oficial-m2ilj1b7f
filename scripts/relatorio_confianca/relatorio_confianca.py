@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
-# Relatório Mensal — ARAGUARI + DIAMANTINA VISTORIA (licença CONFIANÇA, filtro por CENTRO DE CUSTO)
-# v1.0, 2026-09-30 (formato Uberlândia v1.2 + competência + saldo por unidade + regra previsão 01.01–01.05)
-# Uso: python3 relatorio_confianca.py [YYYY-MM-DD] [unidade]  (unidade: araguari | diamantina | ambas)
-# Gera UM pacote por unidade (PDF + Excel), filtrando TODOS os relatórios pelo centro de custo:
-#   Araguari → CC "ARAGUARI" (id 170212) · Diamantina → CC "DIAMANTINA" (id 170199)
-#   "ambas" → pacote UNIFICADO (CC ARAGUARI OU DIAMANTINA; lançamentos sem CC ficam fora)
+# Relatório Mensal — VISTORIAS da licença CONFIANÇA (filtro por CENTRO DE CUSTO)
+# v1.1, 2026-09-30 (formato Uberlândia v1.2 + competência + saldo por unidade + regra previsão 01.01–01.05)
+# Uso: python3 relatorio_confianca.py [YYYY-MM-DD] [unidade]
+# Unidades: araguari · diamantina · caratinga · pirapora · joao_monlevade · teofoli_otoni
+# Pacotes unificados: ambas (ARAGUARI+DIAMANTINA) · quatro (PIRAPORA+CARATINGA+JOÃO MONLEVADE+TEÓFILO OTONI)
+# CCs: ARAGUARI 170212 · DIAMANTINA 170199 · CARATINGA 170198 · PIRAPORA 170191 ·
+#      JOAO MONLEVADE 170196 · TEOFOLI OTONI 170197
 # Contas por unidade (mapeamento Vinícius 30/09):
 #   Araguari → ARAGUARI TRANSPOCRED (227414) + ARAGUARI CAIXINHA (227413)
 #   Diamantina → DIAMANTINA TRANPOCRED (227382) + DIAMANTINA CAIXINHA (227380)
-#   Ambas → as 4 contas
+#   Caratinga → CARATINGA CORA (227401) + CARATINGA CAIXINHA (227378)
+#   Pirapora → PIRAPORA CORA (227366) + PIRAPORA CAIXINHA (227365)
+#   João Monlevade → JOAO MONLEVADE CORA (227389) + JOAO MONLEVADE CAIXINHA (227387)
+#   Teófilo Otoni → TEOFOLI OTONI CORA (227392) + TEOFOLI OTONI CAIXINHA (227391)
+#   Unificados → todas as contas das unidades do pacote
 # Estrutura: capa compacta + 1. Receitas e Despesas por categoria do mês anterior NA MESMA PÁGINA
 # (REGIME DE COMPETÊNCIA: janela larga + dt_competence, INCLUI NÃO PAGOS, sem transferências;
 # 06.01 em negrito) · 2. Comparativo 6 meses por categoria (competência; Média, R$ inteiros,
@@ -42,14 +47,20 @@ LOGO = os.path.join(_dir, "logo-terceirizou.png")
 UNIDADES = {
     "araguari":   {"nome": "ARAGUARI (VISTORIA)",   "doc": "Relatório Gerencial — Araguari Vistoria",   "arq": "Araguari",   "cc": "ARAGUARI",   "contas": ["ARAGUARI TRANSPOCRED", "ARAGUARI CAIXINHA"]},
     "diamantina": {"nome": "DIAMANTINA (VISTORIA)", "doc": "Relatório Gerencial — Diamantina Vistoria", "arq": "Diamantina", "cc": "DIAMANTINA", "contas": ["DIAMANTINA TRANPOCRED", "DIAMANTINA CAIXINHA"]},
+    "caratinga":  {"nome": "CARATINGA (VISTORIA)",  "doc": "Relatório Gerencial — Caratinga Vistoria",  "arq": "Caratinga",  "cc": "CARATINGA",  "contas": ["CARATINGA CORA", "CARATINGA CAIXINHA"]},
+    "pirapora":   {"nome": "PIRAPORA (VISTORIA)",   "doc": "Relatório Gerencial — Pirapora Vistoria",   "arq": "Pirapora",   "cc": "PIRAPORA",   "contas": ["PIRAPORA CORA", "PIRAPORA CAIXINHA"]},
+    "joao_monlevade": {"nome": "JOÃO MONLEVADE (VISTORIA)", "doc": "Relatório Gerencial — João Monlevade Vistoria", "arq": "Joao_Monlevade", "cc": "JOAO MONLEVADE", "contas": ["JOAO MONLEVADE CORA", "JOAO MONLEVADE CAIXINHA"]},
+    "teofoli_otoni":  {"nome": "TEÓFILO OTONI (VISTORIA)",  "doc": "Relatório Gerencial — Teófilo Otoni Vistoria",  "arq": "Teofoli_Otoni",  "cc": "TEOFOLI OTONI",  "contas": ["TEOFOLI OTONI CORA", "TEOFOLI OTONI CAIXINHA"]},
     "ambas":      {"nome": "ARAGUARI + DIAMANTINA (VISTORIA)", "doc": "Relatório Gerencial — Araguari + Diamantina Vistoria", "arq": "Araguari_Diamantina", "cc": None, "contas": ["ARAGUARI TRANSPOCRED", "ARAGUARI CAIXINHA", "DIAMANTINA TRANPOCRED", "DIAMANTINA CAIXINHA"]},
+    "quatro":     {"nome": "PIRAPORA + CARATINGA + JOÃO MONLEVADE + TEÓFILO OTONI (VISTORIA)", "doc": "Relatório Gerencial — Pirapora + Caratinga + João Monlevade + Teófilo Otoni Vistoria", "arq": "Quatro_Unidades", "cc": None, "contas": ["PIRAPORA CORA", "PIRAPORA CAIXINHA", "CARATINGA CORA", "CARATINGA CAIXINHA", "JOAO MONLEVADE CORA", "JOAO MONLEVADE CAIXINHA", "TEOFOLI OTONI CORA", "TEOFOLI OTONI CAIXINHA"]},
 }
 _un = sys.argv[2] if len(sys.argv) > 2 else "araguari"
 UN = UNIDADES[_un]
 CC_NOME = UN["cc"]
-CC_NOMES = None if CC_NOME is None else {CC_NOME.upper()}  # pacote "ambas" usa conjunto {ARAGUARI, DIAMANTINA}
+CC_NOMES = None if CC_NOME is None else {CC_NOME.upper()}  # pacotes unificados usam conjunto de CCs
 if CC_NOME is None:
-    CC_NOMES = {"ARAGUARI", "DIAMANTINA"}
+    CC_NOMES = ({"ARAGUARI", "DIAMANTINA"} if _un == "ambas"
+                else {"PIRAPORA", "CARATINGA", "JOAO MONLEVADE", "TEOFOLI OTONI"})
 
 MES_PT = {1:"janeiro",2:"fevereiro",3:"março",4:"abril",5:"maio",6:"junho",7:"julho",8:"agosto",9:"setembro",10:"outubro",11:"novembro",12:"dezembro"}
 MES_AB = {1:"jan",2:"fev",3:"mar",4:"abr",5:"mai",6:"jun",7:"jul",8:"ago",9:"set",10:"out",11:"nov",12:"dez"}
@@ -107,7 +118,7 @@ def cat_nome(t):
     return (cats[0].get("ds_category") or "?") if cats else "(sem categoria)"
 
 def ok_ub(t):
-    """Filtro: sem transferências entre contas + CENTRO DE CUSTO da unidade (ou conjunto p/ pacote unificado)."""
+    """Filtro: sem transferências entre contas + CENTRO DE CUSTO da unidade (ou conjunto p/ unificado)."""
     for c in (t.get("apportionments_plan_account") or []):
         if (c.get("ds_category") or "").startswith("99.01"):
             return False
@@ -187,9 +198,8 @@ prev_cor = [t for t in tx_list(MES_COR.isoformat(), FIM_MES_COR.isoformat()) if 
 prev_desp = agrupa_por_categoria(prev_cor, so_negativas=True)
 prev_desp_total = sum(v for v, _ in prev_desp.values())
 
-# 4. Saldo nas contas no último dia do mês anterior (SÓ as contas da unidade — mapeamento Vinícius 30/09:
-#    Araguari → ARAGUARI TRANSPOCRED + ARAGUARI CAIXINHA · Diamantina → DIAMANTINA TRANPOCRED + DIAMANTINA CAIXINHA ·
-#    Ambas → as 4 contas)
+# 4. Saldo nas contas no último dia do mês anterior (SÓ as contas da unidade — mapeamento Vinícius 30/09;
+#    filtro por NOME EXATO da conta na lista UN["contas"])
 contas_todas = req(f"{BASE}/account/v1/accounts").get("results", [])
 _nomes_contas = set(UN["contas"])
 contas_un = [c for c in contas_todas if c["ds_account"] in _nomes_contas]
@@ -282,7 +292,7 @@ if os.path.exists(LOGO):
 E.append(Spacer(1, 10))
 E.append(P('<b>' + UN["nome"] + '</b>', h1c))
 E.append(P("Relatório Gerencial Mensal", h2c))
-_cc_label = "ARAGUARI + DIAMANTINA" if CC_NOMES and CC_NOME is None else CC_NOME
+_cc_label = ("ARAGUARI + DIAMANTINA" if _un == "ambas" else "PIRAPORA + CARATINGA + JOÃO MONLEVADE + TEÓFILO OTONI") if CC_NOME is None else CC_NOME
 E.append(P(f"Gerado em {HOJE_LABEL} · Fonte: Controlle · Centro de custo: {_cc_label} · Ref.: {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year}", subc))
 E.append(Spacer(1, 8))
 
@@ -390,7 +400,7 @@ t = tabela(rs_rows, [12*cm, 4.5*cm], fs=11)
 t.setStyle(TableStyle([("BACKGROUND", (0,2), (-1,2), LARANJA_CLARO), ("BACKGROUND", (0,5), (-1,5), LARANJA_CLARO)]))
 E.append(t)
 E.append(Spacer(1, 10))
-_cc_txt = "ARAGUARI + DIAMANTINA" if CC_NOMES and CC_NOME is None else CC_NOME
+_cc_txt = ("ARAGUARI + DIAMANTINA" if _un == "ambas" else "PIRAPORA + CARATINGA + JOÃO MONLEVADE + TEÓFILO OTONI") if CC_NOME is None else CC_NOME
 E.append(P(f"Base do cálculo: faturamento de {MES_PT[MES_ANT.month].capitalize()} para previsão = receitas de vistoria (categorias 01.01–01.05, centro de custo {_cc_txt}) = {brl(FAT_ANT)} em {DU_ANT} dias úteis "
            f"(média de {brl(int(round(MEDIA_DIA)))} por dia útil). Previsão de setembro: média/dia × {DU_COR} dias úteis. "
            f"Previsão de saldo final = previsão de resultado − despesas em aberto + saldo nas contas.", sub))
