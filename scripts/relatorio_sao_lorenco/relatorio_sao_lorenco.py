@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-# Relatório Mensal — SÃO LOURENÇO (L & R) VISTORIA — v1.1, 2026-09-29 (formato Uberlândia v1.2 + competência)
-# Uso: python3 relatorio_sao_lorenco.py [YYYY-MM-DD]  (default: hoje)
-# Gera UM PDF (logo Terceirizou na capa e símbolo no canto inferior direito das páginas seguintes) + UM Excel.
-# Estrutura (v1.1):
-#   Capa COMPACTA + 1. Receitas e Despesas por categoria do mês anterior NA MESMA PÁGINA
-#   (REGIME DE COMPETÊNCIA: janela larga + dt_competence, INCLUI NÃO PAGOS, sem transferências;
-#   06.01 Distribuição de Resultado em negrito) · 2. Comparativo 6 meses por categoria
-#   (REGIME DE COMPETÊNCIA: inclui não pagos; Média no lugar do Total, R$ inteiros, + linha Resultado do mês) ·
-#   3. Previsão de despesas do mês corrente (caixa) · 4. Saldo nas contas dia 31/08 ·
-#   5. Despesas em aberto até 31/08 (mesma página do saldo quando couber) · 6. Resumo "Previsão para <mês>"
-# Excel: título na 1ª linha de cada aba + Comparativo com coluna Média + linha "Resultado do mês"
-#   (média e total dos 6 meses) + aba "Previsão <mês>" + aba "Detalhe <mês>" (competência, por categoria).
-# Fonte: API Controlle v1 (token São Lourenço). Envio: MENSAL dia 04 14:00 → vinicius@terceirizou.com.br.
+# Relatório Mensal — SÃO LOURENÇO (L & R) VISTORIA — v1.0, 2026-09-29 (motor v1.4 Bem Viver + layout logo)
+# Uso: python3 relatorio_uberlandia.py [YYYY-MM-DD]  (default: hoje)
+# Gera UM PDF (um relatório por folha, logo Terceirizou na 1ª página e símbolo no canto inferior
+# direito nas seguintes) + UM Excel.
+# Estrutura (pedido Vinícius 29/09):
+#   1. Receitas e Despesas por categoria do mês anterior (ago; sem transferências)
+#   2. Comparativo dos últimos 06 meses por categoria (sem transferências)
+#   3. Previsão de despesas para o mês seguinte por categoria (setembro)
+#   4. Saldo nas contas no último dia do mês anterior (31/08)
+#   5. Despesas em aberto até o último dia do mês anterior (31/08)
+#   6. Resumo — Previsão de Resultado do Mês (setembro): faturamento previsto (média/dia útil de ago
+#      × dias úteis do mês corrente), despesa prevista, resultado, despesas em aberto, saldo contas
+#      e previsão de saldo no fim do mês corrente
+# Fonte: API Controlle v1 (token Uberlândia). Envio: vinicius@terceirizou.com.br.
+# Realizado: situation in (1,2) — match exato com balances Done (validado ago: 48.924,73 / -53.773,13).
 import json, os, sys, urllib.request
 from collections import defaultdict
 from datetime import date, timedelta
@@ -22,6 +24,7 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
                                 PageBreak, Image as RLImage)
+from reportlab.lib.utils import ImageReader
 
 BASE = "https://api-v1.controlle.com"
 _dir = os.path.dirname(os.path.abspath(__file__))
@@ -173,10 +176,11 @@ desp_aberto = [t for t in tx_list(f"{FIM_MES_ANT.year}-01-01", FIM_MES_ANT.isofo
 g_desp_aberto = agrupa_por_categoria(desp_aberto)
 total_desp_aberto = sum(v for v, _ in g_desp_aberto.values())
 
-# 6. Resumo — Previsão de Resultado do Mês corrente (faturamento pela COMPETÊNCIA do mês anterior)
+# 6. Resumo — Previsão de Resultado do Mês corrente
 DU_ANT = dias_uteis(MES_ANT, FIM_MES_ANT, FERIADOS)
 DU_COR = dias_uteis(MES_COR, FIM_MES_COR, FERIADOS)
-FAT_ANT = ant_entradas
+# Faturamento para previsão = SÓ receitas de vistoria (categorias 01.01–01.05), decisão Vinícius 30/09
+FAT_ANT = sum(v for cat, (v, _) in ant_rec.items() if cat[:5] in ("01.01", "01.02", "01.03", "01.04", "01.05"))
 MEDIA_DIA = FAT_ANT / DU_ANT if DU_ANT else 0
 FAT_PREV = round(MEDIA_DIA * DU_COR)
 DESP_PREV = prev_desp_total
@@ -251,7 +255,7 @@ E.append(P("Relatório Gerencial Mensal", h2c))
 E.append(P(f"Gerado em {HOJE_LABEL} · Fonte: Controlle · Ref.: {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year}", subc))
 E.append(Spacer(1, 8))
 
-# ===== 1. Receitas e Despesas por categoria do mês anterior (competência) =====
+# ===== 1. Receitas e Despesas por categoria do mês anterior =====
 bloco = []
 bloco.append(P(f"Receitas e Despesas por Categoria — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (regime de competência)", h2))
 rd_rows = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
@@ -270,7 +274,7 @@ t.setStyle(TableStyle([("BACKGROUND", (0,len(rd_rows)-3), (-1,len(rd_rows)-1), L
 bloco.append(t)
 E.extend(bloco)
 
-# ===== 2. Comparativo dos últimos 06 meses por categoria (competência) =====
+# ===== 2. Comparativo dos últimos 06 meses por categoria =====
 E.append(PageBreak())
 E.append(P(f"Comparativo dos Últimos 6 Meses por Categoria ({MES_AB[INI_6.month]}/{str(INI_6.year)[2:]} a {MES_AB[MES_ANT.month]}/{str(MES_ANT.year)[2:]}) — regime de competência", h2))
 cat_names_6 = sorted({c for c in matriz_6})
@@ -344,7 +348,7 @@ rs_cellr = ParagraphStyle("rs_cellr", parent=rs_cell, alignment=2)
 rs_cellrb = ParagraphStyle("rs_cellrb", parent=rs_cellr, fontName="Helvetica-Bold")
 E.append(P(f"Previsão para {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year}", h1_res))
 rs_rows = []
-rs_rows.append([P(f"<b>Previsão Faturamento {MES_PT[MES_COR.month].capitalize()}</b> (média/dia útil de {MES_AB[MES_ANT.month]} × {DU_COR} dias úteis)", rs_cell),
+rs_rows.append([P(f"<b>Previsão Faturamento {MES_PT[MES_COR.month].capitalize()}</b> (média/dia útil de {MES_AB[MES_ANT.month]} — receitas de vistoria 01.01–01.05 — × {DU_COR} dias úteis)", rs_cell),
                 P_val(FAT_PREV, rs_cellr)])
 rs_rows.append([P(f"<b>Previsão Despesa {MES_PT[MES_COR.month].capitalize()}</b>", rs_cell), P_val(DESP_PREV, rs_cellr)])
 rs_rows.append([P(f"<b>Previsão de Resultado {MES_PT[MES_COR.month].capitalize()}</b>", rs_cellrb), P_val(RESULT_PREV, rs_cellrb)])
@@ -355,7 +359,7 @@ t = tabela(rs_rows, [12*cm, 4.5*cm], fs=11)
 t.setStyle(TableStyle([("BACKGROUND", (0,2), (-1,2), LARANJA_CLARO), ("BACKGROUND", (0,5), (-1,5), LARANJA_CLARO)]))
 E.append(t)
 E.append(Spacer(1, 10))
-E.append(P(f"Base do cálculo: faturamento de {MES_PT[MES_ANT.month].capitalize()} (competência) foi {brl(FAT_ANT)} em {DU_ANT} dias úteis "
+E.append(P(f"Base do cálculo: faturamento de {MES_PT[MES_ANT.month].capitalize()} para previsão = receitas de vistoria (categorias 01.01–01.05) = {brl(FAT_ANT)} em {DU_ANT} dias úteis "
            f"(média de {brl(int(round(MEDIA_DIA)))} por dia útil). Previsão de setembro: média/dia × {DU_COR} dias úteis. "
            f"Previsão de saldo final = previsão de resultado − despesas em aberto + saldo nas contas.", sub))
 
@@ -363,32 +367,49 @@ E.append(Spacer(1, 10))
 E.append(P("Gerado automaticamente pela Terceirizou · dados do Controlle", sub))
 
 # símbolo (o "5" laranja) no canto inferior direito das páginas seguintes
+def _desenha_logo(canvas, doc_):
+    if not os.path.exists(LOGO):
+        return
+    canvas.saveState()
+    # recorta só o símbolo (o "5" laranja fica na ~primeira metade esquerda da logo)
+    try:
+        sim = ImageReader(LOGO)
+        w, h = 1.1*cm, 1.1*cm*561/1600
+        # desenha a parte esquerda da logo (símbolo) recortada via clipping
+        p = canvas.beginPath()
+        p.rect(0, 0, 0, 0)
+        canvas.restoreState()
+        canvas.saveState()
+        canvas.setPageSize((A4[0], A4[1]))
+        # símbolo: recorte proporcional da logo (esquerda ~18% da largura)
+        logo_w, logo_h = 1600, 561
+        crop_w = int(logo_w * 0.16)
+        from PIL import Image as PILImage
+        sim_path = os.path.join(_dir, "simbolo-terceirizou.png")
+        if os.path.exists(sim_path):
+            from PIL import Image as PILImage2
+            sw, sh = PILImage2.open(sim_path).size
+            alt = 0.85*cm
+            img_s = RLImage(sim_path, width=alt*sw/sh, height=alt)
+            img_s.drawOn(canvas, A4[0]-1.9*cm, 0.8*cm)
+        canvas.restoreState()
+    except Exception:
+        pass
+
+def _capa(canvas, doc_):
+    pass
+
 # gerar recorte do símbolo (o "5" laranja = ~23% esquerdo da logo horizontal)
 from PIL import Image as PILImage
 img_full = PILImage.open(LOGO)
 _w, _h = img_full.size
 sim = img_full.crop((0, 0, int(_w * 0.233), _h))
+# aparar bordas transparentes
 bbox = sim.getbbox()
 if bbox:
     sim = sim.crop(bbox)
 sim.save(os.path.join(_dir, "simbolo-terceirizou.png"))
 print(f"simbolo: {sim.size}")
-
-def _desenha_logo(canvas, doc_):
-    if not os.path.exists(LOGO):
-        return
-    canvas.saveState()
-    sim_path = os.path.join(_dir, "simbolo-terceirizou.png")
-    if os.path.exists(sim_path):
-        from PIL import Image as PILImage2
-        sw, sh = PILImage2.open(sim_path).size
-        alt = 0.85*cm
-        img_s = RLImage(sim_path, width=alt*sw/sh, height=alt)
-        img_s.drawOn(canvas, A4[0]-1.9*cm, 0.8*cm)
-    canvas.restoreState()
-
-def _capa(canvas, doc_):
-    pass
 
 def _on_page(canvas, doc_):
     if doc_.page > 1:  # pula a capa
@@ -516,7 +537,7 @@ aba("Despesas em aberto",
 
 aba("Previsão " + MES_AB[MES_COR.month],
     [("Item", "Valor"),
-     (f"Previsão Faturamento {MES_PT[MES_COR.month].capitalize()} ({DU_COR} dias úteis)", r_(FAT_PREV)),
+     (f"Previsão Faturamento {MES_PT[MES_COR.month].capitalize()} (receitas de vistoria 01.01–01.05, {DU_COR} dias úteis)", r_(FAT_PREV)),
      (f"Previsão Despesa {MES_PT[MES_COR.month].capitalize()}", r_(DESP_PREV)),
      (f"Previsão de Resultado {MES_PT[MES_COR.month].capitalize()}", r_(RESULT_PREV)),
      (f"Despesas em aberto até {FIM_MES_ANT_LABEL}", r_(total_desp_aberto)),
@@ -524,7 +545,7 @@ aba("Previsão " + MES_AB[MES_COR.month],
      (f"Previsão de Saldo em {FIM_MES_COR.strftime('%d/%m/%Y')}", r_(SALDO_PREV_FIM))],
     [55, 18], titulo=f"Previsão para {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year}")
 
-# lançamentos do mês anterior (competência) agrupados por categoria, com total por categoria
+# lançamentos do mês anterior agrupados por categoria (receitas + despesas, com total por categoria)
 def detalhe_agrupado(txs):
     por_cat = defaultdict(list)
     for t in txs:
