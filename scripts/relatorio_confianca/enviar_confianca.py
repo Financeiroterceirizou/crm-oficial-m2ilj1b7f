@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# Envio dos Relatórios Mensais ARAGUARI / DIAMANTINA / UNIFICADO por e-mail (Resend).
-# Uso: python3 enviar_confianca.py <unidade>  (araguari | diamantina | ambas)
+# Envio dos Relatórios Mensais das VISTORIAS da licença CONFIANÇA por e-mail (Resend).
+# Uso: python3 enviar_confianca.py <unidade>
+# Unidades: araguari | diamantina | caratinga | pirapora | joao_monlevade | teofoli_otoni | ambas | quatro
 # Chave Resend: scripts/95b7f382c0a1ba1d/resend_key.txt (fora do repo) ou env RESEND_API_KEY.
 # Destinatário: vinicius@terceirizou.com.br.
 import base64, json, os, sys, urllib.request
@@ -9,7 +10,12 @@ from datetime import date
 UNIDADES = {
     "araguari":   {"nome": "ARAGUARI VISTORIA",   "arq": "Araguari"},
     "diamantina": {"nome": "DIAMANTINA VISTORIA", "arq": "Diamantina"},
+    "caratinga":  {"nome": "CARATINGA VISTORIA",  "arq": "Caratinga"},
+    "pirapora":   {"nome": "PIRAPORA VISTORIA",   "arq": "Pirapora"},
+    "joao_monlevade": {"nome": "JOÃO MONLEVADE VISTORIA", "arq": "Joao_Monlevade"},
+    "teofoli_otoni":  {"nome": "TEÓFILO OTONI VISTORIA",  "arq": "Teofoli_Otoni"},
     "ambas":      {"nome": "ARAGUARI + DIAMANTINA VISTORIA (unificado)", "arq": "Araguari_Diamantina"},
+    "quatro":     {"nome": "PIRAPORA + CARATINGA + JOÃO MONLEVADE + TEÓFILO OTONI VISTORIA (unificado)", "arq": "Quatro_Unidades"},
 }
 _un = sys.argv[1] if len(sys.argv) > 1 else "araguari"
 UN = UNIDADES[_un]
