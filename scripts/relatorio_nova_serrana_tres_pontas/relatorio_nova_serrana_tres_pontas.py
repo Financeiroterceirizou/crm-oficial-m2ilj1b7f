@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 # Relatório Mensal — NOVA SERRANA + TRÊS PONTAS VISTORIA (mesma licença Controlle, filtro por CENTRO DE CUSTO)
-# v1.0, 2026-09-30 (formato Uberlândia v1.2 + competência)
+# v1.1, 2026-09-30 (formato Uberlândia v1.2 + competência + saldo por unidade)
 # Uso: python3 relatorio_nova_serrana_tres_pontas.py [YYYY-MM-DD] [unidade]  (unidade: nova_serrana | tres_pontas)
 # Gera UM pacote por unidade (PDF + Excel), filtrando TODOS os relatórios pelo centro de custo:
 #   Nova Serrana → CC "NOVA SERRANA" (id 170053) · Três Pontas → CC "TRÊS PONTAS" (id 170054)
-# Estrutura (v1.0):
+# Estrutura (v1.1):
 #   Capa COMPACTA + 1. Receitas e Despesas por categoria do mês anterior NA MESMA PÁGINA
 #   (REGIME DE COMPETÊNCIA: janela larga + dt_competence, INCLUI NÃO PAGOS, sem transferências;
 #   06.01 Distribuição de Resultado em negrito) · 2. Comparativo 6 meses por categoria
 #   (REGIME DE COMPETÊNCIA: inclui não pagos; Média no lugar do Total, R$ inteiros, + linha Resultado do mês) ·
-#   3. Previsão de despesas do mês corrente (caixa) · 4. Saldo nas contas dia 31/08 (por conta da licença) ·
+#   3. Previsão de despesas do mês corrente (caixa) · 4. Saldo nas contas dia 31/08 SÓ COM AS CONTAS DA UNIDADE
+#   (mapeamento Vinícius 30/09: Nova Serrana → NOVA SERRANA CAIXINHA + NOVA SERRANA CORA ·
+#   Três Pontas → TRES PONTAS CORA + CAIXINHA + TRANSPOCRED IN; prefixo sem acento) ·
 #   5. Despesas em aberto até 31/08 (mesma página do saldo quando couber) · 6. Resumo "Previsão para <mês>"
 # Excel: título na 1ª linha de cada aba + Comparativo com coluna Média + linha "Resultado do mês"
 #   (média e total dos 6 meses) + aba "Previsão <mês>" + aba "Detalhe <mês>" (competência, por categoria).
 # Fonte: API Controlle v1 (token compartilhado). Envio: MENSAL dia 04 14:00 → vinicius@terceirizou.com.br.
-# NOTA: contas da licença são dedicadas por unidade (NOVA SERRANA CAIXINHA/CORA, TRES PONTAS CAIXINHA/CORA/TRANSPOCRED),
-# mas o relatório de saldo mostra TODAS as contas da licença (não há vínculo conta↔CC na API).
 import json, os, sys, urllib.request
 from collections import defaultdict
 from datetime import date, timedelta
@@ -174,10 +174,16 @@ prev_cor = [t for t in tx_list(MES_COR.isoformat(), FIM_MES_COR.isoformat()) if 
 prev_desp = agrupa_por_categoria(prev_cor, so_negativas=True)
 prev_desp_total = sum(v for v, _ in prev_desp.values())
 
-# 4. Saldo nas contas no último dia do mês anterior (contas da LICENÇA — sem vínculo conta↔CC na API)
+# 4. Saldo nas contas no último dia do mês anterior (SÓ as contas da unidade — mapeamento Vinícius 30/09:
+#    Nova Serrana → NOVA SERRANA CAIXINHA + NOVA SERRANA CORA · Três Pontas → TRES PONTAS CORA + CAIXINHA + TRANSPOCRED IN)
+import unicodedata
+def _sem_acento(s):
+    return "".join(ch for ch in unicodedata.normalize("NFD", s or "") if not unicodedata.combining(ch))
+_prefixo_un = _sem_acento(CC_NOME).upper()  # "NOVA SERRANA" / "TRES PONTAS"
 contas = [c for c in req(f"{BASE}/account/v1/accounts").get("results", []) if c.get("status") == 1]
+contas_un = [c for c in contas if _sem_acento(c["ds_account"]).upper().startswith(_prefixo_un)]
 saldos_conta = []
-for c in contas:
+for c in contas_un:
     b = req(f"{BASE}/transaction/v1/transactions/balances?start_date=2017-01-01&end_date={FIM_MES_ANT.isoformat()}&id_account_main={c['id']}")["results"]
     saldos_conta.append((c["ds_account"], b["balanceDone"]))
 saldos_conta = [(n, v) for n, v in saldos_conta if v != 0]
