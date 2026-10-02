@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
-# Relatório Mensal — UBERLÂNDIA (CORREA) VISTORIA — v1.0, 2026-09-29 (motor v1.4 Bem Viver + layout logo)
+# Relatório Mensal — UBERLÂNDIA (CORREA) VISTORIA — v1.2, 2026-09-29 (motor v1.4 Bem Viver + layout logo)
 # Uso: python3 relatorio_uberlandia.py [YYYY-MM-DD]  (default: hoje)
 # Gera UM PDF (um relatório por folha, logo Terceirizou na 1ª página e símbolo no canto inferior
 # direito nas seguintes) + UM Excel.
 # Estrutura (pedido Vinícius 29/09):
-#   1. Receitas e Despesas por categoria do mês anterior (ago; sem transferências)
-#   2. Comparativo dos últimos 06 meses por categoria (sem transferências)
-#   3. Previsão de despesas para o mês seguinte por categoria (setembro)
-#   4. Saldo nas contas no último dia do mês anterior (31/08)
-#   5. Despesas em aberto até o último dia do mês anterior (31/08)
-#   6. Resumo — Previsão de Resultado do Mês (setembro): faturamento previsto (média/dia útil de ago
-#      × dias úteis do mês corrente), despesa prevista, resultado, despesas em aberto, saldo contas
-#      e previsão de saldo no fim do mês corrente
-# Fonte: API Controlle v1 (token Uberlândia). Envio: vinicius@terceirizou.com.br.
-# Realizado: situation in (1,2) — match exato com balances Done (validado ago: 48.924,73 / -53.773,13).
+#   1. Receitas e Despesas por categoria do mês anterior (REGIME DE COMPETÊNCIA: janela larga +
+#      dt_competence, inclui não pagos, sem transferências)
+#   2. Comparativo dos últimos 06 meses por categoria (REGIME DE COMPETÊNCIA)
+#   3. Previsão de despesas para o mês corrente por categoria (caixa)
+#   4. Saldo nas contas no último dia do mês anterior
+#   5. Despesas em aberto até o último dia do mês anterior
+#   6. Resumo — Previsão de Resultado do Mês corrente: FAT_ANT = SÓ receitas de vistoria 01.01–01.05
+#      (decisão Vinícius 30/09), média/dia útil × dias úteis do mês corrente
+# Fonte: API Controlle v1 (token Uberlândia). Envio: MENSAL dia 04 14:00 → vinicius@terceirizou.com.br.
+# Realizado: situation in (1,2) — match exato com balances Done.
+# v1.2 (02/10): req com retry (4 tentativas, 500/502/503) — a API da Controlle dá 502 intermitente.
 import json, os, sys, urllib.request
 from collections import defaultdict
 from datetime import date, timedelta
@@ -39,12 +40,20 @@ LOGO = os.path.join(_dir, "logo-terceirizou.png")
 MES_PT = {1:"janeiro",2:"fevereiro",3:"março",4:"abril",5:"maio",6:"junho",7:"julho",8:"agosto",9:"setembro",10:"outubro",11:"novembro",12:"dezembro"}
 MES_AB = {1:"jan",2:"fev",3:"mar",4:"abr",5:"mai",6:"jun",7:"jul",8:"ago",9:"set",10:"out",11:"nov",12:"dez"}
 
-def req(url):
-    r = urllib.request.Request(url)
-    for k, v in UA.items():
-        r.add_header(k, v)
-    with urllib.request.urlopen(r, timeout=120) as resp:
-        return json.loads(resp.read().decode("utf-8", "replace"))
+def req(url, tries=4):
+    import time
+    for i in range(tries):
+        try:
+            r = urllib.request.Request(url)
+            for k, v in UA.items():
+                r.add_header(k, v)
+            with urllib.request.urlopen(r, timeout=120) as resp:
+                return json.loads(resp.read().decode("utf-8", "replace"))
+        except urllib.error.HTTPError as e:
+            if e.code in (500, 502, 503) and i < tries - 1:
+                time.sleep(3 * (i + 1))
+                continue
+            raise
 
 def tx_list(start, end, **filtros):
     out, page = [], 1
@@ -112,10 +121,10 @@ def dias_uteis(ini, fim, feriados=()):
 
 # ===== datas =====
 HOJE = date.fromisoformat(sys.argv[1]) if len(sys.argv) > 1 else date.today()
-MES_ANT = add_months(HOJE.replace(day=1), -1)          # mês anterior (agosto)
+MES_ANT = add_months(HOJE.replace(day=1), -1)          # mês anterior (setembro)
 FIM_MES_ANT = MES_ANT.replace(day=28) + timedelta(days=4)
-FIM_MES_ANT = FIM_MES_ANT - timedelta(days=FIM_MES_ANT.day)  # último dia do mês anterior (31/08)
-MES_COR = HOJE.replace(day=1)                          # mês corrente (setembro)
+FIM_MES_ANT = FIM_MES_ANT - timedelta(days=FIM_MES_ANT.day)  # último dia do mês anterior (30/09)
+MES_COR = HOJE.replace(day=1)                          # mês corrente (outubro)
 FIM_MES_COR = MES_COR.replace(day=28) + timedelta(days=4)
 FIM_MES_COR = FIM_MES_COR - timedelta(days=FIM_MES_COR.day)
 
@@ -257,7 +266,7 @@ E.append(Spacer(1, 8))
 
 # ===== 1. Receitas e Despesas por categoria do mês anterior =====
 bloco = []
-bloco.append(P(f"Receitas e Despesas por Categoria — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (realizado)", h2))
+bloco.append(P(f"Receitas e Despesas por Categoria — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (regime de competência)", h2))
 rd_rows = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
 for nome, (v, n) in sorted(ant_rec.items()):
     rd_rows.append([P(nome, cell), P(str(n), cellc), P_val(v, cellr)])
@@ -360,56 +369,39 @@ t.setStyle(TableStyle([("BACKGROUND", (0,2), (-1,2), LARANJA_CLARO), ("BACKGROUN
 E.append(t)
 E.append(Spacer(1, 10))
 E.append(P(f"Base do cálculo: faturamento de {MES_PT[MES_ANT.month].capitalize()} para previsão = receitas de vistoria (categorias 01.01–01.05) = {brl(FAT_ANT)} em {DU_ANT} dias úteis "
-           f"(média de {brl(int(round(MEDIA_DIA)))} por dia útil). Previsão de setembro: média/dia × {DU_COR} dias úteis. "
+           f"(média de {brl(int(round(MEDIA_DIA)))} por dia útil). Previsão de outubro: média/dia × {DU_COR} dias úteis. "
            f"Previsão de saldo final = previsão de resultado − despesas em aberto + saldo nas contas.", sub))
 
 E.append(Spacer(1, 10))
 E.append(P("Gerado automaticamente pela Terceirizou · dados do Controlle", sub))
 
 # símbolo (o "5" laranja) no canto inferior direito das páginas seguintes
-def _desenha_logo(canvas, doc_):
-    if not os.path.exists(LOGO):
-        return
-    canvas.saveState()
-    # recorta só o símbolo (o "5" laranja fica na ~primeira metade esquerda da logo)
-    try:
-        sim = ImageReader(LOGO)
-        w, h = 1.1*cm, 1.1*cm*561/1600
-        # desenha a parte esquerda da logo (símbolo) recortada via clipping
-        p = canvas.beginPath()
-        p.rect(0, 0, 0, 0)
-        canvas.restoreState()
-        canvas.saveState()
-        canvas.setPageSize((A4[0], A4[1]))
-        # símbolo: recorte proporcional da logo (esquerda ~18% da largura)
-        logo_w, logo_h = 1600, 561
-        crop_w = int(logo_w * 0.16)
-        from PIL import Image as PILImage
-        sim_path = os.path.join(_dir, "simbolo-terceirizou.png")
-        if os.path.exists(sim_path):
-            from PIL import Image as PILImage2
-            sw, sh = PILImage2.open(sim_path).size
-            alt = 0.85*cm
-            img_s = RLImage(sim_path, width=alt*sw/sh, height=alt)
-            img_s.drawOn(canvas, A4[0]-1.9*cm, 0.8*cm)
-        canvas.restoreState()
-    except Exception:
-        pass
-
-def _capa(canvas, doc_):
-    pass
-
 # gerar recorte do símbolo (o "5" laranja = ~23% esquerdo da logo horizontal)
 from PIL import Image as PILImage
 img_full = PILImage.open(LOGO)
 _w, _h = img_full.size
 sim = img_full.crop((0, 0, int(_w * 0.233), _h))
-# aparar bordas transparentes
 bbox = sim.getbbox()
 if bbox:
     sim = sim.crop(bbox)
 sim.save(os.path.join(_dir, "simbolo-terceirizou.png"))
 print(f"simbolo: {sim.size}")
+
+def _desenha_logo(canvas, doc_):
+    if not os.path.exists(LOGO):
+        return
+    canvas.saveState()
+    sim_path = os.path.join(_dir, "simbolo-terceirizou.png")
+    if os.path.exists(sim_path):
+        from PIL import Image as PILImage2
+        sw, sh = PILImage2.open(sim_path).size
+        alt = 0.85*cm
+        img_s = RLImage(sim_path, width=alt*sw/sh, height=alt)
+        img_s.drawOn(canvas, A4[0]-1.9*cm, 0.8*cm)
+    canvas.restoreState()
+
+def _capa(canvas, doc_):
+    pass
 
 def _on_page(canvas, doc_):
     if doc_.page > 1:  # pula a capa
@@ -486,7 +478,7 @@ aba("Receitas e Despesas " + MES_AB[MES_ANT.month],
     [(n, n2, r_(v)) for n, (v, n2) in sorted(ant_desp.items())] +
     [("Total de Despesas", sum(n for _, n in ant_desp.values()), r_(ant_saidas)),
      ("Resultado do mês", len(mes_ant_tx), r_(ant_resultado))],
-    [45, 14, 16], titulo=f"Receitas e Despesas por Categoria — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (realizado)")
+    [45, 14, 16], titulo=f"Receitas e Despesas por Categoria — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (regime de competência)")
 
 aba("Comparativo 6 meses",
     [("Categoria",) + tuple(lab for _, _, lab in meses_6) + ("Média", "Total")] +
@@ -495,7 +487,7 @@ aba("Comparativo 6 meses",
      for cat in cat_names_6],
     [40] + [13]*6 + [13, 15], titulo=f"Comparativo dos Últimos 6 Meses por Categoria ({MES_AB[INI_6.month]}/{str(INI_6.year)[2:]} a {MES_AB[MES_ANT.month]}/{str(MES_ANT.year)[2:]}) — regime de competência")
 
-# linha de resultado do mês no Excel (igual ao PDF: entradas - saidas de cada mes, pela matriz)
+# linha de resultado do mês no Excel (igual ao PDF: entradas - saídas de cada mês, pela matriz)
 _ws_cmp = wb["Comparativo 6 meses"]
 _row_res = ["Resultado do mês"]
 for _, fim_m_iso, _ in meses_6:
@@ -563,7 +555,7 @@ def detalhe_agrupado(txs):
 aba("Detalhe " + MES_AB[MES_ANT.month],
     detalhe_agrupado(mes_ant_tx) + [(f"Resultado do mês ({MES_PT[MES_ANT.month].capitalize()})", "", "", "", "", "", r_(ant_resultado))],
     [12, 9, 55, 20, 35, 10, 14],
-    titulo=f"Lançamentos de {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} por categoria")
+    titulo=f"Lançamentos de {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} por categoria (competência)")
 
 wb.save(ARQ_XLSX)
 print(f"OK: {ARQ_XLSX}")
