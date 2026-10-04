@@ -1,25 +1,25 @@
 #!/usr/bin/env python3
 # Relatório Mensal — CENTROVITA MAURO RAMOS + BARRA DA LAGOA (ILPI, sócio Henrique) — licença CENTROVITA MAURO RAMOS
-# v1.0, 2026-10-04 (pedido Vinícius: filtro por CC + consolidado, TUDO EM UM PDF ÚNICO)
+# v1.1, 2026-10-04 (feedback Vinícius: capa com relatório na 1ª página, comparativo em PAISAGEM,
+#   título "Previsão de Receitas e Despesas", Fluxo de Caixa POR CENTRO DE CUSTO + unificado)
 # Uso: python3 relatorio_centrovita_mr_bl.py [YYYY-MM-DD]  (default: hoje; relatórios do MES_ANT)
-# Estrutura do PDF único:
-#   PARTE 1 — MAURO RAMOS (CC 157108): 1. Comparativo 13 meses (competência) · 2. Receitas e Despesas
-#     do mês anterior consolidadas (competência) · 3. Previsão de Receitas e Despesas do mês corrente
-#     (caixa, pago+pendente) · 4. Fluxo de Caixa dos últimos 13 meses (caixa realizado) ·
+# Estrutura do PDF único (sem página em branco):
+#   CAPA COMPACTA + PARTE 1 — MAURO RAMOS (CC 157108): banda laranja + 1. Comparativo 13 meses
+#     (competência, PAISAGEM) · 2. Receitas e Despesas do mês anterior (competência) ·
+#     3. Previsão de Receitas e Despesas do mês corrente (caixa, pago+pendente) ·
+#     4. Fluxo de Caixa dos últimos 13 meses (POR CC: lançamentos com CC da unidade;
+#     transferências internas pareadas por uuid/descrição+data se anulam; transferências ENTRE
+#     unidades contam como movimento real; saldo final = saldo real via balances) ·
 #     5. Saldo nas contas no último dia do mês anterior
 #   PARTE 2 — BARRA DA LAGOA (CC 157107): mesmos 5 relatórios
-#   PARTE 3 — CONSOLIDADO: 2 (Receitas e Despesas mês anterior) · 3 (Previsão mês corrente) ·
-#     5 (Saldo nas contas) das duas unidades somadas
+#   PARTE 3 — CONSOLIDADO: 2 (mês anterior) · 3 (previsão) · 5 (saldo) das duas unidades somadas
 # Contas (mapeamento Vinícius 04/10):
 #   BARRA DA LAGOA → Cora Barra da Lagoa (213167) + Banco Inter Barra da Lagoa (213168) +
 #     Banco Inter Investimentos Barra da Lagoa (213169) + Banco BTG Investimento Barra da Lagoa (224034)
 #   MAURO RAMOS → Cora Mauro Ramos (212452) + Banco Inter Mauro Ramos (212451) +
 #     Banco Inter Investimentos Mauro Ramos (212453) + Banco BTG Investimento Mauro Ramos (224031)
 #   Consolidado → as 8 contas
-# Filtros: relatórios de competência (1, 2) e previsão (3) por CC + sem transferências;
-#   FLUXO DE CAIXA (4) e SALDO (5) pelas CONTAS da unidade (transferências internas se anulam;
-#   saldo final do fluxo = saldo real via balances — casa 1:1 com o relatório de saldos).
-# Fonte: API Controlle v1. Envio: vinicius@terceirizou.com.br (cron mensal).
+# Fonte: API Controlle v1. Envio: vinicius@terceirizou.com.br (cron mensal dia 04 14:00).
 import json, os, sys, urllib.request, time
 from collections import defaultdict
 from datetime import date, timedelta
@@ -28,8 +28,10 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import cm
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-                                PageBreak, Image as RLImage)
+from reportlab.platypus import (Paragraph, Spacer, Table, TableStyle,
+                                PageBreak, Image as RLImage,
+                                BaseDocTemplate, PageTemplate, Frame, NextPageTemplate)
+from reportlab.lib.pagesizes import landscape
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
@@ -140,7 +142,7 @@ FIM_MES_ANT = FIM_MES_ANT - timedelta(days=FIM_MES_ANT.day)
 MES_COR = HOJE.replace(day=1)
 FIM_MES_COR = MES_COR.replace(day=28) + timedelta(days=4)
 FIM_MES_COR = FIM_MES_COR - timedelta(days=FIM_MES_COR.day)
-INI_13 = add_months(MES_ANT, -12)   # 13 meses: set/25..set/26
+INI_13 = add_months(MES_ANT, -12)   # 13 meses
 
 FERIADOS = set()
 for y in (MES_COR.year, MES_ANT.year):
@@ -167,16 +169,61 @@ def dados_unidade(nome, cid):
     mes_ant_tx = [t for t in _tx if (t.get("dt_competence") or "")[:7] == f"{MES_ANT.year}-{MES_ANT.month:02d}" and ok_cc(t, ccs)]
     rec = agrupa(mes_ant_tx, so_positivas=True)
     desp = agrupa(mes_ant_tx, so_negativas=True)
-    # comparativo 13 meses + fluxo de caixa realizado
     matriz = defaultdict(lambda: defaultdict(int))
     fluxo = []  # (label, saldo_ini, entradas, saidas, saldo_fim)
-    # FLUXO POR SALDOS REAIS: saldo final de cada mês = balances real das contas da unidade;
-    # entradas/saídas do mês = lançamentos das contas (transferências internas se anulam).
+    # FLUXO DE CAIXA POR CENTRO DE CUSTO: lançamentos com CC da unidade, sem transferências
+    # entre contas — EXCETO transferências internas da unidade (pareadas por uuid ou
+    # descrição+data), que se anulam entre as contas da unidade e NÃO entram no fluxo.
+    # Transferências ENTRE unidades (ex.: MR→BL) contam como movimento real de cada lado.
+    # Saldo final de cada mês = saldo real via balances (casa 1:1 com o relatório de saldos).
     contas_un = set(UNIDADES[nome]["contas"])
-    def conta_da_unid(t):
-        return (t.get("ds_account_main") in contas_un or
-                t.get("ds_account_debits") in contas_un or
-                t.get("ds_account_credits") in contas_un)
+    def transf(t):
+        return ("TRANSFERÊNCIA" in (t.get("ds_transaction") or "").upper()
+                or "para Banco" in (t.get("ds_transaction") or ""))
+    tr_all = [t for t in _tx if transf(t)]
+    por_uuid = defaultdict(list)
+    for t in tr_all:
+        if t.get("transaction_related_uuid"):
+            por_uuid[t["transaction_related_uuid"]].append(t)
+    pares = []
+    usadas = set()
+    for u, lst in por_uuid.items():
+        if len(lst) >= 2:
+            pares.append((lst[0], lst[1])); usadas.update(id(x) for x in lst[:2])
+    resto = [t for t in tr_all if id(t) not in usadas]
+    por_chave = defaultdict(list)
+    for t in resto:
+        # parear por descrição+data (valores OPOSTOS casam dentro do grupo)
+        por_chave[((t.get("ds_transaction") or "")[:60], t.get("dt_billing") or t.get("dt_due") or "")].append(t)
+    usadas2 = set()
+    for k, lst in por_chave.items():
+        neg = [t for t in lst if t["value_in_cent"] < 0 and id(t) not in usadas2]
+        pos = [t for t in lst if t["value_in_cent"] > 0 and id(t) not in usadas2]
+        for a in neg:
+            for b in pos:
+                if id(b) in usadas2: continue
+                if a["value_in_cent"] == -b["value_in_cent"]:
+                    pares.append((a, b)); usadas2.update((id(a), id(b)))
+                    break
+    def transf_interna(t):
+        """True se a transferência é par INTERNO à unidade (anula — não é movimento da unidade)."""
+        for a, b in pares:
+            if t is a or t is b:
+                contas_par = {a.get("ds_account_main"), b.get("ds_account_main")}
+                return contas_par <= contas_un
+        return False
+    def transf_da_unidade(t):
+        """True se a transferência toca a unidade (perna dela)."""
+        return t.get("ds_account_main") in contas_un
+    def ok_fluxo(t):
+        if ok_cc(t, ccs):
+            return True
+        if transf(t):
+            if not transf_da_unidade(t):
+                return False  # transferência de OUTRA unidade → fora do fluxo desta
+            # interna (par dentro da unidade) anula → fora; entre unidades/órfã → movimento real → entra
+            return not transf_interna(t)
+        return False
     id_contas = {}
     for c in req(f"{BASE}/account/v1/accounts").get("results", []):
         if c["ds_account"] in contas_un and c.get("status") == 1:
@@ -189,7 +236,7 @@ def dados_unidade(nome, cid):
         return tot
     saldo_acum = saldo_real((date.fromisoformat(MESES13[0][0]) - timedelta(days=1)).isoformat())
     for i, (ini_m, fim_m, lab) in enumerate(MESES13):
-        txs_m = [t for t in _tx if ini_m <= bdate(t) <= fim_m and conta_da_unid(t)]
+        txs_m = [t for t in _tx if ini_m <= bdate(t) <= fim_m and ok_fluxo(t)]
         ent = sum(t["value_in_cent"] for t in txs_m if t["activity_type"] == 1)
         sai = sum(t["value_in_cent"] for t in txs_m if t["activity_type"] == 0)
         saldo_fim_real = saldo_real(fim_m)
@@ -287,27 +334,49 @@ def tabela_cat(titulo, grupos, total_label="Total"):
 
 P = Paragraph
 ARQ_PDF = f"artifacts/{HOJE.strftime('%y%m%d')}_Relatorio_Centrovita_MR_BL.pdf"
-doc = SimpleDocTemplate(ARQ_PDF, pagesize=A4, leftMargin=1.5*cm, rightMargin=1.5*cm, topMargin=1.3*cm, bottomMargin=1.3*cm,
-                        title="Relatório Gerencial — Centrovita Mauro Ramos + Barra da Lagoa")
+doc = BaseDocTemplate(ARQ_PDF, title="Relatório Gerencial — Centrovita Mauro Ramos + Barra da Lagoa",
+                      pagesize=A4, leftMargin=1.5*cm, rightMargin=1.5*cm, topMargin=1.3*cm, bottomMargin=1.3*cm)
+fr_p = Frame(1.5*cm, 1.3*cm, A4[0]-3*cm, A4[1]-2.6*cm, id="fr_p")
+fr_l = Frame(1.5*cm, 1.3*cm, landscape(A4)[0]-3*cm, landscape(A4)[1]-2.6*cm, id="fr_l")
+
+def _marca(canvas, doc_):
+    """Símbolo Terceirizou no canto inferior direito (todas as páginas menos a capa)."""
+    if doc_.page > 1:
+        sim_path = os.path.join(_dir, "simbolo-terceirizou.png")
+        if os.path.exists(sim_path):
+            from PIL import Image as PILImage2
+            sw, sh = PILImage2.open(sim_path).size
+            alt = 0.85*cm
+            img_s = RLImage(sim_path, width=alt*sw/sh, height=alt)
+            img_s.drawOn(canvas, canvas._pagesize[0]-1.9*cm, 0.8*cm)
+
+doc.addPageTemplates([
+    PageTemplate(id="portrait", frames=[fr_p], pagesize=A4, onPage=_marca),
+    PageTemplate(id="landscape", frames=[fr_l], pagesize=landscape(A4), onPage=_marca),
+])
 E = []
 
-# CAPA
+# CAPA COMPACTA + 1º relatório NA MESMA PÁGINA (sem página em branco)
+subc_center = ParagraphStyle("subc_center", parent=sub, fontSize=8, alignment=1, spaceAfter=0)
 if os.path.exists(LOGO):
-    img = RLImage(LOGO, width=6*cm, height=6*cm*561/1600)
+    img = RLImage(LOGO, width=4.5*cm, height=4.5*cm*561/1600)
     img.hAlign = "CENTER"
     E.append(img)
-E.append(Spacer(1, 14))
+E.append(Spacer(1, 6))
 E.append(P("<b>CENTROVITA MAURO RAMOS + BARRA DA LAGOA</b>", h1c))
-E.append(P("Relatório Gerencial Mensal", ParagraphStyle("h2c", parent=h2, fontSize=12, alignment=1, spaceBefore=4, spaceAfter=2)))
-E.append(P(f"Gerado em {HOJE_LABEL} · Fonte: Controlle · Ref.: {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year}", sub))
-E.append(PageBreak())
+E.append(P(f"Relatório Gerencial Mensal · Gerado em {HOJE_LABEL} · Fonte: Controlle · Ref.: {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year}", subc_center))
+E.append(Spacer(1, 4))
 
-def bloco_unidade(nome, d):
-    """5 relatórios de uma unidade."""
+def bloco_unidade(nome, d, primeira=False):
+    """5 relatórios de uma unidade. primeira=True: sem PageBreak (continua na capa)."""
     els = []
+    if not primeira:
+        els.append(PageBreak())
     els.append(banda_unidade(nome))
     els.append(Spacer(1, 6))
-    # 1. Comparativo 13 meses (competência)
+    # 1. Comparativo 13 meses (competência) — PÁGINA EM PAISAGEM
+    els.append(NextPageTemplate("landscape"))
+    els.append(PageBreak())
     els.append(P(f"Comparativo dos Últimos 13 Meses por Categoria ({MES_AB[INI_13.month]}/{str(INI_13.year)[2:]} a {MES_AB[MES_ANT.month]}/{str(MES_ANT.year)[2:]}) — regime de competência", h2))
     cats = sorted({c for c in d["matriz"]})
     rows = [[P("<b>Categoria</b>", cell)] + [P(f"<b>{lab}</b>", cellr) for _, _, lab in MESES13] + [P("<b>Média</b>", cellr), P("<b>Total</b>", cellr)]]
@@ -319,8 +388,9 @@ def bloco_unidade(nome, d):
         row.append(P_val_int(round(sum(vals13) / len(vals13)), cellrb))
         row.append(P_val_int(sum(vals13), cellrb))
         rows.append(row)
-    els.append(tabela(rows, [4.4*cm] + [1.05*cm]*13 + [1.25*cm, 1.4*cm], fs=5.8))
-    # 2. Receitas e Despesas do mês anterior (competência)
+    els.append(tabela(rows, [6.0*cm] + [1.35*cm]*13 + [1.6*cm, 1.8*cm], fs=7))
+    # 2. Receitas e Despesas do mês anterior consolidadas (competência) — volta ao retrato
+    els.append(NextPageTemplate("portrait"))
     els.append(PageBreak())
     els += tabela_cat(f"Receitas e Despesas — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (regime de competência)", d["rec"], total_label="Total de Receitas")
     rows2 = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
@@ -333,7 +403,7 @@ def bloco_unidade(nome, d):
     els.append(t)
     # 3. Previsão de Receitas e Despesas do mês corrente (caixa)
     els.append(PageBreak())
-    els += tabela_cat(f"Previsão de Receitas — {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} (pago + pendente)", d["prev_rec"], total_label="Total previsto")
+    els += tabela_cat(f"Previsão de Receitas e Despesas — {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} (pago + pendente)", d["prev_rec"], total_label="Total previsto")
     rows3 = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
     for nm, (v, n) in sorted(d["prev_desp"].items()):
         rows3.append([P(nm, cell), P(str(n), cellc), P_val(v, cellr)])
@@ -341,7 +411,7 @@ def bloco_unidade(nome, d):
     t = tabela(rows3, [11*cm, 2.5*cm, 3*cm])
     t.setStyle(TableStyle([("BACKGROUND", (0,len(rows3)-1), (-1,len(rows3)-1), LARANJA_CLARO)]))
     els.append(t)
-    # 4. Fluxo de Caixa dos últimos 13 meses (realizado)
+    # 4. Fluxo de Caixa dos últimos 13 meses (realizado, POR CC)
     els.append(PageBreak())
     els.append(P(f"Fluxo de Caixa — Últimos 13 Meses ({MES_AB[INI_13.month]}/{str(INI_13.year)[2:]} a {MES_AB[MES_ANT.month]}/{str(MES_ANT.year)[2:]}) — realizado", h2))
     rows4 = [[P("<b>Mês</b>", cell), P("<b>Saldo inicial</b>", cellr), P("<b>Entradas</b>", cellr), P("<b>Saídas</b>", cellr), P("<b>Saldo final</b>", cellr)]]
@@ -349,8 +419,9 @@ def bloco_unidade(nome, d):
         rows4.append([P(lab, cell), P_val(si, cellr), P_val(ent, cellr), P_val(sai, cellr), P_val(sf, cellrb)])
     t = tabela(rows4, [3.2*cm, 3.4*cm, 3.4*cm, 3.4*cm, 3.6*cm], fs=7)
     els.append(t)
-    els.append(P("Nota: fluxo calculado pelas contas da unidade (entradas e saídas bancárias). "
-                 "Transferências entre contas da própria unidade se anulam e não alteram o saldo total.", sub))
+    els.append(P("Nota: fluxo por centro de custo. Transferências entre contas da própria unidade "
+                 "se anulam (não alteram o saldo); transferências entre unidades contam como movimento. "
+                 "Saldo final = saldo real das contas da unidade.", sub))
     # 5. Saldo nas contas
     els.append(Spacer(1, 16))
     els.append(P(f"Saldo nas contas em {FIM_MES_ANT_LABEL}", h2))
@@ -398,7 +469,7 @@ def bloco_consolidado():
     els.append(t)
     # 3. previsão mês corrente
     els.append(PageBreak())
-    els += tabela_cat(f"Previsão de Receitas — {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} (pago + pendente)", prec_c, total_label="Total previsto")
+    els += tabela_cat(f"Previsão de Receitas e Despesas — {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} (pago + pendente)", prec_c, total_label="Total previsto")
     rows3 = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
     for nm, (v, n) in sorted(pdesp_c.items()):
         rows3.append([P(nm, cell), P(str(n), cellc), P_val(v, cellr)])
@@ -420,9 +491,8 @@ def bloco_consolidado():
     els.append(P("Gerado automaticamente pela Terceirizou · dados do Controlle", sub))
     return els
 
-for nome in ("MAURO RAMOS", "BARRA DA LAGOA"):
-    E.append(PageBreak())
-    E.extend(bloco_unidade(nome, D[nome]))
+for i, nome in enumerate(("MAURO RAMOS", "BARRA DA LAGOA")):
+    E.extend(bloco_unidade(nome, D[nome], primeira=(i == 0)))
 E.extend(bloco_consolidado())
 
 # símbolo
@@ -435,27 +505,7 @@ if bbox:
     sim = sim.crop(bbox)
 sim.save(os.path.join(_dir, "simbolo-terceirizou.png"))
 
-def _desenha_logo(canvas, doc_):
-    if not os.path.exists(LOGO):
-        return
-    canvas.saveState()
-    sim_path = os.path.join(_dir, "simbolo-terceirizou.png")
-    if os.path.exists(sim_path):
-        from PIL import Image as PILImage2
-        sw, sh = PILImage2.open(sim_path).size
-        alt = 0.85*cm
-        img_s = RLImage(sim_path, width=alt*sw/sh, height=alt)
-        img_s.drawOn(canvas, A4[0]-1.9*cm, 0.8*cm)
-    canvas.restoreState()
-
-def _capa(canvas, doc_):
-    pass
-
-def _on_page(canvas, doc_):
-    if doc_.page > 1:
-        _desenha_logo(canvas, doc_)
-
-doc.build(E, onFirstPage=_capa, onLaterPages=_on_page)
+doc.build(E)
 print(f"OK: {ARQ_PDF}")
 
 # ===== Excel =====
