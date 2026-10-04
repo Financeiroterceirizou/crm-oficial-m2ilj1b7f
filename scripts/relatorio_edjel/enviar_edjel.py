@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 # Envio dos Relatórios Mensais EDJEL VISTORIAS por e-mail (Resend).
 # Uso: python3 enviar_edjel.py <unidade>  (contagem_1 | coronel_fabriciano | ituiutaba_2 | unai_2 | unificado)
-# Chave Resend: scripts/95b7f382c0a1ba1d/resend_key.txt (fora do repo) ou env RESEND_API_KEY.
-# Destinatário: vinicius@terceirizou.com.br.
 import base64, json, os, sys, urllib.request
 from datetime import date
 
@@ -37,6 +35,8 @@ if os.path.exists(xlsx_path):
         anexos.append({"filename": os.path.basename(xlsx_path), "content": base64.b64encode(f.read()).decode()})
 
 hora_pdf = date.today().strftime("%Y%m%d") + "-" + str(int(os.path.getmtime(pdf_path)) % 100000)
+if os.path.exists(xlsx_path):
+    hora_pdf += "-" + str(int(os.path.getmtime(xlsx_path)) % 100000)
 
 html = f"""<p>Bom dia!</p>
 <p>Segue em anexo o <b>relatório gerencial mensal da {UN['nome']}</b> (fonte Controlle, filtro por centro de custo).</p>
