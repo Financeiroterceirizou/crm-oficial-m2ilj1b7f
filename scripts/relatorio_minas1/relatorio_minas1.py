@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-# Relatórios MINAS 1 (JF-T) — 7 unidades por CENTRO DE CUSTO — v1.0, 2026-10-05
+# Relatórios MINAS 1 (JF-T) — 7 unidades por CENTRO DE CUSTO — v1.1, 2026-10-05
+#   v1.1 (feedback Vinícius): comparativo ordena RECEITAS primeiro, DESPESAS depois (PDF e Excel).
 #   Formato Campo Belo/Uberlândia v1.4 (aprovado): relatórios 1+2 em REGIME DE COMPETÊNCIA
 #   (janela 1 ano — há recorrências 2027 com dt_competence retroativa), demais no caixa.
 #   Filtro: SÓ categoria 99.01 (regra Vinícius 05/10 — descrição não filtra).
@@ -310,10 +311,10 @@ def gerar_pdf(chave, nome_uni, d, saldos, arq_pdf):
     t.setStyle(TableStyle([("BACKGROUND", (0,len(rd_rows)-2), (-1,len(rd_rows)-1), LARANJA_CLARO)]))
     E.append(t)
 
-    # 2. comparativo 6m (competência)
+    # 2. comparativo 6m (competência) — receitas primeiro, despesas depois
     E.append(Spacer(1, 14))
     E.append(P(f"Comparativo dos Últimos 6 Meses por Categoria — regime de competência", h2))
-    cat_names = sorted({c for c in d["matriz_6"]})
+    cat_names = sorted({c for c in d["matriz_6"]}, key=lambda c: sum(d["matriz_6"][c].values()), reverse=True)
     n_col = len(MESES6)
     cm_rows = [[P("<b>Categoria</b>", cell)] + [P(f"<b>{lab}</b>", cellr) for _, _, lab in MESES6] + [P("<b>Média</b>", cellr)]]
     for cat in cat_names:
@@ -470,8 +471,8 @@ def gerar_excel(chave, nome_uni, d, saldos, arq_xlsx):
     du_cor = dias_uteis(MES_COR.year, MES_COR.month)
     fat_prev = round(fat_ant / du_ant * du_cor) if du_ant else 0
     res_prev = fat_prev + d["prev_desp_total"]
-    # comparativo 6m
-    cat_names = sorted({c for c in d["matriz_6"]})
+    # comparativo 6m — receitas primeiro, despesas depois
+    cat_names = sorted({c for c in d["matriz_6"]}, key=lambda c: sum(d["matriz_6"][c].values()), reverse=True)
     _res_mensais = [sum(v[fim_m_iso[:7]] for v in d["matriz_6"].values()) for _, fim_m_iso, _ in MESES6]
     aba(wb, "Comparativo 6m",
         [("Categoria",) + tuple(lab for _, _, lab in MESES6) + ("Média",)] +
