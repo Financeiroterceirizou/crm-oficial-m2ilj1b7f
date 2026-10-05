@@ -1,24 +1,29 @@
 #!/usr/bin/env python3
 # Relatório Mensal — CENTROVITA MAURO RAMOS + BARRA DA LAGOA (ILPI, sócio Henrique) — licença CENTROVITA MAURO RAMOS
-# v1.1, 2026-10-04 (feedback Vinícius: capa com relatório na 1ª página, comparativo em PAISAGEM,
-#   título "Previsão de Receitas e Despesas", Fluxo de Caixa POR CENTRO DE CUSTO + unificado)
+# v1.2, 2026-10-04 (últimos ajustes de layout do Vinícius)
+#   v1.2: pág 1 = PAISAGEM com capa compacta + banda MR + comparativo 13m + Receitas e Despesas do
+#     mês anterior juntos; KeepTogether em todos os relatórios (nenhum quebra no meio; se não couber,
+#     o relatório inteiro vai para a página seguinte); NOVO relatório 6 "Projeção de Fluxo de Caixa —
+#     Próximos 12 Meses" por CC (MR, BL) + CONSOLIDADO (lançamentos previstos por CC, saldo de partida
+#     = saldo real em 30/09; consolidado fecha exato com o balancePreview da API); Excel: resultado
+#     previsto do mês nas abas de previsão + abas "Proj fluxo 12m" (MR/BL/consolidado).
+#   v1.1: capa compacta, comparativo em paisagem, título "Previsão de Receitas e Despesas", fluxo por CC.
+#   v1.0: pacote único (filtro por CC + consolidado).
 # Uso: python3 relatorio_centrovita_mr_bl.py [YYYY-MM-DD]  (default: hoje; relatórios do MES_ANT)
-# Estrutura do PDF único (sem página em branco):
-#   CAPA COMPACTA + PARTE 1 — MAURO RAMOS (CC 157108): banda laranja + 1. Comparativo 13 meses
-#     (competência, PAISAGEM) · 2. Receitas e Despesas do mês anterior (competência) ·
-#     3. Previsão de Receitas e Despesas do mês corrente (caixa, pago+pendente) ·
-#     4. Fluxo de Caixa dos últimos 13 meses (POR CC: lançamentos com CC da unidade;
-#     transferências internas pareadas por uuid/descrição+data se anulam; transferências ENTRE
-#     unidades contam como movimento real; saldo final = saldo real via balances) ·
-#     5. Saldo nas contas no último dia do mês anterior
-#   PARTE 2 — BARRA DA LAGOA (CC 157107): mesmos 5 relatórios
-#   PARTE 3 — CONSOLIDADO: 2 (mês anterior) · 3 (previsão) · 5 (saldo) das duas unidades somadas
+# Estrutura do PDF único (13 páginas):
+#   PÁG 1 (paisagem) — capa compacta + MAURO RAMOS: 1. Comparativo 13 meses (competência) +
+#     2. Receitas e Despesas do mês anterior (competência)
+#   MR: 3. Previsão de Receitas e Despesas do mês corrente · 4. Fluxo de Caixa 13m realizado (por CC) ·
+#     5. Saldo nas contas · 6. Projeção de Fluxo de Caixa 12m
+#   BARRA DA LAGOA (CC 157107): mesmos 6 relatórios
+#   CONSOLIDADO: 2 + 3 + 5 + 6 das duas unidades somadas
 # Contas (mapeamento Vinícius 04/10):
 #   BARRA DA LAGOA → Cora Barra da Lagoa (213167) + Banco Inter Barra da Lagoa (213168) +
 #     Banco Inter Investimentos Barra da Lagoa (213169) + Banco BTG Investimento Barra da Lagoa (224034)
 #   MAURO RAMOS → Cora Mauro Ramos (212452) + Banco Inter Mauro Ramos (212451) +
 #     Banco Inter Investimentos Mauro Ramos (212453) + Banco BTG Investimento Mauro Ramos (224031)
 #   Consolidado → as 8 contas
+# Filtros: sem transferências entre contas (99.01 ou descrição TRANSFERÊNCIA) + CC da unidade.
 # Fonte: API Controlle v1. Envio: vinicius@terceirizou.com.br (cron mensal dia 04 14:00).
 import json, os, sys, urllib.request, time
 from collections import defaultdict
@@ -29,7 +34,7 @@ from reportlab.lib.units import cm
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import (Paragraph, Spacer, Table, TableStyle,
-                                PageBreak, Image as RLImage,
+                                PageBreak, Image as RLImage, KeepTogether,
                                 BaseDocTemplate, PageTemplate, Frame, NextPageTemplate)
 from reportlab.lib.pagesizes import landscape
 from openpyxl import Workbook
@@ -251,6 +256,17 @@ def dados_unidade(nome, cid):
     prev_tx = [t for t in _tx if MES_COR.isoformat() <= bdate(t) <= FIM_MES_COR.isoformat() and ok_cc(t, ccs)]
     prev_rec = agrupa(prev_tx, so_positivas=True)
     prev_desp = agrupa(prev_tx, so_negativas=True)
+    # PROJEÇÃO 12M: lançamentos previstos por CC mês a mês (janela do MÊS, não cumulativa)
+    # + saldo real de partida (preenchido depois, após os saldos)
+    proj = []
+    for i in range(1, 13):
+        ini_m = add_months(MES_COR, i - 1)
+        fim_m = add_months(ini_m, 1) - timedelta(days=1)
+        lab = f"{MES_AB[ini_m.month]}/{str(ini_m.year)[2:]}"
+        txs_m = [t for t in _tx if ini_m.isoformat() <= bdate(t) <= fim_m.isoformat() and ok_cc(t, ccs)]
+        ent = sum(t["value_in_cent"] for t in txs_m if t["activity_type"] == 1)
+        sai = sum(t["value_in_cent"] for t in txs_m if t["activity_type"] == 0)
+        proj.append((lab, ent, sai))
     return {
         "rec": rec, "desp": desp,
         "entradas": sum(v for v, _ in rec.values()), "saidas": sum(v for v, _ in desp.values()),
@@ -260,6 +276,7 @@ def dados_unidade(nome, cid):
         "prev_rec_total": sum(v for v, _ in prev_rec.values()),
         "prev_desp_total": sum(v for v, _ in prev_desp.values()),
         "mes_ant_tx": mes_ant_tx, "prev_tx": prev_tx,
+        "proj": proj,
     }
 
 # saldos por unidade no último dia do mês anterior
@@ -278,6 +295,24 @@ for nome in UNIDADES:
     tot = sum(v for _, v in S[nome])
     D[nome]["saldos"] = S[nome]
     D[nome]["saldo_total"] = tot
+    # projeção 12m: saldo acumulado = saldo real de 30/09 + movimentos previstos do mês
+    saldo_ac = tot
+    proj_ac = []
+    for lab, ent, sai in D[nome]["proj"]:
+        saldo_ac += ent + sai
+        proj_ac.append((lab, ent, sai, saldo_ac))
+    D[nome]["proj_ac"] = proj_ac
+# consolidado: proj = soma das duas unidades (saldo = soma dos saldos acumulados)
+if len(UNIDADES) == 2:
+    nomes = list(UNIDADES)
+    proj_c = []
+    for i in range(12):
+        lab = D[nomes[0]]["proj_ac"][i][0]
+        ent = D[nomes[0]]["proj_ac"][i][1] + D[nomes[1]]["proj_ac"][i][1]
+        sai = D[nomes[0]]["proj_ac"][i][2] + D[nomes[1]]["proj_ac"][i][2]
+        saldo = D[nomes[0]]["proj_ac"][i][3] + D[nomes[1]]["proj_ac"][i][3]
+        proj_c.append((lab, ent, sai, saldo))
+    D["CONSOLIDADO"] = {"proj_ac": proj_c}
 print("dados prontos")
 
 # ===== PDF =====
@@ -351,30 +386,31 @@ def _marca(canvas, doc_):
             img_s.drawOn(canvas, canvas._pagesize[0]-1.9*cm, 0.8*cm)
 
 doc.addPageTemplates([
-    PageTemplate(id="portrait", frames=[fr_p], pagesize=A4, onPage=_marca),
     PageTemplate(id="landscape", frames=[fr_l], pagesize=landscape(A4), onPage=_marca),
+    PageTemplate(id="portrait", frames=[fr_p], pagesize=A4, onPage=_marca),
 ])
 E = []
 
-# CAPA COMPACTA + 1º relatório NA MESMA PÁGINA (sem página em branco)
+# CAPA COMPACTA: pág 1 em PAISAGEM (acompanha o comparativo na mesma página)
 subc_center = ParagraphStyle("subc_center", parent=sub, fontSize=8, alignment=1, spaceAfter=0)
 if os.path.exists(LOGO):
-    img = RLImage(LOGO, width=4.5*cm, height=4.5*cm*561/1600)
+    img = RLImage(LOGO, width=4.2*cm, height=4.2*cm*561/1600)
     img.hAlign = "CENTER"
     E.append(img)
-E.append(Spacer(1, 6))
+E.append(Spacer(1, 4))
 E.append(P("<b>CENTROVITA MAURO RAMOS + BARRA DA LAGOA</b>", h1c))
 E.append(P(f"Relatório Gerencial Mensal · Gerado em {HOJE_LABEL} · Fonte: Controlle · Ref.: {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year}", subc_center))
 E.append(Spacer(1, 4))
 
 def bloco_unidade(nome, d, primeira=False):
-    """5 relatórios de uma unidade. primeira=True: sem PageBreak (continua na capa)."""
+    """6 relatórios de uma unidade. primeira=True: sem PageBreak (continua na capa)."""
     els = []
     if not primeira:
+        els.append(NextPageTemplate("portrait"))
         els.append(PageBreak())
     els.append(banda_unidade(nome))
     els.append(Spacer(1, 6))
-    # 1. Comparativo 13 meses (competência) — PÁGINA EM PAISAGEM
+    # 1. Comparativo 13 meses (competência) — MESMA PÁGINA DA CAPA (paisagem)
     els.append(NextPageTemplate("landscape"))
     els.append(PageBreak())
     els.append(P(f"Comparativo dos Últimos 13 Meses por Categoria ({MES_AB[INI_13.month]}/{str(INI_13.year)[2:]} a {MES_AB[MES_ANT.month]}/{str(MES_ANT.year)[2:]}) — regime de competência", h2))
@@ -389,10 +425,9 @@ def bloco_unidade(nome, d, primeira=False):
         row.append(P_val_int(sum(vals13), cellrb))
         rows.append(row)
     els.append(tabela(rows, [6.0*cm] + [1.35*cm]*13 + [1.6*cm, 1.8*cm], fs=7))
-    # 2. Receitas e Despesas do mês anterior consolidadas (competência) — volta ao retrato
-    els.append(NextPageTemplate("portrait"))
-    els.append(PageBreak())
-    els += tabela_cat(f"Receitas e Despesas — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (regime de competência)", d["rec"], total_label="Total de Receitas")
+    # 2. Receitas e Despesas do mês anterior consolidadas (competência) — MESMA PÁGINA (paisagem)
+    els.append(Spacer(1, 10))
+    els.append(KeepTogether(tabela_cat(f"Receitas e Despesas — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (regime de competência)", d["rec"], total_label="Total de Receitas")))
     rows2 = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
     for nm, (v, n) in sorted(d["desp"].items()):
         rows2.append([P(nm, cell), P(str(n), cellc), P_val(v, cellr)])
@@ -403,7 +438,7 @@ def bloco_unidade(nome, d, primeira=False):
     els.append(t)
     # 3. Previsão de Receitas e Despesas do mês corrente (caixa)
     els.append(PageBreak())
-    els += tabela_cat(f"Previsão de Receitas e Despesas — {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} (pago + pendente)", d["prev_rec"], total_label="Total previsto")
+    els.append(KeepTogether(tabela_cat(f"Previsão de Receitas e Despesas — {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} (pago + pendente)", d["prev_rec"], total_label="Total previsto")))
     rows3 = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
     for nm, (v, n) in sorted(d["prev_desp"].items()):
         rows3.append([P(nm, cell), P(str(n), cellc), P_val(v, cellr)])
@@ -411,32 +446,39 @@ def bloco_unidade(nome, d, primeira=False):
     t = tabela(rows3, [11*cm, 2.5*cm, 3*cm])
     t.setStyle(TableStyle([("BACKGROUND", (0,len(rows3)-1), (-1,len(rows3)-1), LARANJA_CLARO)]))
     els.append(t)
-    # 4. Fluxo de Caixa dos últimos 13 meses (realizado, POR CC)
+    # 4. Fluxo de Caixa dos últimos 13 meses (realizado, por CC)
     els.append(PageBreak())
-    els.append(P(f"Fluxo de Caixa — Últimos 13 Meses ({MES_AB[INI_13.month]}/{str(INI_13.year)[2:]} a {MES_AB[MES_ANT.month]}/{str(MES_ANT.year)[2:]}) — realizado", h2))
     rows4 = [[P("<b>Mês</b>", cell), P("<b>Saldo inicial</b>", cellr), P("<b>Entradas</b>", cellr), P("<b>Saídas</b>", cellr), P("<b>Saldo final</b>", cellr)]]
     for lab, si, ent, sai, sf in d["fluxo"]:
         rows4.append([P(lab, cell), P_val(si, cellr), P_val(ent, cellr), P_val(sai, cellr), P_val(sf, cellrb)])
     t = tabela(rows4, [3.2*cm, 3.4*cm, 3.4*cm, 3.4*cm, 3.6*cm], fs=7)
-    els.append(t)
+    els.append(KeepTogether([P(f"Fluxo de Caixa — Últimos 13 Meses ({MES_AB[INI_13.month]}/{str(INI_13.year)[2:]} a {MES_AB[MES_ANT.month]}/{str(MES_ANT.year)[2:]}) — realizado", h2), t]))
     els.append(P("Nota: fluxo por centro de custo. Transferências entre contas da própria unidade "
                  "se anulam (não alteram o saldo); transferências entre unidades contam como movimento. "
                  "Saldo final = saldo real das contas da unidade.", sub))
     # 5. Saldo nas contas
     els.append(Spacer(1, 16))
-    els.append(P(f"Saldo nas contas em {FIM_MES_ANT_LABEL}", h2))
     rows5 = [[P("<b>Conta</b>", cell), P(f"<b>Saldo em {FIM_MES_ANT_LABEL}</b>", cellr)]]
     for nm, v in d["saldos"]:
         rows5.append([P(nm, cell), P_val(v, cellr)])
     rows5.append([P("<b>Total</b>", cellrb), P_val(d["saldo_total"], cellrb)])
     t = tabela(rows5, [11*cm, 5*cm])
     t.setStyle(TableStyle([("BACKGROUND", (0,len(rows5)-1), (-1,len(rows5)-1), LARANJA_CLARO)]))
-    els.append(t)
+    els.append(KeepTogether([P(f"Saldo nas contas em {FIM_MES_ANT_LABEL}", h2), t]))
+    # 6. Projeção de Fluxo de Caixa — próximos 12 meses (por CC)
+    els.append(PageBreak())
+    rows6 = [[P("<b>Mês</b>", cell), P("<b>Entradas previstas</b>", cellr), P("<b>Saídas previstas</b>", cellr), P("<b>Saldo previsto</b>", cellr)]]
+    for lab, ent, sai, saldo in d["proj_ac"]:
+        rows6.append([P(lab, cell), P_val(ent, cellr), P_val(sai, cellr), P_val(saldo, cellrb)])
+    t = tabela(rows6, [3.6*cm, 4.4*cm, 4.4*cm, 4.6*cm], fs=7.5)
+    els.append(KeepTogether([P(f"Projeção de Fluxo de Caixa — Próximos 12 Meses ({MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} a {MES_PT[add_months(MES_COR,11).month].capitalize()} de {add_months(MES_COR,11).year})", h2), t,
+                             P("Nota: saldo de partida = saldo real em " + FIM_MES_ANT_LABEL + "; movimentos = lançamentos previstos do Controlle (aportes e despesas recorrentes).", sub)]))
     return els
 
 def bloco_consolidado():
-    """Consolidado: 2 (mês anterior) + 3 (previsão) + 5 (saldo) das duas unidades."""
+    """Consolidado: 2 (mês anterior) + 3 (previsão) + 5 (saldo) + 6 (projeção 12m)."""
     els = []
+    els.append(NextPageTemplate("portrait"))
     els.append(PageBreak())
     els.append(banda_unidade("CONSOLIDADO — MAURO RAMOS + BARRA DA LAGOA"))
     els.append(Spacer(1, 6))
@@ -458,7 +500,7 @@ def bloco_consolidado():
     saldos_c = [(nm, v) for nome in UNIDADES for nm, v in D[nome]["saldos"]]
     tot_c = sum(v for _, v in saldos_c)
     # 2. mês anterior
-    els += tabela_cat(f"Receitas e Despesas — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (regime de competência)", rec_c, total_label="Total de Receitas")
+    els.append(KeepTogether(tabela_cat(f"Receitas e Despesas — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (regime de competência)", rec_c, total_label="Total de Receitas")))
     rows2 = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
     for nm, (v, n) in sorted(desp_c.items()):
         rows2.append([P(nm, cell), P(str(n), cellc), P_val(v, cellr)])
@@ -469,7 +511,7 @@ def bloco_consolidado():
     els.append(t)
     # 3. previsão mês corrente
     els.append(PageBreak())
-    els += tabela_cat(f"Previsão de Receitas e Despesas — {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} (pago + pendente)", prec_c, total_label="Total previsto")
+    els.append(KeepTogether(tabela_cat(f"Previsão de Receitas e Despesas — {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} (pago + pendente)", prec_c, total_label="Total previsto")))
     rows3 = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
     for nm, (v, n) in sorted(pdesp_c.items()):
         rows3.append([P(nm, cell), P(str(n), cellc), P_val(v, cellr)])
@@ -479,14 +521,21 @@ def bloco_consolidado():
     els.append(t)
     # 5. saldo nas contas
     els.append(Spacer(1, 16))
-    els.append(P(f"Saldo nas contas em {FIM_MES_ANT_LABEL}", h2))
     rows5 = [[P("<b>Conta</b>", cell), P(f"<b>Saldo em {FIM_MES_ANT_LABEL}</b>", cellr)]]
     for nm, v in saldos_c:
         rows5.append([P(nm, cell), P_val(v, cellr)])
     rows5.append([P("<b>Total</b>", cellrb), P_val(tot_c, cellrb)])
     t = tabela(rows5, [11*cm, 5*cm])
     t.setStyle(TableStyle([("BACKGROUND", (0,len(rows5)-1), (-1,len(rows5)-1), LARANJA_CLARO)]))
-    els.append(t)
+    els.append(KeepTogether([P(f"Saldo nas contas em {FIM_MES_ANT_LABEL}", h2), t]))
+    # 6. Projeção de Fluxo de Caixa 12m — CONSOLIDADO
+    rows6 = [[P("<b>Mês</b>", cell), P("<b>Entradas previstas</b>", cellr), P("<b>Saídas previstas</b>", cellr), P("<b>Saldo previsto</b>", cellr)]]
+    for lab, ent, sai, saldo in D["CONSOLIDADO"]["proj_ac"]:
+        rows6.append([P(lab, cell), P_val(ent, cellr), P_val(sai, cellr), P_val(saldo, cellrb)])
+    t = tabela(rows6, [3.6*cm, 4.4*cm, 4.4*cm, 4.6*cm], fs=7.5)
+    els.append(PageBreak())
+    els.append(KeepTogether([P(f"Projeção de Fluxo de Caixa — Próximos 12 Meses ({MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} a {MES_PT[add_months(MES_COR,11).month].capitalize()} de {add_months(MES_COR,11).year})", h2), t,
+                             P("Nota: saldo de partida = saldo real em " + FIM_MES_ANT_LABEL + " (soma das duas unidades); movimentos = lançamentos previstos do Controlle.", sub)]))
     els.append(Spacer(1, 10))
     els.append(P("Gerado automaticamente pela Terceirizou · dados do Controlle", sub))
     return els
@@ -589,7 +638,8 @@ for nome in ("MAURO RAMOS", "BARRA DA LAGOA"):
         [(n, n2, r_(v)) for n, (v, n2) in sorted(d["prev_rec"].items())] +
         [("Total previsto", sum(n for _, n in d["prev_rec"].values()), r_(d["prev_rec_total"]))] +
         [(n, n2, r_(v)) for n, (v, n2) in sorted(d["prev_desp"].items())] +
-        [("Total de Despesas Previstas", sum(n for _, n in d["prev_desp"].values()), r_(d["prev_desp_total"]))],
+        [("Total de Despesas Previstas", sum(n for _, n in d["prev_desp"].values()), r_(d["prev_desp_total"])),
+         ("Resultado previsto do mês", "", r_(d["prev_rec_total"] + d["prev_desp_total"]))],
         [45, 14, 16], titulo=f"{nome} — Previsão de Receitas e Despesas de {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} (pago + pendente)")
     aba(f"Fluxo 13m {tag}",
         [("Mês", "Saldo inicial", "Entradas", "Saídas", "Saldo final")] +
@@ -599,6 +649,10 @@ for nome in ("MAURO RAMOS", "BARRA DA LAGOA"):
         [("Conta", f"Saldo em {FIM_MES_ANT_LABEL}")] +
         [(n, r_(v)) for n, v in d["saldos"]] + [("Total", r_(d["saldo_total"]))],
         [40, 18], titulo=f"{nome} — Saldo nas contas em {FIM_MES_ANT_LABEL}")
+    aba(f"Proj fluxo 12m {tag}",
+        [("Mês", "Entradas previstas", "Saídas previstas", "Saldo previsto")] +
+        [(lab, r_(ent), r_(sai), r_(saldo)) for lab, ent, sai, saldo in d["proj_ac"]],
+        [10, 18, 18, 18], titulo=f"{nome} — Projeção de Fluxo de Caixa — Próximos 12 Meses")
 
 # consolidado
 rec_c = defaultdict(lambda: [0, 0]); desp_c = defaultdict(lambda: [0, 0])
@@ -623,8 +677,13 @@ aba("Consolidado previsao",
     [(n, n2, r_(v)) for n, (v, n2) in sorted(prec_c.items())] +
     [("Total previsto", sum(n for _, n in prec_c.values()), r_(sum(v for v, _ in prec_c.values())))] +
     [(n, n2, r_(v)) for n, (v, n2) in sorted(pdesp_c.items())] +
-    [("Total de Despesas Previstas", sum(n for _, n in pdesp_c.values()), r_(sum(v for v, _ in pdesp_c.values())))],
+    [("Total de Despesas Previstas", sum(n for _, n in pdesp_c.values()), r_(sum(v for v, _ in pdesp_c.values()))),
+     ("Resultado previsto do mês", "", r_(sum(v for v, _ in prec_c.values()) + sum(v for v, _ in pdesp_c.values())))],
     [45, 14, 16], titulo=f"CONSOLIDADO — Previsão de {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} (pago + pendente)")
+aba("Consolidado proj 12m",
+    [("Mês", "Entradas previstas", "Saídas previstas", "Saldo previsto")] +
+    [(lab, r_(ent), r_(sai), r_(saldo)) for lab, ent, sai, saldo in D["CONSOLIDADO"]["proj_ac"]],
+    [10, 18, 18, 18], titulo="CONSOLIDADO — Projeção de Fluxo de Caixa — Próximos 12 Meses")
 saldos_c = [(nm, v) for nome in UNIDADES for nm, v in D[nome]["saldos"]]
 aba("Consolidado saldos",
     [("Conta", f"Saldo em {FIM_MES_ANT_LABEL}")] +
