@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-# Relatório Mensal — GIANE ZANELATO SAUDE CAPILAR LTDA — v1.3, 2026-10-05
+# Relatório Mensal — GIANE ZANELATO SAUDE CAPILAR LTDA — v1.4, 2026-10-05
+#   v1.4 (feedback Vinícius): Excel ganha 2 abas de detalhe — "Detalhe <mês ant>" (todos os
+#     lançamentos do mês anterior, agrupados por categoria com total) e "Detalhe Previsão <mês>"
+#     (lançamentos da previsão de despesas do mês corrente, agrupados por categoria com total).
 #   v1.3 (feedback Vinícius): comparativo INICIA em ago/2026 (âncora fixa — meses anteriores são
 #     implantação). Janela cresce mês a mês até 13 colunas (ago/26 → ago/27) e nunca inclui o mês
 #     corrente (só meses fechados até o de referência).
@@ -514,6 +517,40 @@ aba("Saldo contas",
     [(n, r_(v)) for n, v in saldos_conta] +
     [("Total", r_(total_saldos))],
     [30, 18], titulo=f"Saldo nas contas em {FIM_MES_ANT_LABEL}")
+
+# 6. detalhe do mês anterior — todos os lançamentos agrupados por categoria
+def fmt_d(d):
+    return f"{d[8:10]}/{d[5:7]}/{d[:4]}"
+
+por_cat_det = defaultdict(list)
+for t in mes_ant_tx:
+    por_cat_det[cat_nome(t)].append(t)
+det_rows = [("Data", "Descrição", "Categoria", "Conta", "Valor")]
+for cat in sorted(por_cat_det):
+    for t in sorted(por_cat_det[cat], key=bdate):
+        det_rows.append((fmt_d(bdate(t)), (t.get("ds_transaction") or "")[:80], cat,
+                         t.get("ds_account_main") or "", r_(t["value_in_cent"])))
+    det_rows.append((f"Total {cat}", "", "", "", r_(sum(t["value_in_cent"] for t in por_cat_det[cat]))))
+det_rows.append(("Resultado do mês", f"{len(mes_ant_tx)} lançamentos", "", "", r_(ant_resultado)))
+aba("Detalhe " + MES_AB[MES_ANT.month], det_rows, [12, 58, 40, 24, 16],
+    titulo=f"Lançamentos — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (regime de caixa)")
+
+# 7. detalhe da previsão de despesas do mês corrente — lançamentos agrupados por categoria
+por_cat_prev = defaultdict(list)
+for t in prev_cor:
+    if t["value_in_cent"] < 0:
+        por_cat_prev[cat_nome(t)].append(t)
+SIT = {0: "Aberto", 1: "Pago", 2: "Agendado"}
+prev_rows = [("Vencimento", "Descrição", "Categoria", "Conta", "Situação", "Valor")]
+for cat in sorted(por_cat_prev):
+    for t in sorted(por_cat_prev[cat], key=bdate):
+        prev_rows.append((fmt_d(bdate(t)), (t.get("ds_transaction") or "")[:80], cat,
+                          t.get("ds_account_main") or "", SIT.get(t.get("situation"), "?"),
+                          r_(t["value_in_cent"])))
+    prev_rows.append((f"Total {cat}", "", "", "", "", r_(sum(t["value_in_cent"] for t in por_cat_prev[cat]))))
+prev_rows.append(("Total de Despesas Previstas", f"{sum(len(v) for v in por_cat_prev.values())} lançamentos", "", "", "", r_(prev_desp_total)))
+aba("Detalhe Previsão " + MES_AB[MES_COR.month], prev_rows, [12, 58, 40, 24, 12, 16],
+    titulo=f"Previsão de Despesas — {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} (pago + pendente)")
 
 wb.save(ARQ_XLSX)
 print(f"OK: {ARQ_XLSX}")
