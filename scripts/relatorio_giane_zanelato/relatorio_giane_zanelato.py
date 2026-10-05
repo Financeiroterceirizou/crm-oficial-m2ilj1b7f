@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-# Relatório Mensal — GIANE ZANELATO SAUDE CAPILAR LTDA — v1.1, 2026-10-05
+# Relatório Mensal — GIANE ZANELATO SAUDE CAPILAR LTDA — v1.2, 2026-10-05
+#   v1.2 (feedback Vinícius): filtro de exclusão = SÓ a categoria 99.01 Transferência entre Contas.
+#     A descrição NÃO filtra — nesta licença os Pix de clientes chegam como "Transferência <nome>"
+#     com categoria de receita (1.01/1.02/1.03) e os pagamentos por Pix como "Transferência <fornecedor>"
+#     com categoria de despesa (6.01/1.01) — o filtro antigo por descrição engolia R$ 14.302,70 de
+#     receitas e R$ 9.533,95 de despesas reais de setembro.
 #   v1.1 (feedback Vinícius): comparativo 13m e Receitas/Despesas do mês anterior em REGIME DE CAIXA
 #     (situation in 1,2 = pago + agendado, mês por dt_billing); Previsão de Receitas e Despesas
 #     substituída por Previsão de DESPESAS do mês corrente (caixa); título da Projeção de Fluxo
@@ -12,7 +17,7 @@
 #   3. Despesas em aberto até o último dia do mês anterior
 #   4. Previsão de Despesas do mês corrente (pago + pendente)
 #   5. Previsão de Fluxo de Caixa para os próximos 06 meses (lançamentos previstos + saldo real)
-# Fonte: API Controlle v1. Conta dedicada, sem centro de custo, sem transferências (99.01).
+# Fonte: API Controlle v1. Conta dedicada, sem centro de custo.
 # Contas: Sicoob 226898, Conta Inicial 226623 (0), Nubank Giane 226900, Nubank Nicolas 226901, CAIXINHA 227915.
 # Categorias PRÓPRIAS (1.01 Receitas com Tratamento, 6.01 Despesas Pessoais dos Sócios etc.) —
 #   não usa o plano de contas das vistorias. Movimentação começa em jun/jul/26.
@@ -94,13 +99,11 @@ def cat_nome(t):
     return (cats[0].get("ds_category") or "?") if cats else "(sem categoria)"
 
 def ok_ub(t):
-    """Sem transferências entre contas (categoria 99.01 ou descrição Transferência)."""
+    """Exclui SÓ a categoria 99.01 Transferência entre Contas (regra Vinícius 05/10).
+    A descrição NÃO filtra — "Transferência <nome>" com categoria de receita é Pix de cliente."""
     for c in (t.get("apportionments_plan_account") or []):
         if (c.get("ds_category") or "").startswith("99.01"):
             return False
-    ds = (t.get("ds_transaction") or "").upper()
-    if ds.startswith("TRANSFERÊNCIA") or ds.startswith("TRASFERENCIA"):
-        return False
     return True
 
 def agrupa_por_categoria(txs, so_negativas=False, so_positivas=False):
@@ -190,7 +193,7 @@ desp_aberto = [t for t in _tx if t["activity_type"] == 0 and t.get("situation") 
 g_desp_aberto = agrupa_por_categoria(desp_aberto)
 total_desp_aberto = sum(v for v, _ in g_desp_aberto.values())
 
-# 4. Previsão de Despesas do mês corrente (pago + pendente, sem transferências)
+# 4. Previsão de Despesas do mês corrente (pago + pendente)
 prev_cor = [t for t in _tx if MES_COR.isoformat() <= bdate(t) <= FIM_MES_COR.isoformat() and ok_ub(t)]
 prev_desp = agrupa_por_categoria(prev_cor, so_negativas=True)
 prev_desp_total = sum(v for v, _ in prev_desp.values())
