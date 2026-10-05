@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
-# Relatórios Semanais — CENTROVITA ARARANGUÁ (ILPI) — v1.0, 2026-09-22 (motor v1.4 Bem Viver)
-# Uso: python3 relatorio_centrovita.py [YYYY-MM-DD]  (default: hoje)
-# Gera UM PDF + UM Excel com os 11 relatórios + Comparativo 13 meses em PDF PRÓPRIO PAISAGEM.
+# Relatórios Semanais — BEM VIVER (ILPI) — v1, 2026-09-21
+# Uso: python3 relatorio_bemviver.py [YYYY-MM-DD]  (default: hoje)
+# Gera UM PDF + UM Excel com os 11 relatórios no padrão dos exemplos de 14/09.
 # Fonte: API Controlle v1 (token Centrovita). Envio: segunda-feira 14:00 → raulroliveira@hotmail.com
-#
-# Diferenças vs Bem Viver: centro de custo Centrovita Araranguá (170575), TAG Boleto Emitido (131714).
-# Mesmo formato do pacote Bem Viver v1.4 aprovado pelo Vinícius em 21/09.
-import json, os, sys, urllib.request
+import json, os, sys, time, urllib.request
 from collections import defaultdict
 from datetime import date, timedelta
 
@@ -16,6 +13,8 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
                                 PageBreak, KeepTogether)
+from reportlab.graphics.shapes import Drawing, String
+from reportlab.graphics.charts.barcharts import VerticalBarChart
 
 BASE = "https://api-v1.controlle.com"
 _token = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".controlle_token_centrovita")
@@ -34,8 +33,18 @@ def req(url):
     r = urllib.request.Request(url)
     for k, v in UA.items():
         r.add_header(k, v)
-    with urllib.request.urlopen(r, timeout=120) as resp:
-        return json.loads(resp.read().decode("utf-8", "replace"))
+    ultimo = None
+    for tent in range(4):  # retry 4x em 500/502/503 (outage da API Controlle)
+        try:
+            with urllib.request.urlopen(r, timeout=120) as resp:
+                return json.loads(resp.read().decode("utf-8", "replace"))
+        except urllib.error.HTTPError as e:
+            ultimo = e
+            if e.code in (500, 502, 503) and tent < 3:
+                time.sleep(5 * (tent + 1))
+                continue
+            raise
+    raise ultimo
 
 def tx_list(start, end, **filtros):
     out, page = [], 1
@@ -121,7 +130,7 @@ FIM_MES_ANT_LABEL = FIM_MES_ANT.strftime("%d/%m/%Y")
 SEM_LABEL = f"{INI_SEM.strftime('%d/%m/%Y')} até {FIM_SEM.strftime('%d/%m/%Y')}"
 
 # ===== dados =====
-# Filtro padrão em TODOS os relatórios: centro de custo Centrovita, sem transferências entre contas.
+# Filtro padrão em TODOS os relatórios: centro de custo BEM VIVER, sem transferências entre contas.
 # saldos por conta no dia anterior
 contas = [c for c in req(f"{BASE}/account/v1/accounts").get("results", []) if c.get("status") == 1]
 saldos_conta = []
@@ -227,6 +236,8 @@ def P_val_int(cents, style):
     s = ParagraphStyle("v", parent=style, textColor=(VERDE if cents > 0 else VERMELHO if cents < 0 else PRETO))
     return P(brl_int(cents), s)
 
+# NOTE: o comparativo 13 meses é gerado em PDF próprio paisagem (definido após o PDF principal).
+
 def tabela(rows, widths, fs=7.5):
     t = Table(rows, colWidths=widths, repeatRows=1)
     style = [("FONTNAME", (0,0), (-1,-1), "Helvetica"), ("FONTSIZE", (0,0), (-1,-1), fs),
@@ -249,6 +260,7 @@ def tabela_cat(titulo, grupos, positivo=True, total_label="Total"):
     rows.append([P(f"<b>{total_label}</b>", cellrb), P(f"<b>{sum(n for _, n in grupos.values())}</b>", cellc), P_val(tot, cellrb)])
     t = tabela(rows, [11*cm, 2.5*cm, 3*cm])
     t.setStyle(TableStyle([("BACKGROUND", (0,len(rows)-1), (-1,len(rows)-1), LARANJA_CLARO)]))
+    # título + tabela juntos: o relatório completo não quebra no meio
     return [KeepTogether([P(f"<b>{titulo}</b>", h2), t])]
 
 def tabela_lancamentos(txs, titulo=None, total_label="Total"):
@@ -288,7 +300,7 @@ ARQ_COMP = f"artifacts/{HOJE.strftime('%y%m%d')}_Comparativo_Centrovita.pdf"
 doc_comp = SimpleDocTemplate(ARQ_COMP, pagesize=landscape(A4), leftMargin=1.2*cm, rightMargin=1.2*cm, topMargin=1.2*cm, bottomMargin=1.2*cm)
 C = []
 C.append(P("<b>CENTROVITA ARARANGUÁ — Comparativo dos últimos 13 meses</b>", h1))
-C.append(P(f"Gerado em {HOJE_LABEL} · Fonte: Controlle · {label_curto(INI_13)} a {label_curto(MES_REF)} · Apenas pago/recebido · Valores em R$ inteiros", sub))
+C.append(P(f"Gerado em {HOJE_LABEL} · Fonte: Controlle · {label_curto(INI_13)} a {label_curto(MES_REF)} · Apenas pago/recebido", sub))
 cm_rows = [[P("<b>Série</b>", cell)] + [P(f"<b>{lab}</b>", cellr) for _, _, lab in meses_13] + [P("<b>Média</b>", cellr), P("<b>Total</b>", cellr)]]
 for idx, nome_serie in [(1, "Entrada realizada"), (2, "Saída realizada"), (3, "Resultado do mês")]:
     row = [P(nome_serie, cell)]
@@ -427,6 +439,7 @@ def aba(nome, linhas, larguras, pct_from=None):
     for r in linhas:
         ws.append(list(r))
     headers = [str(c.value or "") for c in ws[1]]
+    # cabeçalho (título): negrito, branco, centralizado
     for c in ws[1]:
         c.fill = FILL_H
         c.font = FH
@@ -434,7 +447,7 @@ def aba(nome, linhas, larguras, pct_from=None):
     for row in ws.iter_rows(min_row=2):
         label = str(row[0].value or "")
         is_total = label.startswith(TOT_LABELS)
-        if is_total:
+        if is_total:  # linhas de resultado: negrito e centralizado
             for c in row:
                 c.fill = FILL_T
                 c.alignment = Alignment(horizontal="center", vertical="center")
@@ -442,7 +455,7 @@ def aba(nome, linhas, larguras, pct_from=None):
         for j, c in enumerate(row[1:], 2):
             if isinstance(c.value, (int, float)):
                 hdr = headers[j-1] if j-1 < len(headers) else ""
-                if "Lançamentos" in hdr:
+                if "Lançamentos" in hdr:  # contagem: sem vírgula e sem R$
                     c.number_format = "0"
                     c.font = Font(bold=is_total)
                 elif pct_from and j >= pct_from:
