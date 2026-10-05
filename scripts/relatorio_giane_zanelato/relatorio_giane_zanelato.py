@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-# Relatório Mensal — GIANE ZANELATO SAUDE CAPILAR LTDA — v1.2, 2026-10-05
+# Relatório Mensal — GIANE ZANELATO SAUDE CAPILAR LTDA — v1.3, 2026-10-05
+#   v1.3 (feedback Vinícius): comparativo INICIA em ago/2026 (âncora fixa — meses anteriores são
+#     implantação). Janela cresce mês a mês até 13 colunas (ago/26 → ago/27) e nunca inclui o mês
+#     corrente (só meses fechados até o de referência).
 #   v1.2 (feedback Vinícius): filtro de exclusão = SÓ a categoria 99.01 Transferência entre Contas.
 #     A descrição NÃO filtra — nesta licença os Pix de clientes chegam como "Transferência <nome>"
 #     com categoria de receita (1.01/1.02/1.03) e os pagamentos por Pix como "Transferência <fornecedor>"
@@ -124,7 +127,9 @@ FIM_MES_ANT = FIM_MES_ANT - timedelta(days=FIM_MES_ANT.day)
 MES_COR = HOJE.replace(day=1)
 FIM_MES_COR = MES_COR.replace(day=28) + timedelta(days=4)
 FIM_MES_COR = FIM_MES_COR - timedelta(days=FIM_MES_COR.day)
-INI_13 = add_months(MES_ANT, -12)   # 13 meses
+# Ancora do comparativo: ago/2026 (pedido Vinícius 05/10 — movimento anterior é implantação)
+ANCORA = date(2026, 8, 1)
+INI_13 = max(ANCORA, add_months(MES_ANT, -12))
 
 HOJE_LABEL = HOJE.strftime("%d/%m/%Y")
 FIM_MES_ANT_LABEL = FIM_MES_ANT.strftime("%d/%m/%Y")
@@ -132,7 +137,7 @@ FIM_MES_ANT_LABEL = FIM_MES_ANT.strftime("%d/%m/%Y")
 # ===== dados =====
 # comparativo + mês anterior: 2 anos (INI_13.year + MES_ANT.year); projeção: ano seguinte (_fut)
 _tx = []
-for y in (INI_13.year, MES_ANT.year):
+for y in sorted({INI_13.year, MES_ANT.year}):
     _tx.extend(tx_list(f"{y}-01-01", f"{y}-12-31"))
 # dedup por id (defensivo)
 _vistos = set()
@@ -147,11 +152,13 @@ for t in _tx:
 _tx = _tx_dedup
 
 def meses_13():
+    # janela: de INI_13 até o mês de referência (MES_ANT) — não inclui mês corrente parcial
     out = []
-    for i in range(0, 13):
-        ini_m = add_months(INI_13, i)
+    ini_m = INI_13
+    while ini_m <= MES_ANT:
         fim_m = add_months(ini_m, 1) - timedelta(days=1)
         out.append((ini_m.isoformat(), fim_m.isoformat(), f"{MES_AB[ini_m.month]}/{str(ini_m.year)[2:]}"))
+        ini_m = add_months(ini_m, 1)
     return out
 MESES13 = meses_13()
 
