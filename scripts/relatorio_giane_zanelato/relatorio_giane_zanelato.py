@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-# Relatório Mensal — GIANE ZANELATO SAUDE CAPILAR LTDA — v1.0, 2026-10-05
+# Relatório Mensal — GIANE ZANELATO SAUDE CAPILAR LTDA — v1.1, 2026-10-05
+#   v1.1 (feedback Vinícius): comparativo 13m e Receitas/Despesas do mês anterior em REGIME DE CAIXA
+#     (situation in 1,2 = pago + agendado, mês por dt_billing); Previsão de Receitas e Despesas
+#     substituída por Previsão de DESPESAS do mês corrente (caixa); título da Projeção de Fluxo
+#     de Caixa 6m movido para ACIMA da tabela.
 # Uso: python3 relatorio_giane_zanelato.py [YYYY-MM-DD]  (default: hoje)
-# Gera UM PDF + UM Excel. Relatórios (pedido Vinícius 05/10):
-#   1. Comparativo dos últimos 13 meses por categoria (competência) — EXCLUI colunas de meses
+# Gera UM PDF + UM Excel. Relatórios:
+#   1. Comparativo dos últimos 13 meses por categoria (regime de caixa) — EXCLUI colunas de meses
 #      sem movimentação (pedido: "quando não tiver movimentação excluir a coluna do mês")
-#   2. Receitas e Despesas do mês anterior (competência)
+#   2. Receitas e Despesas do mês anterior (regime de caixa)
 #   3. Despesas em aberto até o último dia do mês anterior
-#   4. Previsão de Receitas e Despesas do mês corrente (pago + pendente, com resultado previsto)
+#   4. Previsão de Despesas do mês corrente (pago + pendente)
 #   5. Previsão de Fluxo de Caixa para os próximos 06 meses (lançamentos previstos + saldo real)
 # Fonte: API Controlle v1. Conta dedicada, sem centro de custo, sem transferências (99.01).
 # Contas: Sicoob 226898, Conta Inicial 226623 (0), Nubank Giane 226900, Nubank Nicolas 226901, CAIXINHA 227915.
@@ -148,12 +152,14 @@ def meses_13():
     return out
 MESES13 = meses_13()
 
-# 1. Comparativo 13 meses (competência) — matriz por categoria × mês
+# 1. Comparativo 13 meses — REGIME DE CAIXA (situation in 1,2 = pago + agendado, mês por dt_billing)
 matriz_13 = defaultdict(lambda: defaultdict(int))
 for t in _tx:
     if not ok_ub(t):
         continue
-    mes = (t.get("dt_competence") or "")[:7]
+    if t.get("situation") not in (1, 2):
+        continue
+    mes = bdate(t)[:7]
     if mes < MESES13[0][0][:7] or mes > MESES13[-1][1][:7]:
         continue
     aps = t.get("apportionments_plan_account") or []
@@ -169,8 +175,9 @@ for _, fim_m_iso, lab in MESES13:
     if tot != 0:
         meses_com_mov.append((fim_m_iso, lab))
 
-# 2. Receitas e Despesas do mês anterior (competência)
-mes_ant_tx = [t for t in _tx if (t.get("dt_competence") or "")[:7] == f"{MES_ANT.year}-{MES_ANT.month:02d}" and ok_ub(t)]
+# 2. Receitas e Despesas do mês anterior — REGIME DE CAIXA (situation in 1,2 + dt_billing)
+mes_ant_tx = [t for t in _tx if bdate(t)[:7] == f"{MES_ANT.year}-{MES_ANT.month:02d}"
+              and t.get("situation") in (1, 2) and ok_ub(t)]
 ant_rec = agrupa_por_categoria(mes_ant_tx, so_positivas=True)
 ant_desp = agrupa_por_categoria(mes_ant_tx, so_negativas=True)
 ant_entradas = sum(v for v, _ in ant_rec.values())
@@ -183,11 +190,9 @@ desp_aberto = [t for t in _tx if t["activity_type"] == 0 and t.get("situation") 
 g_desp_aberto = agrupa_por_categoria(desp_aberto)
 total_desp_aberto = sum(v for v, _ in g_desp_aberto.values())
 
-# 4. Previsão de Receitas e Despesas do mês corrente (pago + pendente)
+# 4. Previsão de Despesas do mês corrente (pago + pendente, sem transferências)
 prev_cor = [t for t in _tx if MES_COR.isoformat() <= bdate(t) <= FIM_MES_COR.isoformat() and ok_ub(t)]
-prev_rec = agrupa_por_categoria(prev_cor, so_positivas=True)
 prev_desp = agrupa_por_categoria(prev_cor, so_negativas=True)
-prev_rec_total = sum(v for v, _ in prev_rec.values())
 prev_desp_total = sum(v for v, _ in prev_desp.values())
 
 # 5. Previsão de Fluxo de Caixa — próximos 6 meses (lançamentos previstos por mês + saldo real)
@@ -291,7 +296,7 @@ E.append(P(f"Gerado em {HOJE_LABEL} · Fonte: Controlle · Ref.: {MES_PT[MES_ANT
 E.append(Spacer(1, 8))
 
 # 1. Comparativo 13 meses (só meses COM movimentação)
-E.append(P(f"Comparativo dos Últimos 13 Meses por Categoria ({MES_AB[INI_13.month]}/{str(INI_13.year)[2:]} a {MES_AB[MES_ANT.month]}/{str(MES_ANT.year)[2:]}) — regime de competência", h2))
+E.append(P(f"Comparativo dos Últimos 13 Meses por Categoria ({MES_AB[INI_13.month]}/{str(INI_13.year)[2:]} a {MES_AB[MES_ANT.month]}/{str(MES_ANT.year)[2:]}) — regime de caixa", h2))
 E.append(P("Meses sem movimentação foram excluídos do comparativo.", sub))
 cat_names = sorted({c for c in matriz_13})
 n_col = len(meses_com_mov)
@@ -321,7 +326,7 @@ else:
 
 # 2. Receitas e Despesas do mês anterior
 E.append(PageBreak())
-E += tabela_cat(f"Receitas e Despesas — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (regime de competência)", ant_rec, total_label="Total de Receitas")
+E += tabela_cat(f"Receitas e Despesas — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (regime de caixa)", ant_rec, total_label="Total de Receitas")
 rd_rows = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
 for nome, (v, n) in sorted(ant_desp.items()):
     rd_rows.append([P(nome, cell), P(str(n), cellc), P_val(v, cellr)])
@@ -353,26 +358,25 @@ if desp_aberto:
         E.append(P(f"<b>{cat}</b>", h3))
         E.append(tt)
 
-# 4. Previsão de Receitas e Despesas do mês corrente
+# 4. Previsão de Despesas do mês corrente
 E.append(PageBreak())
-E += tabela_cat(f"Previsão de Receitas e Despesas — {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} (pago + pendente)", prev_rec, total_label="Total previsto")
 rows3 = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
 for nm, (v, n) in sorted(prev_desp.items()):
     rows3.append([P(nm, cell), P(str(n), cellc), P_val(v, cellr)])
 rows3.append([P("<b>Total de Despesas Previstas</b>", cellrb), P(f"<b>{sum(n for _, n in prev_desp.values())}</b>", cellc), P_val(prev_desp_total, cellrb)])
-rows3.append([P("<b>Resultado previsto do mês</b>", cellrb), P("", cellc), P_val(prev_rec_total + prev_desp_total, cellrb)])
 t = tabela(rows3, [11*cm, 2.5*cm, 3*cm])
-t.setStyle(TableStyle([("BACKGROUND", (0,len(rows3)-2), (-1,len(rows3)-1), LARANJA_CLARO)]))
+t.setStyle(TableStyle([("BACKGROUND", (0,len(rows3)-1), (-1,len(rows3)-1), LARANJA_CLARO)]))
+E.append(P(f"Previsão de Despesas — {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} (pago + pendente)", h2))
 E.append(t)
 
-# 5. Previsão de Fluxo de Caixa — próximos 6 meses
+# 5. Previsão de Fluxo de Caixa — próximos 6 meses (título ACIMA da tabela)
 E.append(Spacer(1, 14))
+E.append(P(f"Previsão de Fluxo de Caixa — Próximos 6 Meses ({MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} a {MES_PT[add_months(MES_COR,5).month].capitalize()} de {add_months(MES_COR,5).year})", h2))
 rows6 = [[P("<b>Mês</b>", cell), P("<b>Entradas previstas</b>", cellr), P("<b>Saídas previstas</b>", cellr), P("<b>Saldo previsto</b>", cellr)]]
 for lab, ent, sai, saldo in proj_ac:
     rows6.append([P(lab, cell), P_val(ent, cellr), P_val(sai, cellr), P_val(saldo, cellrb)])
 t = tabela(rows6, [3.2*cm, 4.4*cm, 4.4*cm, 4.6*cm], fs=7.5)
 E.append(t)
-E.append(P(f"Previsão de Fluxo de Caixa — Próximos 6 Meses ({MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} a {MES_PT[add_months(MES_COR,5).month].capitalize()} de {add_months(MES_COR,5).year})", h2))
 E.append(P("Nota: saldo de partida = saldo real em " + FIM_MES_ANT_LABEL + "; movimentos = lançamentos previstos do Controlle. "
            "As receitas da clínica não são recorrentes no sistema — o saldo projetado considera apenas as despesas previstas; "
            "cada mês de vendas real reduz a queda.", sub))
@@ -462,7 +466,7 @@ aba("Comparativo 13m",
      for cat in cat_names] +
     [("Resultado do mês",) + tuple(int(round(m / 100)) if m else None for m in _res_mensais)
      + (int(round(sum(_res_mensais) / len(_res_mensais) / 100)), int(round(sum(_res_mensais) / 100)))],
-    [40] + [13]*n_col + [13, 15], titulo=f"Comparativo dos Últimos 13 Meses por Categoria (competência) — meses sem movimentação excluídos")
+    [40] + [13]*n_col + [13, 15], titulo=f"Comparativo dos Últimos 13 Meses por Categoria (regime de caixa) — meses sem movimentação excluídos")
 
 # 2. mês anterior
 aba("Receitas e Despesas " + MES_AB[MES_ANT.month],
@@ -472,7 +476,7 @@ aba("Receitas e Despesas " + MES_AB[MES_ANT.month],
     [(n, n2, r_(v)) for n, (v, n2) in sorted(ant_desp.items())] +
     [("Total de Despesas", sum(n for _, n in ant_desp.values()), r_(ant_saidas)),
      ("Resultado do mês", len(mes_ant_tx), r_(ant_resultado))],
-    [45, 14, 16], titulo=f"Receitas e Despesas — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (regime de competência)")
+    [45, 14, 16], titulo=f"Receitas e Despesas — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (regime de caixa)")
 
 # 3. despesas em aberto
 aba("Despesas em aberto",
@@ -481,15 +485,12 @@ aba("Despesas em aberto",
     [("Total em aberto", len(desp_aberto), r_(total_desp_aberto))],
     [45, 14, 16], titulo=f"Despesas em aberto até {FIM_MES_ANT_LABEL}")
 
-# 4. previsão mês corrente
-aba("Previsão " + MES_AB[MES_COR.month],
+# 4. previsão de despesas do mês corrente
+aba("Previsão Despesas " + MES_AB[MES_COR.month],
     [("Categoria", "Lançamentos", "Valor")] +
-    [(n, n2, r_(v)) for n, (v, n2) in sorted(prev_rec.items())] +
-    [("Total previsto", sum(n for _, n in prev_rec.values()), r_(prev_rec_total))] +
     [(n, n2, r_(v)) for n, (v, n2) in sorted(prev_desp.items())] +
-    [("Total de Despesas Previstas", sum(n for _, n in prev_desp.values()), r_(prev_desp_total)),
-     ("Resultado previsto do mês", "", r_(prev_rec_total + prev_desp_total))],
-    [45, 14, 16], titulo=f"Previsão de Receitas e Despesas — {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} (pago + pendente)")
+    [("Total de Despesas Previstas", sum(n for _, n in prev_desp.values()), r_(prev_desp_total))],
+    [45, 14, 16], titulo=f"Previsão de Despesas — {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} (pago + pendente)")
 
 # 5. projeção 6m
 aba("Proj fluxo 6m",
