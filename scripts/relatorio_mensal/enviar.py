@@ -4,8 +4,10 @@
 #   Sem argumento: usa o PDF do mês anterior (artifacts/relatorio-terceirizou-YYYY-MM.pdf).
 # Chave Resend: scripts/95b7f382c0a1ba1d/resend_key.txt (ou env RESEND_API_KEY).
 # Destinatários: vinicius@terceirizou.com.br (to) + financeiro@terceirizou.com.br (bcc).
-# Idempotência: chave inclui o MTIME do PDF — regeneração (conteúdo novo) = reenvio
-# legítimo; mesmo arquivo = bloqueado (HTTP 409). Padrão igual aos relatórios de cliente.
+# Idempotência em 2 camadas: (1) marcador .enviado-<mes_ref> no modo automático — impede
+# e-mail duplicado quando dois crons da mesma tarefa regeneram o PDF (mtime muda);
+# (2) Idempotency-Key com mtime do PDF — mesmo arquivo = 409 (Resend).
+# Reenvio manual legítimo: apagar o marcador .enviado-<mes_ref> e rodar de novo.
 import base64, json, os, sys, urllib.request, urllib.error
 from datetime import date, timedelta
 
@@ -34,6 +36,14 @@ MES_LABEL = f"{MES_PT[mes].capitalize()} de {ano}"
 if not os.path.exists(pdf_path):
     print(f"ERRO: PDF não encontrado: {pdf_path}")
     sys.exit(1)
+
+# Trava anti-duplicidade: no modo automático (sem argumento), um marcador por mês de
+# referência impede que pipelines paralelos (dois crons da mesma tarefa em canais
+# diferentes) enviem duas vezes — cada um regenera o PDF, o que mudaria o mtime.
+LOCK = os.path.join(os.path.dirname(os.path.abspath(__file__)), f".enviado-{mes_ref}")
+if os.path.exists(LOCK) and len(sys.argv) <= 1:
+    print(f"OK: relatório {mes_ref} já enviado (marcador {os.path.basename(LOCK)}). Nenhum reenvio.")
+    sys.exit(0)
 
 with open(pdf_path, "rb") as f:
     pdf_b64 = base64.b64encode(f.read()).decode()
@@ -71,9 +81,11 @@ req.add_header("Content-Type", "application/json")
 try:
     with urllib.request.urlopen(req, timeout=60) as resp:
         out = json.loads(resp.read().decode())
+        open(LOCK, "w").write(out.get("id", ""))
         print(f"OK: enviado (id {out.get('id')}) — {os.path.basename(pdf_path)}{' + ' + os.path.basename(xlsx_path) if os.path.exists(xlsx_path) else ''} → {', '.join(TO)} | bcc {', '.join(BCC)}")
 except urllib.error.HTTPError as e:
     if e.code == 409:
+        open(LOCK, "w").write("409")
         print("OK: já enviado com este mesmo arquivo (idempotency-key, nenhum reenvio).")
     else:
         raise
