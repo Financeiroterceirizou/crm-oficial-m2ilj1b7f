@@ -1,22 +1,17 @@
 #!/usr/bin/env python3
 # Relatório Mensal — CENTROVITA MAURO RAMOS + BARRA DA LAGOA (ILPI, sócio Henrique) — licença CENTROVITA MAURO RAMOS
-# v1.2, 2026-10-04 (últimos ajustes de layout do Vinícius)
-#   v1.2: pág 1 = PAISAGEM com capa compacta + banda MR + comparativo 13m + Receitas e Despesas do
-#     mês anterior juntos; KeepTogether em todos os relatórios (nenhum quebra no meio; se não couber,
-#     o relatório inteiro vai para a página seguinte); NOVO relatório 6 "Projeção de Fluxo de Caixa —
-#     Próximos 12 Meses" por CC (MR, BL) + CONSOLIDADO (lançamentos previstos por CC, saldo de partida
+# v1.3, 2026-10-04 (estrutura de páginas EXATA definida pelo Vinícius — 8 páginas, todas paisagem)
+#   v1.3: p1 capa+banda MR+comparativo+rec/desp · p2 previsão (com RESULTADO PREVISTO do mês no PDF)
+#     +fluxo 13m · p3 saldos+projeção 12m · p4 banda BL+comparativo+rec/desp · p5 previsão+fluxo ·
+#     p6 saldos+projeção · p7 CONSOLIDADO+rec/desp+previsão · p8 saldos+projeção consolidada.
+#     Unidades novas abrem em landscape (banda+comparativo juntos).
+#   v1.2: KeepTogether em todos os relatórios; NOVO relatório 6 "Projeção de Fluxo de Caixa —
+#     Próximos 12 Meses" por CC + CONSOLIDADO (lançamentos previstos por CC, saldo de partida
 #     = saldo real em 30/09; consolidado fecha exato com o balancePreview da API); Excel: resultado
 #     previsto do mês nas abas de previsão + abas "Proj fluxo 12m" (MR/BL/consolidado).
 #   v1.1: capa compacta, comparativo em paisagem, título "Previsão de Receitas e Despesas", fluxo por CC.
 #   v1.0: pacote único (filtro por CC + consolidado).
 # Uso: python3 relatorio_centrovita_mr_bl.py [YYYY-MM-DD]  (default: hoje; relatórios do MES_ANT)
-# Estrutura do PDF único (13 páginas):
-#   PÁG 1 (paisagem) — capa compacta + MAURO RAMOS: 1. Comparativo 13 meses (competência) +
-#     2. Receitas e Despesas do mês anterior (competência)
-#   MR: 3. Previsão de Receitas e Despesas do mês corrente · 4. Fluxo de Caixa 13m realizado (por CC) ·
-#     5. Saldo nas contas · 6. Projeção de Fluxo de Caixa 12m
-#   BARRA DA LAGOA (CC 157107): mesmos 6 relatórios
-#   CONSOLIDADO: 2 + 3 + 5 + 6 das duas unidades somadas
 # Contas (mapeamento Vinícius 04/10):
 #   BARRA DA LAGOA → Cora Barra da Lagoa (213167) + Banco Inter Barra da Lagoa (213168) +
 #     Banco Inter Investimentos Barra da Lagoa (213169) + Banco BTG Investimento Barra da Lagoa (224034)
@@ -29,14 +24,13 @@ import json, os, sys, urllib.request, time
 from collections import defaultdict
 from datetime import date, timedelta
 
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import cm
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import (Paragraph, Spacer, Table, TableStyle,
                                 PageBreak, Image as RLImage, KeepTogether,
                                 BaseDocTemplate, PageTemplate, Frame, NextPageTemplate)
-from reportlab.lib.pagesizes import landscape
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
@@ -318,7 +312,7 @@ print("dados prontos")
 # ===== PDF =====
 styles = getSampleStyleSheet()
 h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=16, textColor=PRETO, spaceAfter=4)
-h1c = ParagraphStyle("h1c", parent=h1, fontSize=15, alignment=1, spaceAfter=2)
+h1c = ParagraphStyle("h1c", parent=h1, fontSize=13, alignment=1, spaceAfter=1)
 h1u = ParagraphStyle("h1u", parent=h1, fontSize=17, textColor=colors.white, alignment=1, spaceBefore=6, spaceAfter=6)
 h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontSize=12, textColor=LARANJA, spaceBefore=14, spaceAfter=3)
 h3 = ParagraphStyle("h3", parent=styles["Heading3"], fontSize=10, textColor=PRETO, spaceBefore=10, spaceAfter=3)
@@ -340,7 +334,7 @@ def P_val_int(cents, style):
 def tabela(rows, widths, fs=7.5):
     t = Table(rows, colWidths=widths, repeatRows=1)
     style = [("FONTNAME", (0,0), (-1,-1), "Helvetica"), ("FONTSIZE", (0,0), (-1,-1), fs),
-             ("TOPPADDING", (0,0), (-1,-1), 3), ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+             ("TOPPADDING", (0,0), (-1,-1), 2.2), ("BOTTOMPADDING", (0,0), (-1,-1), 2.2),
              ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
              ("BACKGROUND", (0,0), (-1,0), LARANJA), ("TEXTCOLOR", (0,0), (-1,0), colors.white),
              ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
@@ -394,25 +388,23 @@ E = []
 # CAPA COMPACTA: pág 1 em PAISAGEM (acompanha o comparativo na mesma página)
 subc_center = ParagraphStyle("subc_center", parent=sub, fontSize=8, alignment=1, spaceAfter=0)
 if os.path.exists(LOGO):
-    img = RLImage(LOGO, width=4.2*cm, height=4.2*cm*561/1600)
+    img = RLImage(LOGO, width=2.4*cm, height=2.4*cm*561/1600)
     img.hAlign = "CENTER"
     E.append(img)
-E.append(Spacer(1, 4))
+E.append(Spacer(1, 2))
 E.append(P("<b>CENTROVITA MAURO RAMOS + BARRA DA LAGOA</b>", h1c))
 E.append(P(f"Relatório Gerencial Mensal · Gerado em {HOJE_LABEL} · Fonte: Controlle · Ref.: {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year}", subc_center))
-E.append(Spacer(1, 4))
+E.append(Spacer(1, 2))
 
 def bloco_unidade(nome, d, primeira=False):
     """6 relatórios de uma unidade. primeira=True: sem PageBreak (continua na capa)."""
     els = []
     if not primeira:
-        els.append(NextPageTemplate("portrait"))
-        els.append(PageBreak())
+        els.append(NextPageTemplate("landscape"))
+        els.append(PageBreak())  # unidade nova abre em landscape (banda + comparativo juntos)
     els.append(banda_unidade(nome))
     els.append(Spacer(1, 6))
-    # 1. Comparativo 13 meses (competência) — MESMA PÁGINA DA CAPA (paisagem)
-    els.append(NextPageTemplate("landscape"))
-    els.append(PageBreak())
+    # 1. Comparativo 13 meses (competência) — MESMA PÁGINA da capa/banda
     els.append(P(f"Comparativo dos Últimos 13 Meses por Categoria ({MES_AB[INI_13.month]}/{str(INI_13.year)[2:]} a {MES_AB[MES_ANT.month]}/{str(MES_ANT.year)[2:]}) — regime de competência", h2))
     cats = sorted({c for c in d["matriz"]})
     rows = [[P("<b>Categoria</b>", cell)] + [P(f"<b>{lab}</b>", cellr) for _, _, lab in MESES13] + [P("<b>Média</b>", cellr), P("<b>Total</b>", cellr)]]
@@ -426,7 +418,7 @@ def bloco_unidade(nome, d, primeira=False):
         rows.append(row)
     els.append(tabela(rows, [6.0*cm] + [1.35*cm]*13 + [1.6*cm, 1.8*cm], fs=7))
     # 2. Receitas e Despesas do mês anterior consolidadas (competência) — MESMA PÁGINA (paisagem)
-    els.append(Spacer(1, 10))
+    els.append(Spacer(1, 8))
     els.append(KeepTogether(tabela_cat(f"Receitas e Despesas — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (regime de competência)", d["rec"], total_label="Total de Receitas")))
     rows2 = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
     for nm, (v, n) in sorted(d["desp"].items()):
@@ -436,18 +428,19 @@ def bloco_unidade(nome, d, primeira=False):
     t = tabela(rows2, [11*cm, 2.5*cm, 3*cm])
     t.setStyle(TableStyle([("BACKGROUND", (0,len(rows2)-2), (-1,len(rows2)-1), LARANJA_CLARO)]))
     els.append(t)
-    # 3. Previsão de Receitas e Despesas do mês corrente (caixa)
+    # 3. Previsão de Receitas e Despesas do mês corrente (caixa) — PÁGINA NOVA (p2/p5)
     els.append(PageBreak())
     els.append(KeepTogether(tabela_cat(f"Previsão de Receitas e Despesas — {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} (pago + pendente)", d["prev_rec"], total_label="Total previsto")))
     rows3 = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
     for nm, (v, n) in sorted(d["prev_desp"].items()):
         rows3.append([P(nm, cell), P(str(n), cellc), P_val(v, cellr)])
     rows3.append([P("<b>Total de Despesas Previstas</b>", cellrb), P(f"<b>{sum(n for _, n in d['prev_desp'].values())}</b>", cellc), P_val(d["prev_desp_total"], cellrb)])
+    rows3.append([P("<b>Resultado previsto do mês</b>", cellrb), P("", cellc), P_val(d["prev_rec_total"] + d["prev_desp_total"], cellrb)])
     t = tabela(rows3, [11*cm, 2.5*cm, 3*cm])
-    t.setStyle(TableStyle([("BACKGROUND", (0,len(rows3)-1), (-1,len(rows3)-1), LARANJA_CLARO)]))
+    t.setStyle(TableStyle([("BACKGROUND", (0,len(rows3)-2), (-1,len(rows3)-1), LARANJA_CLARO)]))
     els.append(t)
-    # 4. Fluxo de Caixa dos últimos 13 meses (realizado, por CC)
-    els.append(PageBreak())
+    # 4. Fluxo de Caixa dos últimos 13 meses (realizado) — MESMA PÁGINA da previsão
+    els.append(Spacer(1, 12))
     rows4 = [[P("<b>Mês</b>", cell), P("<b>Saldo inicial</b>", cellr), P("<b>Entradas</b>", cellr), P("<b>Saídas</b>", cellr), P("<b>Saldo final</b>", cellr)]]
     for lab, si, ent, sai, sf in d["fluxo"]:
         rows4.append([P(lab, cell), P_val(si, cellr), P_val(ent, cellr), P_val(sai, cellr), P_val(sf, cellrb)])
@@ -456,8 +449,9 @@ def bloco_unidade(nome, d, primeira=False):
     els.append(P("Nota: fluxo por centro de custo. Transferências entre contas da própria unidade "
                  "se anulam (não alteram o saldo); transferências entre unidades contam como movimento. "
                  "Saldo final = saldo real das contas da unidade.", sub))
-    # 5. Saldo nas contas
-    els.append(Spacer(1, 16))
+    # 5. Saldo nas contas — PÁGINA NOVA (p3/p6: saldos + projeção)
+    els.append(PageBreak())
+    els.append(Spacer(1, 4))
     rows5 = [[P("<b>Conta</b>", cell), P(f"<b>Saldo em {FIM_MES_ANT_LABEL}</b>", cellr)]]
     for nm, v in d["saldos"]:
         rows5.append([P(nm, cell), P_val(v, cellr)])
@@ -465,8 +459,8 @@ def bloco_unidade(nome, d, primeira=False):
     t = tabela(rows5, [11*cm, 5*cm])
     t.setStyle(TableStyle([("BACKGROUND", (0,len(rows5)-1), (-1,len(rows5)-1), LARANJA_CLARO)]))
     els.append(KeepTogether([P(f"Saldo nas contas em {FIM_MES_ANT_LABEL}", h2), t]))
-    # 6. Projeção de Fluxo de Caixa — próximos 12 meses (por CC)
-    els.append(PageBreak())
+    # 6. Projeção de Fluxo de Caixa — próximos 12 meses (por CC) — MESMA PÁGINA dos saldos
+    els.append(Spacer(1, 12))
     rows6 = [[P("<b>Mês</b>", cell), P("<b>Entradas previstas</b>", cellr), P("<b>Saídas previstas</b>", cellr), P("<b>Saldo previsto</b>", cellr)]]
     for lab, ent, sai, saldo in d["proj_ac"]:
         rows6.append([P(lab, cell), P_val(ent, cellr), P_val(sai, cellr), P_val(saldo, cellrb)])
@@ -478,7 +472,6 @@ def bloco_unidade(nome, d, primeira=False):
 def bloco_consolidado():
     """Consolidado: 2 (mês anterior) + 3 (previsão) + 5 (saldo) + 6 (projeção 12m)."""
     els = []
-    els.append(NextPageTemplate("portrait"))
     els.append(PageBreak())
     els.append(banda_unidade("CONSOLIDADO — MAURO RAMOS + BARRA DA LAGOA"))
     els.append(Spacer(1, 6))
@@ -497,6 +490,7 @@ def bloco_consolidado():
         for k, (v, n) in d["prev_desp"].items():
             pdesp_c[k][0] += v; pdesp_c[k][1] += n
     ent_c = sum(v for v, _ in rec_c.values()); sai_c = sum(v for v, _ in desp_c.values())
+    prent_c = sum(v for v, _ in prec_c.values()); prsai_c = sum(v for v, _ in pdesp_c.values())
     saldos_c = [(nm, v) for nome in UNIDADES for nm, v in D[nome]["saldos"]]
     tot_c = sum(v for _, v in saldos_c)
     # 2. mês anterior
@@ -509,18 +503,20 @@ def bloco_consolidado():
     t = tabela(rows2, [11*cm, 2.5*cm, 3*cm])
     t.setStyle(TableStyle([("BACKGROUND", (0,len(rows2)-2), (-1,len(rows2)-1), LARANJA_CLARO)]))
     els.append(t)
-    # 3. previsão mês corrente
-    els.append(PageBreak())
+    # 3. previsão mês corrente — MESMA PÁGINA
+    els.append(Spacer(1, 12))
     els.append(KeepTogether(tabela_cat(f"Previsão de Receitas e Despesas — {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} (pago + pendente)", prec_c, total_label="Total previsto")))
     rows3 = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
     for nm, (v, n) in sorted(pdesp_c.items()):
         rows3.append([P(nm, cell), P(str(n), cellc), P_val(v, cellr)])
-    rows3.append([P("<b>Total de Despesas Previstas</b>", cellrb), P(f"<b>{sum(n for _, n in pdesp_c.values())}</b>", cellc), P_val(sum(v for v, _ in pdesp_c.values()), cellrb)])
+    rows3.append([P("<b>Total de Despesas Previstas</b>", cellrb), P(f"<b>{sum(n for _, n in pdesp_c.values())}</b>", cellc), P_val(prsai_c, cellrb)])
+    rows3.append([P("<b>Resultado previsto do mês</b>", cellrb), P("", cellc), P_val(prent_c + prsai_c, cellrb)])
     t = tabela(rows3, [11*cm, 2.5*cm, 3*cm])
     t.setStyle(TableStyle([("BACKGROUND", (0,len(rows3)-1), (-1,len(rows3)-1), LARANJA_CLARO)]))
     els.append(t)
-    # 5. saldo nas contas
-    els.append(Spacer(1, 16))
+    # 5. saldo nas contas — PÁGINA NOVA (p8: saldos + projeção)
+    els.append(PageBreak())
+    els.append(Spacer(1, 4))
     rows5 = [[P("<b>Conta</b>", cell), P(f"<b>Saldo em {FIM_MES_ANT_LABEL}</b>", cellr)]]
     for nm, v in saldos_c:
         rows5.append([P(nm, cell), P_val(v, cellr)])
@@ -528,12 +524,12 @@ def bloco_consolidado():
     t = tabela(rows5, [11*cm, 5*cm])
     t.setStyle(TableStyle([("BACKGROUND", (0,len(rows5)-1), (-1,len(rows5)-1), LARANJA_CLARO)]))
     els.append(KeepTogether([P(f"Saldo nas contas em {FIM_MES_ANT_LABEL}", h2), t]))
-    # 6. Projeção de Fluxo de Caixa 12m — CONSOLIDADO
+    # 6. Projeção de Fluxo de Caixa 12m — CONSOLIDADO — MESMA PÁGINA dos saldos
+    els.append(Spacer(1, 12))
     rows6 = [[P("<b>Mês</b>", cell), P("<b>Entradas previstas</b>", cellr), P("<b>Saídas previstas</b>", cellr), P("<b>Saldo previsto</b>", cellr)]]
     for lab, ent, sai, saldo in D["CONSOLIDADO"]["proj_ac"]:
         rows6.append([P(lab, cell), P_val(ent, cellr), P_val(sai, cellr), P_val(saldo, cellrb)])
     t = tabela(rows6, [3.6*cm, 4.4*cm, 4.4*cm, 4.6*cm], fs=7.5)
-    els.append(PageBreak())
     els.append(KeepTogether([P(f"Projeção de Fluxo de Caixa — Próximos 12 Meses ({MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} a {MES_PT[add_months(MES_COR,11).month].capitalize()} de {add_months(MES_COR,11).year})", h2), t,
                              P("Nota: saldo de partida = saldo real em " + FIM_MES_ANT_LABEL + " (soma das duas unidades); movimentos = lançamentos previstos do Controlle.", sub)]))
     els.append(Spacer(1, 10))
