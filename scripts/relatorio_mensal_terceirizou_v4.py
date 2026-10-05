@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
-# Relatório Gerencial Mensal — TERCEIRIZOU (v4.2, 2026-09-18)
+# Relatório Gerencial Mensal — TERCEIRIZOU (v4, 2026-09-18)
 # Uso: python3 relatorio_mensal_terceirizou_v4.py [YYYY-MM-DD]
 #   Sem argumento: mês anterior completo (rodar no dia 05 via cron).
 #   Com argumento: último dia do mês de referência (ex.: 2026-08-31).
 # Fonte: API Controlle v1. Token: scripts/.controlle_token ou env CONTROLLE_TOKEN.
-# Gera PDF (logo + laranja #ff501c) + Excel (7 abas).
-# Seções: Resumo · Fluxo de Caixa realizado (planilha) · Categorias Receitas e Despesas
-# (planilha única com resultado) · DRE caixa por grupo · DRE competência no mesmo formato
-# do caixa (janela larga jan/ano→dez/ano+1 + filtro dt_competence) · Receitas em aberto por
-# cliente · Saldo nas contas · Projeção dos PRÓXIMOS 12 meses (balancePreview) com gráfico.
-import json, os, sys, urllib.request
+# Seções (feedback Vinícius 18/09):
+#   1. Resumo do mês
+#   2. Fluxo de Caixa — realizado (planilha: saldo anterior, entradas, saídas, resultado, saldo final)
+#   3. Categorias Receitas e Despesas (planilha única com resultado)
+#   4. DRE Gerencial — regime caixa (por grupo de categoria)
+#   5. DRE Gerencial — regime competência (por categoria, incluindo não pagos/não recebidos)
+#   6. Receitas em aberto até [fim] por cliente
+#   7. Saldo nas Contas dia [fim] por conta (exceto zero)
+#   8. Projeção de fluxo de caixa — 12 meses (gráfico)
+# Excluídos por decisão: Resultado 12m, Comparativo 13m, Comparativo por categoria.
+# Logo + paleta laranja (#ff501c).
+import json, os, sys, time, urllib.request, urllib.error
 from collections import defaultdict
 from datetime import date, timedelta
 
@@ -34,12 +40,21 @@ CINZA = colors.HexColor("#f5f5f5")
 MES_PT = {1:"janeiro",2:"fevereiro",3:"março",4:"abril",5:"maio",6:"junho",7:"julho",8:"agosto",9:"setembro",10:"outubro",11:"novembro",12:"dezembro"}
 MES_AB = {1:"jan",2:"fev",3:"mar",4:"abr",5:"mai",6:"jun",7:"jul",8:"ago",9:"set",10:"out",11:"nov",12:"dez"}
 
-def req(url):
+def req(url, tent=4):
     r = urllib.request.Request(url)
     for k, v in UA.items():
         r.add_header(k, v)
-    with urllib.request.urlopen(r, timeout=90) as resp:
-        return json.loads(resp.read().decode("utf-8", "replace"))
+    ultimo = None
+    for i in range(tent):
+        try:
+            with urllib.request.urlopen(r, timeout=90) as resp:
+                return json.loads(resp.read().decode("utf-8", "replace"))
+        except urllib.error.HTTPError as e:
+            if e.code in (500, 502, 503) and i < tent - 1:
+                ultimo = e
+                time.sleep(5 * (i + 1))
+                continue
+            raise
 
 def tx_list(start, end, **filtros):
     out, page = [], 1
@@ -147,6 +162,20 @@ for c in contas:
     if b["balanceDone"] != 0:
         saldos_conta.append((c["ds_account"], b["balanceDone"]))
 
+# série de saldos para o gráfico da projeção (13 meses)
+MESES = []
+for i in range(12, -1, -1):
+    ini_m = add_months(MES_FIM.replace(day=1), -i)
+    fim_m = min((add_months(ini_m, 1) - timedelta(days=1)), date.today())
+    label = f"{MES_AB[ini_m.month]}/{str(ini_m.year)[2:]}"
+    if fim_m == date.today() and fim_m.day < 28:
+        label += "*"
+    MESES.append((fim_m.isoformat(), label, ini_m.isoformat()))
+saldos_serie = []
+for fim_m, label, ini_m in MESES:
+    b = req(f"{BASE}/transaction/v1/transactions/balances?start_date={ini_m}&end_date={fim_m}")["results"]
+    saldos_serie.append((label, b["balanceDone"]))
+
 # ===== PDF =====
 styles = getSampleStyleSheet()
 h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=15, textColor=PRETO, spaceAfter=2)
@@ -215,7 +244,7 @@ for nome, v in sorted(rec_vals.items(), key=lambda x: -x[1]):
 for nome, v in sorted(desp_cat.items(), key=lambda x: x[1]):
     cd_rows.append([P(nome, cell), P("—", cellr), P(brl(v), cellr)])
 cd_rows.append([P("<b>Totais</b>", cellrb), P(f"<b>{brl(entradas_mes)}</b>", cellrb), P(f"<b>{brl(saidas_mes)}</b>", cellrb)])
-cd_rows.append([P("", cell), P(""), P(f"<b>{brl(resultado_mes)}</b>", cellrb)])
+cd_rows.append([P("<b>Resultado</b>", cellrb), P(""), P(f"<b>{brl(resultado_mes)}</b>", cellrb)])
 t = tabela(cd_rows, [9*cm, 3.5*cm, 3.5*cm])
 t.setStyle(TableStyle([("BACKGROUND", (0,len(cd_rows)-2), (-1,len(cd_rows)-1), LARANJA_CLARO)]))
 E.append(t)

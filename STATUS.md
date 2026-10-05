@@ -7,7 +7,7 @@
 - **Fase 1:** concluída — 10/10 tasks.
 - **Fase 2:** concluída — 5/5 tasks.
 - **Fase 3:** concluída — 7/7 tasks, aceite final do champion em 2026-09-16.
-- **Fase 4:** em andamento — **3/8 tasks concluídas** (`e4c77e80`, `cd704a1c`, `b7c2faea`); prazo 30/09/2026.
+- **Fase 4:** em andamento — **3/8 tasks concluídas** (`e4c77e80`, `cd704a1c`, `b7c2faea`); `5ef4b7cd` bloqueada aguardando B4-201/B4-202; prazo 30/09/2026.
 - **Task `cd704a1c`:** concluída após QA técnico, correção de regressão, verificação no preview e aceite humano do champion em 22/09/2026 — "Aparece o formulário".
 - **Skip:** CRM Oficial; correção funcional e fechamento documental aprovados com QA 5/5.
 - **Preview:** https://crm-oficial-65bb8--preview.goskip.app
@@ -45,6 +45,14 @@
 - **QA:** Skip v0.0.100 / `c53c171`; setup, análise estática, build, integrações e testes passaram.
 - **Produção:** publicada em `https://crm-oficial-65bb8.goskip.app`; validação visual confirmou o painel e o período de 28 dias.
 
+## `5ef4b7cd` — bloqueada por decisão de negócio
+
+- **B4-201 pendente:** faltam motivos de perda elegíveis, janela da última interação e exclusões.
+- **B4-202 pendente:** faltam campo/fonte de consentimento ou base legal e regra operacional para descadastro/`nao_contatar`.
+- **Lacuna técnica:** a collection `leads` possui `respostas`, `historico`, `followup_parada` e datas, mas não possui contrato estruturado para esses critérios nem collection de lote/aprovação.
+- **Regra:** não criar fila nem inferir elegibilidade; nenhum contato ou tarefa pode nascer sem aprovação humana.
+- **Estado:** nenhum código da `5ef4b7cd` foi alterado.
+
 ## Próximo passo
 
-Aguardar nova análise e autorização do champion para a próxima task; não iniciar automaticamente.
+Fechar B4-201 e B4-202; depois disso, fazer nova análise/autorização de implementação.

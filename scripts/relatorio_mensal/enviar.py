@@ -2,10 +2,11 @@
 # Envio do Relatório Gerencial Mensal TERCEIRIZOU por e-mail (Resend).
 # Uso: python3 enviar.py [caminho-do-pdf]
 #   Sem argumento: usa o PDF do mês anterior (artifacts/relatorio-terceirizou-YYYY-MM.pdf).
-# Chave Resend: scripts/95b7f382c0a1ba1d/resend_key.txt (fora do repo) ou env RESEND_API_KEY.
+# Chave Resend: scripts/95b7f382c0a1ba1d/resend_key.txt (ou env RESEND_API_KEY).
 # Destinatários: vinicius@terceirizou.com.br (to) + financeiro@terceirizou.com.br (bcc).
-# Anexos: PDF + Excel do mês de referência.
-import base64, json, os, sys, urllib.request
+# Idempotência: chave inclui o MTIME do PDF — regeneração (conteúdo novo) = reenvio
+# legítimo; mesmo arquivo = bloqueado (HTTP 409). Padrão igual aos relatórios de cliente.
+import base64, json, os, sys, urllib.request, urllib.error
 from datetime import date, timedelta
 
 API = "https://api.resend.com/emails"
@@ -63,9 +64,16 @@ payload = {
 req = urllib.request.Request(API, data=json.dumps(payload).encode(), method="POST")
 req.add_header("Authorization", f"Bearer {KEY}")
 req.add_header("User-Agent", "terceirizou-relatorio-mensal/1.0")
-req.add_header("Idempotency-Key", f"relatorio-mensal-{mes_ref}-{date.today().strftime('%Y%m%d')}")
+pdf_mtime = int(os.path.getmtime(pdf_path))
+req.add_header("Idempotency-Key", f"relatorio-mensal-{mes_ref}-{pdf_mtime}")
 req.add_header("Content-Type", "application/json")
 
-with urllib.request.urlopen(req, timeout=60) as resp:
-    out = json.loads(resp.read().decode())
-    print(f"OK: enviado (id {out.get('id')}) — {os.path.basename(pdf_path)}{' + ' + os.path.basename(xlsx_path) if os.path.exists(xlsx_path) else ''} → {', '.join(TO)} | bcc {', '.join(BCC)}")
+try:
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        out = json.loads(resp.read().decode())
+        print(f"OK: enviado (id {out.get('id')}) — {os.path.basename(pdf_path)}{' + ' + os.path.basename(xlsx_path) if os.path.exists(xlsx_path) else ''} → {', '.join(TO)} | bcc {', '.join(BCC)}")
+except urllib.error.HTTPError as e:
+    if e.code == 409:
+        print("OK: já enviado com este mesmo arquivo (idempotency-key, nenhum reenvio).")
+    else:
+        raise
