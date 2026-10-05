@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-# Relatório Mensal — GIANE ZANELATO SAUDE CAPILAR LTDA — v1.4, 2026-10-05
+# Relatório Mensal — GIANE ZANELATO SAUDE CAPILAR LTDA — v1.5, 2026-10-05
+#   v1.5 (feedback Vinícius): comparativo ordena RECEITAS primeiro, DESPESAS depois (PDF e Excel).
 #   v1.4 (feedback Vinícius): Excel ganha 2 abas de detalhe — "Detalhe <mês ant>" (todos os
 #     lançamentos do mês anterior, agrupados por categoria com total) e "Detalhe Previsão <mês>"
 #     (lançamentos da previsão de despesas do mês corrente, agrupados por categoria com total).
@@ -308,10 +309,10 @@ E.append(P("Relatório Gerencial Mensal", h2c))
 E.append(P(f"Gerado em {HOJE_LABEL} · Fonte: Controlle · Ref.: {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year}", subc))
 E.append(Spacer(1, 8))
 
-# 1. Comparativo 13 meses (só meses COM movimentação)
+# 1. Comparativo 13 meses (só meses COM movimentação) — receitas primeiro, despesas depois
 E.append(P(f"Comparativo dos Últimos 13 Meses por Categoria ({MES_AB[INI_13.month]}/{str(INI_13.year)[2:]} a {MES_AB[MES_ANT.month]}/{str(MES_ANT.year)[2:]}) — regime de caixa", h2))
 E.append(P("Meses sem movimentação foram excluídos do comparativo.", sub))
-cat_names = sorted({c for c in matriz_13})
+cat_names = sorted({c for c in matriz_13}, key=lambda c: sum(matriz_13[c].values()), reverse=True)
 n_col = len(meses_com_mov)
 w_cat = max(4.5, 16.5 - 1.3 * n_col - 2.8)
 cm_rows = [[P("<b>Categoria</b>", cell)] + [P(f"<b>{lab}</b>", cellr) for _, lab in meses_com_mov] + [P("<b>Média</b>", cellr), P("<b>Total</b>", cellr)]]
@@ -471,7 +472,7 @@ def aba(nome, linhas, larguras, titulo=None):
 
 r_ = lambda v: v / 100
 
-# 1. comparativo 13m (só meses com movimentação)
+# 1. comparativo 13m (só meses com movimentação) — receitas primeiro, despesas depois
 aba("Comparativo 13m",
     [("Categoria",) + tuple(lab for _, lab in meses_com_mov) + ("Média", "Total")] +
     [(cat,) + tuple((r_(matriz_13[cat].get(fim_m_iso[:7], 0)) if matriz_13[cat].get(fim_m_iso[:7], 0) else None) for fim_m_iso, _ in meses_com_mov)
