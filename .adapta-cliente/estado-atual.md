@@ -1,13 +1,13 @@
 # Estado atual — Adapta Cliente
 
-- task_id: F3-T05-CORRECAO-RESEND
+- task_id: 5ef4b7cd (Fase 4 — lista de leads antigos para nova abordagem)
 - champion: Vinicius (CEO)
-- spec: correção operacional do envio Resend no follow-up da F3-T05
-- etapa: aguardando_teste_humano
-- autorizacao_implementacao: confirmada + 2026-09-17 — "Pode implementar o ajuste do Resend no CRM."
-- teste_humano: pendente — executar disparo com lead sintético qualificado e destinatário de teste Resend
-- verificacao_automatica: passou — Skip v0.0.62 / 7a3d748; setup, staticAnalysis, build, integrations e test
+- spec: 04-fase-atual/specs/spec-4-002-qualidade-origem-reativacao.md
+- etapa: bloqueada
+- autorizacao_implementacao: confirmada + 2026-09-23T19:59:00-03:00 — "autorizado a próxima task"; não libera implementação enquanto B4-201 estiver pendente e B4-202 exigir alinhamento da SPEC e validação da base legal alternativa
+- teste_humano: pendente — não há implementação para testar
+- verificacao_automatica: pendente — análise de baseline concluída; nenhum produto alterado
 - aprendizado: pendente
-- ultima_acao: hook followup_lead.js corrigido; remetente Terceirizou preservado; User-Agent, Idempotency-Key e tratamento de erro de transporte adicionados; QA aprovado
-- proxima_acao: teste humano do disparo no endpoint de follow-up e conferência do recebimento/logs
-- atualizado_em: 2026-09-17T10:01:00-03:00
+- ultima_acao: champion registrou B4-202 — consentimento explícito não é requisito obrigatório; base legal alternativa aplicável por lead deve ser documentada e validada antes da inclusão na fila. SPEC-4-002 ainda exige consentimento e está divergente; nenhum código alterado
+- proxima_acao: consultor alinhar a SPEC-4-002 à decisão e validar/documentar a base legal alternativa aplicável antes de retomar análise de implementação
+- atualizado_em: 2026-10-06T11:36:00-03:00
