@@ -2,7 +2,7 @@
 
 > Registro de tudo que acontece no projeto, em ordem cronológica inversa.
 
-- 2026-10-06 · [Vinícius/Champion] · Decisão parcial B4-201 F4 `5ef4b7cd`: critério conservador — motivo de perda explícito; prestador de serviço com CNPJ; captação há pelo menos 90 dias; sem interação há pelo menos 60 dias. Descadastro/`nao_contatar`/bounce permanente continuam fora. Ainda falta confirmar se qualquer motivo explícito é elegível ou se haverá uma lista de motivos aceitos. Nenhum código alterado.
+- 2026-10-06 · [Vinícius/Champion] · B4-201 F4 `5ef4b7cd` fechado: basta ter motivo de perda explícito, sem lista adicional de motivos permitidos; prestador de serviço com CNPJ; captação há pelo menos 90 dias; sem interação há pelo menos 60 dias. Descadastro/`nao_contatar`/bounce permanente continuam fora. Nenhum código alterado.
 - 2026-10-06 · [Vinícius/Champion] · Decisão B4-202 F4 `5ef4b7cd`: consentimento explícito não será requisito obrigatório; uma base legal alternativa aplicável a cada lead deve ser documentada e validada antes da inclusão na fila. Descadastro/`nao_contatar` seguem excluídos e nenhum contato sai sem aprovação humana. A SPEC-4-002 ainda traz a regra anterior; a task permanece bloqueada até o consultor alinhar a SPEC e concluir a validação. Nenhum código alterado.
 
 - 2026-09-23 · [Adapta/Ethos] · DÚVIDA/BLOQUEIO F4 `5ef4b7cd`: B4-201 sem motivos/janela/exclusões; B4-202 sem consentimento/base legal estruturados; CRM sem contrato de lote/aprovação. Nenhum código alterado.

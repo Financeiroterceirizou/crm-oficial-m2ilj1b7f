@@ -7,7 +7,7 @@
 - **Fase 1:** concluída — 10/10 tasks.
 - **Fase 2:** concluída — 5/5 tasks.
 - **Fase 3:** concluída — 7/7 tasks, aceite final do champion em 2026-09-16.
-- **Fase 4:** em andamento — **3/8 tasks concluídas** (`e4c77e80`, `cd704a1c`, `b7c2faea`); `5ef4b7cd` bloqueada por B4-201 e pela validação/alinhamento da decisão B4-202; prazo 30/09/2026.
+- **Fase 4:** em andamento — **3/8 tasks concluídas** (`e4c77e80`, `cd704a1c`, `b7c2faea`); `5ef4b7cd` bloqueada pelo alinhamento da SPEC-4-002 e pela validação/documentação da base alternativa de B4-202; prazo 30/09/2026.
 - **Task `cd704a1c`:** concluída após QA técnico, correção de regressão, verificação no preview e aceite humano do champion em 22/09/2026 — "Aparece o formulário".
 - **Skip:** CRM Oficial; correção funcional e fechamento documental aprovados com QA 5/5.
 - **Preview:** https://crm-oficial-65bb8--preview.goskip.app
@@ -47,8 +47,7 @@
 
 ## `5ef4b7cd` — bloqueada por decisão de negócio
 
-- **B4-201 — critério conservador aprovado pelo champion em 06/10/2026:** exigir motivo de perda explícito, lead prestador de serviço com CNPJ, captação há pelo menos 90 dias e pelo menos 60 dias sem interação.
-- **Detalhe B4-201 ainda pendente:** confirmar se qualquer motivo de perda explicitamente registrado é elegível ou se haverá uma lista de motivos aceitos. Nenhuma regra foi implementada.
+- **B4-201 fechado pelo champion em 06/10/2026:** basta ter motivo de perda explícito, sem lista adicional de motivos permitidos; o lead deve ser prestador de serviço com CNPJ, ter sido captado há pelo menos 90 dias e estar sem interação há pelo menos 60 dias. Descadastro/`nao_contatar` e bounce permanente ficam excluídos. Nenhuma regra foi implementada.
 - **B4-202 decidido pelo champion em 06/10/2026:** consentimento explícito não será requisito obrigatório; uma base legal alternativa aplicável ao lead deve ser documentada e validada antes da inclusão na fila.
 - **Alinhamento necessário:** a SPEC-4-002 ainda exclui leads sem consentimento. O consultor deve alinhar a SPEC à decisão e validar/documentar a base alternativa antes de retomar a análise.
 - **Salvaguardas mantidas:** descadastro/`nao_contatar` excluídos; aprovação humana do lote obrigatória; nenhum contato automático.
@@ -57,4 +56,4 @@
 
 ## Próximo passo
 
-Confirmar se qualquer motivo de perda explícito basta ou se será definida uma lista de motivos elegíveis; obter o alinhamento da SPEC e a validação consultiva de B4-202; depois disso, fazer nova análise/autorização de implementação.
+Obter o alinhamento da SPEC-4-002 e a validação consultiva de B4-202; depois disso, fazer nova análise/autorização de implementação.
