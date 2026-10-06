@@ -33,8 +33,7 @@
 - 2026-08-21 · [Vinicius/Champion] · F1-T08 TESTE APROVADO.
 - 2026-08-21 · [Adapta/Ethos] · F1-T08 FECHADA: error_log, logging e política de recuperação.
 - 2026-08-21 · [Vinicius/Champion] · F1-T07 TESTE APROVADO.
-- 2026-08-21 · [Adapta/Ethos] · F1-T07 FECHADA: CA-1-??? comprovados; error_log controlado; histórico preservado.
-- 2026-08-21 · [Adapta/Ethos] · F1-T08 FECHADA: error_log, logging e política de recuperação.
+- 2026-08-21 · [Adapta/Ethos] · F1-T07 FECHADA: validação e ausência de falso sucesso.
 - 2026-08-21 · [Vinicius/Champion] · F1-T06 TESTE APROVADO.
 - 2026-08-20 · [Vinicius/Champion] · F1-T05 TESTE APROVADO.
 - 2026-08-19 · [Vinicius/Champion] · F1-T02 TESTE APROVADO.
