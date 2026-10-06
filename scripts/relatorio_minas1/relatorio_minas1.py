@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-# Relatórios MINAS 1 (JF-T) — 7 unidades por CENTRO DE CUSTO — v1.1, 2026-10-05
+# Relatórios MINAS 1 (JF-T) — 7 unidades por CENTRO DE CUSTO — v1.2, 2026-10-06
+#   v1.2 (feedback Vinícius): KeepTogether em todos os relatórios — nenhum quebra no meio (cada
+#     relatório inteiro numa página); símbolo do rodapé com proporção REAL 372x553 (estava
+#     achatado 229/560 — distorção corrigida).
 #   v1.1 (feedback Vinícius): comparativo ordena RECEITAS primeiro, DESPESAS depois (PDF e Excel).
 #   Formato Campo Belo/Uberlândia v1.4 (aprovado): relatórios 1+2 em REGIME DE COMPETÊNCIA
 #   (janela 1 ano — há recorrências 2027 com dt_competence retroativa), demais no caixa.
@@ -279,8 +282,10 @@ def tabela_cat(titulo, grupos, total_label="Total"):
     return [P(f"<b>{titulo}</b>", h2), t]
 
 def rodape_simbolo(canvas, doc):
+    # símbolo no formato padrão (proporção real 372x553 — sem distorção)
     if os.path.exists(SIMBOLO):
-        canvas.drawImage(SIMBOLO, 18.2*cm, 1.1*cm, width=1.4*cm, height=1.4*cm*229/560, mask="auto")
+        alt = 1.2 * cm
+        canvas.drawImage(SIMBOLO, 18.4*cm, 1.1*cm, width=alt*372/553, height=alt, mask="auto")
 
 def gerar_pdf(chave, nome_uni, d, saldos, arq_pdf):
     doc = SimpleDocTemplate(arq_pdf, pagesize=A4, leftMargin=1.5*cm, rightMargin=1.5*cm,
@@ -300,8 +305,8 @@ def gerar_pdf(chave, nome_uni, d, saldos, arq_pdf):
     E.append(P(f"Gerado em {HOJE_LABEL} · Fonte: Controlle · Ref.: {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year}", subc))
     E.append(Spacer(1, 6))
 
-    # 1. rec/desp mês anterior (competência)
-    E += tabela_cat(f"Receitas e Despesas — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (regime de competência)", d["ant_rec"], total_label="Total de Receitas")
+    # 1. rec/desp mês anterior (competência) — KeepTogether (relatório inteiro numa página)
+    bloco1 = tabela_cat(f"Receitas e Despesas — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (regime de competência)", d["ant_rec"], total_label="Total de Receitas")
     rd_rows = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
     for nome, (v, n) in sorted(d["ant_desp"].items()):
         rd_rows.append([P(nome, cell), P(str(n), cellc), P_val(v, cellr)])
@@ -309,11 +314,13 @@ def gerar_pdf(chave, nome_uni, d, saldos, arq_pdf):
     rd_rows.append([P("<b>Resultado do mês</b>", cellrb), P(f"<b>{len(d['ant_tx_comp'])}</b>", cellc), P_val(d["ant_resultado"], cellrb)])
     t = tabela(rd_rows, [11*cm, 2.5*cm, 3*cm])
     t.setStyle(TableStyle([("BACKGROUND", (0,len(rd_rows)-2), (-1,len(rd_rows)-1), LARANJA_CLARO)]))
-    E.append(t)
+    bloco1.append(t)
+    E.append(KeepTogether(bloco1))
 
-    # 2. comparativo 6m (competência) — receitas primeiro, despesas depois
+    # 2. comparativo 6m (competência) — KeepTogether
     E.append(Spacer(1, 14))
-    E.append(P(f"Comparativo dos Últimos 6 Meses por Categoria — regime de competência", h2))
+    bloco2 = [P(f"Comparativo dos Últimos 6 Meses por Categoria — regime de competência", h2)]
+    # receitas primeiro, despesas depois (ordena por soma da categoria: positivos em cima)
     cat_names = sorted({c for c in d["matriz_6"]}, key=lambda c: sum(d["matriz_6"][c].values()), reverse=True)
     n_col = len(MESES6)
     cm_rows = [[P("<b>Categoria</b>", cell)] + [P(f"<b>{lab}</b>", cellr) for _, _, lab in MESES6] + [P("<b>Média</b>", cellr)]]
@@ -332,9 +339,10 @@ def gerar_pdf(chave, nome_uni, d, saldos, arq_pdf):
         res_row.append(P_val_int(tot_mes, cellrb))
     res_row.append(P_val_int(round(sum(_res_mensais) / len(_res_mensais)), cellrb))
     cm_rows.append(res_row)
-    E.append(tabela(cm_rows, [6.4*cm] + [1.55*cm]*n_col + [1.6*cm], fs=6.5))
+    bloco2.append(tabela(cm_rows, [6.4*cm] + [1.55*cm]*n_col + [1.6*cm], fs=6.5))
+    E.append(KeepTogether(bloco2))
 
-    # 3. previsão de despesas mês corrente
+    # 3. previsão de despesas mês corrente — KeepTogether
     E.append(PageBreak())
     rows3 = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
     for nm, (v, n) in sorted(d["prev_desp"].items()):
@@ -342,24 +350,21 @@ def gerar_pdf(chave, nome_uni, d, saldos, arq_pdf):
     rows3.append([P("<b>Total de Despesas Previstas</b>", cellrb), P(f"<b>{sum(n for _, n in d['prev_desp'].values())}</b>", cellc), P_val(d["prev_desp_total"], cellrb)])
     t = tabela(rows3, [11*cm, 2.5*cm, 3*cm])
     t.setStyle(TableStyle([("BACKGROUND", (0,len(rows3)-1), (-1,len(rows3)-1), LARANJA_CLARO)]))
-    E.append(P(f"Previsão de Despesas — {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} (pago + pendente)", h2))
-    E.append(t)
+    E.append(KeepTogether([P(f"Previsão de Despesas — {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} (pago + pendente)", h2), t]))
 
-    # 4. saldo nas contas
+    # 4. saldo nas contas — KeepTogether
     E.append(Spacer(1, 14))
-    E.append(P(f"Saldo nas contas em {FIM_MES_ANT_LABEL}", h2))
     sc_rows = [[P("<b>Conta</b>", cell), P(f"<b>Saldo em {FIM_MES_ANT_LABEL}</b>", cellr)]]
     for nome, v in saldos:
         sc_rows.append([P(nome, cell), P_val(v, cellr)])
     sc_rows.append([P("<b>Total</b>", cellrb), P_val(sum(v for _, v in saldos), cellrb)])
     t = tabela(sc_rows, [11*cm, 5*cm])
     t.setStyle(TableStyle([("BACKGROUND", (0,len(sc_rows)-1), (-1,len(sc_rows)-1), LARANJA_CLARO)]))
-    E.append(t)
+    E.append(KeepTogether([P(f"Saldo nas contas em {FIM_MES_ANT_LABEL}", h2), t]))
 
-    # 5. despesas em aberto
+    # 5. despesas em aberto — KeepTogether (resumo; demonstrativo quebra por bloco de categoria)
     E.append(Spacer(1, 14))
-    E.append(P(f"Despesas em aberto até {FIM_MES_ANT_LABEL}", h2))
-    E += tabela_cat("Resumo por categoria", d["g_aberto"], total_label="Total em aberto")
+    E.append(KeepTogether([P(f"Despesas em aberto até {FIM_MES_ANT_LABEL}", h2)] + tabela_cat("Resumo por categoria", d["g_aberto"], total_label="Total em aberto")))
     if d["desp_aberto"]:
         por_cat = defaultdict(list)
         for t in d["desp_aberto"]:
@@ -375,10 +380,9 @@ def gerar_pdf(chave, nome_uni, d, saldos, arq_pdf):
             rows.append([P("<b>Total</b>", cellrb), P(f"<b>{cat}</b>", cellrb), P("", cell), P(f"<b>{len(txs_cat)}</b>", cellc), P_val(sum(t["value_in_cent"] for t in txs_cat), cellrb)])
             tt = tabela(rows, [2.2*cm, 7.3*cm, 3.2*cm, 1.8*cm, 3*cm])
             tt.setStyle(TableStyle([("BACKGROUND", (0,len(rows)-1), (-1,len(rows)-1), LARANJA_CLARO)]))
-            E.append(P(f"<b>{cat}</b>", h3))
-            E.append(tt)
+            E.append(KeepTogether([P(f"<b>{cat}</b>", h3), tt]))
 
-    # 6. resumo previsão de resultado
+    # 6. resumo previsão de resultado — KeepTogether
     E.append(Spacer(1, 14))
     fat_ant = fat_vistoria(d)
     du_ant = dias_uteis(MES_ANT.year, MES_ANT.month)
@@ -396,8 +400,7 @@ def gerar_pdf(chave, nome_uni, d, saldos, arq_pdf):
                    [P("<b>Previsão de saldo final</b> (resultado − desp. em aberto + saldo)", cellrb), P_val(res_prev - d["total_aberto"] + sum(v for _, v in saldos), cellrb)]]
     t = tabela(resumo_rows, [11.5*cm, 4.5*cm])
     t.setStyle(TableStyle([("BACKGROUND", (0,5), (-1,5), LARANJA_CLARO), ("BACKGROUND", (0,8), (-1,8), LARANJA_CLARO)]))
-    E.append(P(f"Previsão de Resultado — {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year}", h2))
-    E.append(t)
+    E.append(KeepTogether([P(f"Previsão de Resultado — {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year}", h2), t]))
     E.append(P("Base do cálculo: faturamento previsto = média por dia útil do mês anterior (só receitas de vistoria 01.01–01.05) × dias úteis do mês corrente (feriados nacionais descontados); despesas previstas = Previsão de Despesas do mês corrente.", sub))
 
     E.append(Spacer(1, 10))
