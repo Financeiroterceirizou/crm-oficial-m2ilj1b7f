@@ -1,6 +1,6 @@
 # STATUS — Projeto Terceirizou Terceirização Empresarial
 
-> **Atualizado em:** 2026-10-06 11:36 · **Fonte técnica:** Skip projectId 51268
+> **Atualizado em:** 2026-10-06 · **Fonte técnica:** Skip projectId 51268
 
 ## Onde estamos
 
@@ -47,7 +47,8 @@
 
 ## `5ef4b7cd` — bloqueada por decisão de negócio
 
-- **B4-201 pendente:** faltam motivos de perda elegíveis, janela da última interação e exclusões.
+- **B4-201 — critério conservador aprovado pelo champion em 06/10/2026:** exigir motivo de perda explícito, lead prestador de serviço com CNPJ, captação há pelo menos 90 dias e pelo menos 60 dias sem interação.
+- **Detalhe B4-201 ainda pendente:** confirmar se qualquer motivo de perda explicitamente registrado é elegível ou se haverá uma lista de motivos aceitos. Nenhuma regra foi implementada.
 - **B4-202 decidido pelo champion em 06/10/2026:** consentimento explícito não será requisito obrigatório; uma base legal alternativa aplicável ao lead deve ser documentada e validada antes da inclusão na fila.
 - **Alinhamento necessário:** a SPEC-4-002 ainda exclui leads sem consentimento. O consultor deve alinhar a SPEC à decisão e validar/documentar a base alternativa antes de retomar a análise.
 - **Salvaguardas mantidas:** descadastro/`nao_contatar` excluídos; aprovação humana do lote obrigatória; nenhum contato automático.
@@ -56,4 +57,4 @@
 
 ## Próximo passo
 
-Resolver B4-201 e obter o alinhamento/validação consultiva de B4-202; depois disso, fazer nova análise/autorização de implementação.
+Confirmar se qualquer motivo de perda explícito basta ou se será definida uma lista de motivos elegíveis; obter o alinhamento da SPEC e a validação consultiva de B4-202; depois disso, fazer nova análise/autorização de implementação.
