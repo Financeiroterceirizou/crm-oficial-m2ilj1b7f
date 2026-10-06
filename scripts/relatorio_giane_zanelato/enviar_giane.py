@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 # Envio do Relatório Mensal GIANE ZANELATO SAUDE CAPILAR por e-mail (Resend).
+# Destinos (Vinícius 06/10): financeirogianezanelato@gmail.com + vinicius@terceirizou.com.br,
+#   BCC financeiro@terceirizou.com.br. Periodicidade: mensal, dia 03 às 14:00.
 # Uso: python3 enviar_giane.py [caminho-do-pdf]
-#   Sem argumento: usa o PDF de hoje (artifacts/YYMMDD_Relatorio_Giane_Zanelato.pdf).
-# Chave Resend: scripts/95b7f382c0a1ba1d/resend_key.txt (fora do repo) ou env RESEND_API_KEY.
-# Destinatário: vinicius@terceirizou.com.br (padrão; destino do cliente a definir pelo Vinícius).
 import base64, json, os, sys, urllib.request
 from datetime import date
 
 API = "https://api.resend.com/emails"
 FROM = "Terceirizou <financeiro@terceirizou.com.br>"
-TO = ["vinicius@terceirizou.com.br"]
-BCC = []
+TO = ["financeirogianezanelato@gmail.com", "vinicius@terceirizou.com.br"]
+BCC = ["financeiro@terceirizou.com.br"]
 
 _key_path = os.environ.get("RESEND_KEY_PATH") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "95b7f382c0a1ba1d", "resend_key.txt")
 KEY = os.environ.get("RESEND_API_KEY") or (open(_key_path).read().strip() if os.path.exists(_key_path) else "")
@@ -32,7 +31,6 @@ if os.path.exists(xlsx_path):
     with open(xlsx_path, "rb") as f:
         anexos.append({"filename": os.path.basename(xlsx_path), "content": base64.b64encode(f.read()).decode()})
 
-# idempotência inclui a hora do PDF (regeneração = reenvio legítimo; mesmo arquivo = bloqueado)
 hora_pdf = date.today().strftime("%Y%m%d") + "-" + str(int(os.path.getmtime(pdf_path)) % 100000)
 
 html = """<p>Boa tarde!</p>
