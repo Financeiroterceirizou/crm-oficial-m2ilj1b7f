@@ -1,6 +1,6 @@
 #!/bin/bash
 # Captação de Leads — run periódico (cron a5b0d6956d407911)
-# O agente lê as planilhas via MCP e salva em tmp/polling_a5b0/{cora,meta_ads_jun,meta_ads_cadastro}.json.
+# O agente lê as planilhas via MCP e salva em tmp/polling/{cora,meta_ads_jun,meta_ads_cadastro}.json.
 # Este script transforma e processa com ESTADO PRÓPRIO (não disputa estado com o 91e0856).
 # NÃO usa mais build_input.py (dados hardcoded truncados divergiam da planilha ao vivo
 # e brigavam com o pipeline live → CRM oscilando entre valores truncados e completos).
@@ -21,6 +21,17 @@ if ! ls "$POLLING_TMP"/cora.json "$POLLING_TMP"/meta_ads_jun.json "$POLLING_TMP"
   echo "tmp/polling_a5b0 sem arquivos crus — aguardando leitura MCP; leads_input canônico PRESERVADO."
   exit 0
 fi
+
+# GUARDA FRESH (2026-10-08 20:30): mesmo vetor do 91e0856 — arquivos crus
+# gravados no tmp sem leitura MCP verificada (escrita externa corrompida
+# recontaminou o canônico e gerou 1 update errado no CRM em 19:59). Só roda
+# se o agente marcou tmp/polling_a5b0/.mcp-fresh na rodada.
+if [ ! -f "$POLLING_TMP/.mcp-fresh" ]; then
+  echo "tmp/polling_a5b0 sem marcador .mcp-fresh (escrita externa suspeita) — leads_input canônico PRESERVADO."
+  rm -f "$POLLING_TMP"/cora.json "$POLLING_TMP"/meta_ads_jun.json "$POLLING_TMP"/meta_ads_cadastro.json
+  exit 0
+fi
+rm -f "$POLLING_TMP/.mcp-fresh"
 
 python3 scripts/91e08561a5b65e5d/transform.py
 cat "$LEADS_INPUT_PATH" | python3 scripts/captacao_leads/processar.py

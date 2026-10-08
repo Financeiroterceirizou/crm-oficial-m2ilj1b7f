@@ -20,9 +20,6 @@ mkdir -p "$TMP"
 
 echo "[$(date -Iseconds)] Polling start" >> "$LOG"
 
-# Estado e leads_input isolados por job: o cron a5b0 roda o MESMO transform.py
-# em paralelo — sem isolamento, os dois escreviam o mesmo leads_input.json e
-# um lia JSON pela metade (JSONDecodeError) ou processava lote do outro.
 export ESTADO_PATH="$SCRIPTS/91e08561a5b65e5d/estado.json"
 export LEADS_INPUT_PATH="$SCRIPTS/91e08561a5b65e5d/leads_input.json"
 
@@ -37,10 +34,27 @@ if ! ls "$TMP"/cora.json "$TMP"/meta_ads_jun.json "$TMP"/meta_ads_cadastro.json 
   exit 0
 fi
 
+# GUARDA FRESH (2026-10-08 20:25): arquivos crus aparecem no tmp/polling SEM
+# leitura MCP do agente (escritas externas/sessões paralelas com dados
+# corrompidos — João Eduardo duplicado com gestão 'de forma_simples', célula
+# Cora com caso alterado). Rodar sobre esses arquivos re-contamina o
+# leads_input canônico e injeta updates errados no CRM (incidente 19:59).
+# Regra: só roda se o agente marcou a leitura MCP da rodada com tmp/polling/.mcp-fresh.
+if [ ! -f "$TMP/.mcp-fresh" ]; then
+  echo "[$(date -Iseconds)] Polling SKIP: arquivos crus sem marcador .mcp-fresh (escrita externa suspeita); canônico preservado." >> "$LOG"
+  echo '{"skipped": true, "motivo": "tmp/polling sem leitura MCP verificada (sem .mcp-fresh) - leads_input canônico preservado"}'
+  rm -f "$TMP"/cora.json "$TMP"/meta_ads_jun.json "$TMP"/meta_ads_cadastro.json
+  exit 0
+fi
+rm -f "$TMP/.mcp-fresh"
+
 python3 "$SCRIPTS/91e08561a5b65e5d/transform.py" 2>> "$LOG"
 
 # Step 2: Process leads → upsert to CRM
-# O log de ações permanece no caminho padrão (o resumo diário 95b7f382c0a1ba1d o lê).
+# Estado isolado por env var para não disputar o mesmo arquivo com o job
+# antigo a5b0d6956d407911 (que roda processar.py em paralelo e invalidava o
+# estado a cada ciclo → mesmo lote re-atualizado 10/10min). O log de ações
+# permanece no caminho padrão (o resumo diário 95b7f382c0a1ba1d o lê).
 RESULT=$(cat "$LEADS_INPUT_PATH" | python3 "$SCRIPTS/captacao_leads/processar.py" 2>> "$LOG")
 
 echo "$RESULT" >> "$LOG"
