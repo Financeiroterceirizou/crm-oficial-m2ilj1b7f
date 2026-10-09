@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 # Envio dos relatórios DARKE ESTRATEGIA E NEGOCIOS — Resend
+# Destinos (Vinícius 09/10): vinicius@terceirizou.com.br + financeiro@darke.cc,
+#   BCC financeiro@terceirizou.com.br. Periodicidade: mensal, dia 03 às 14:00.
 import sys, os, time, json, urllib.request, base64, hashlib
 
 _dir = os.path.dirname(os.path.abspath(__file__))
 KEY = open(os.path.join(_dir, ".resend_key")).read().strip()
 UAH = {"Authorization": f"Bearer {KEY}", "User-Agent": "terceirizou-relatorios/1.0",
        "Content-Type": "application/json", "Idempotency-Key": ""}
-DEST = "vinicius@terceirizou.com.br"
+DESTS = ["vinicius@terceirizou.com.br", "financeiro@darke.cc"]
 
 def enviar(pdf, xlsx, idem):
     UAH["Idempotency-Key"] = idem
@@ -14,7 +16,7 @@ def enviar(pdf, xlsx, idem):
     a_xl = base64.b64encode(open(xlsx, "rb").read()).decode()
     corpo = {
         "from": "Terceirizou <financeiro@terceirizou.com.br>",
-        "to": [DEST],
+        "to": DESTS,
         "bcc": ["financeiro@terceirizou.com.br"],
         "subject": "Relatório Gerencial — Darke Estratégia e Negócios",
         "html": "<p>Boa tarde Vinícius!</p><p>Segue o relatório gerencial da <b>Darke Estratégia e Negócios</b> (PDF + Excel): comparativo 13 meses, entradas e saídas do mês anterior, previsão do mês corrente, resultado 12 meses, inadimplência e projeção de fluxo de caixa 12 meses.</p><p>Qualquer dúvida estamos à disposição.</p><p>Obrigado!</p>",
