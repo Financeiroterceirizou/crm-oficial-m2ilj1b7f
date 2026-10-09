@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-# Relatórios DARKE ESTRATEGIA E NEGOCIOS LTDA — v1.0, 2026-10-08
+# Relatórios DARKE ESTRATEGIA E NEGOCIOS LTDA — v1.1, 2026-10-09
+#   v1.1 (feedback Vinícius 09/10): comparativo 13m em PÁGINA PAISAGEM inteira (KeepTogether,
+#     células compactas 6pt — cabe ~28 categorias + resultado numa página), sem observação de
+#     meses sem movimentação; inadimplência na projeção entra em NOV (1 mês à frente).
 #   Formato Campo Belo (logo capa + símbolo rodapé proporção real 372x553).
 #   TUDO em REGIME DE CAIXA (situation in 1,2, mês por dt_billing) — pedido Vinícius 08/10.
 #   Relatórios:
-#     1. Comparativo dos últimos 13 meses por categoria (caixa)
+#     1. Comparativo dos últimos 13 meses por categoria (caixa) — PÁGINA PAISAGEM
 #     2. Entradas e Saídas por Categoria do mês anterior (caixa)
 #     3. Previsão de Entradas e Saídas por Categoria do mês corrente (caixa — pago + pendente)
 #     4. Resultado dos últimos 12 meses por categoria (caixa)
 #     5. Inadimplência até o último dia do mês anterior (receitas em aberto)
 #     6. Previsão de Fluxo de Caixa 12m — lançamentos previstos por mês + saldo real;
-#        a INADIMPLÊNCIA entra como previsão de receber 2 meses à frente (out → dez),
+#        a INADIMPLÊNCIA entra como previsão de receber 1 mês à frente (out → nov),
 #        registrado na observação do relatório.
 #   Filtro: exclusão SÓ categoria 99.01 (regra Vinícius 05/10 — descrição não filtra).
 #   Cliente: consultoria estratégia e negócios (novo segmento). Contas: Sicoob Darke 213171,
@@ -19,12 +22,13 @@ import json, os, sys, urllib.request, time
 from collections import defaultdict
 from datetime import date, timedelta
 
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import cm
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-                                PageBreak, Image as RLImage, KeepTogether)
+from reportlab.platypus import (Paragraph, Spacer, Table, TableStyle,
+                                Frame, PageBreak, Image as RLImage, KeepTogether,
+                                BaseDocTemplate, PageTemplate, NextPageTemplate)
 
 BASE = "https://api-v1.controlle.com"
 _dir = os.path.dirname(os.path.abspath(__file__))
@@ -110,7 +114,7 @@ FIM_MES_COR = FIM_MES_COR - timedelta(days=FIM_MES_COR.day)
 FIM_PROJ = add_months(MES_COR, 11)
 FIM_PROJ = FIM_PROJ.replace(day=28) + timedelta(days=4)
 FIM_PROJ = FIM_PROJ - timedelta(days=FIM_PROJ.day)
-MES_INAD = add_months(MES_COR, 2)  # inadimplência recebível 2 meses à frente
+MES_INAD = add_months(MES_COR, 1)  # inadimplência recebível 1 mês à frente (out → nov)
 
 HOJE_LABEL = HOJE.strftime("%d/%m/%Y")
 FIM_MES_ANT_LABEL = FIM_MES_ANT.strftime("%d/%m/%Y")
@@ -198,7 +202,7 @@ for t in inad:
     g_inad[cat_nome(t)][1] += 1
 total_inad = sum(v for v, _ in g_inad.values())
 
-# 6. projeção 12m (lançamentos previstos por mês + saldo real + inadimplência 2m à frente)
+# 6. projeção 12m (lançamentos previstos por mês + saldo real + inadimplência 1m à frente)
 all_fut = _tx + _fut
 proj = []
 for i in range(12):
@@ -241,6 +245,11 @@ cellb = ParagraphStyle("cellb", parent=styles["Normal"], fontSize=8, fontName="H
 cellr = ParagraphStyle("cellr", parent=cell, alignment=2)
 cellrb = ParagraphStyle("cellrb", parent=cellb, alignment=2)
 cellc = ParagraphStyle("cellc", parent=cell, alignment=1)
+# estilos compactos para o comparativo 13m (cabe ~28 categorias numa página paisagem)
+cell6 = ParagraphStyle("cell6", parent=cell, fontSize=6)
+cell6b = ParagraphStyle("cell6b", parent=cell6, fontName="Helvetica-Bold")
+cell6r = ParagraphStyle("cell6r", parent=cell6, alignment=2)
+cell6rb = ParagraphStyle("cell6rb", parent=cell6b, alignment=2)
 P = Paragraph
 
 def P_val(cents, style):
@@ -280,10 +289,16 @@ def rodape_simbolo(canvas, doc):
         canvas.drawImage(SIMBOLO, 18.4*cm, 1.1*cm, width=alt*372/553, height=alt, mask="auto")
 
 ARQ_PDF = f"artifacts/{HOJE.strftime('%y%m%d')}_Relatorio_Darke.pdf"
-doc = SimpleDocTemplate(ARQ_PDF, pagesize=A4, leftMargin=1.5*cm, rightMargin=1.5*cm,
-                        topMargin=1.3*cm, bottomMargin=1.6*cm,
-                        title="Relatório Gerencial — Darke Estratégia e Negócios")
-E = []
+# Páginas alternadas: portrait (padrão) + landscape (comparativo 13m) via BaseDocTemplate
+PW, PH = A4
+LW, LH = landscape(A4)
+doc = BaseDocTemplate(ARQ_PDF, pagesize=A4,
+                      title="Relatório Gerencial — Darke Estratégia e Negócios")
+doc.addPageTemplates([
+    PageTemplate(id="portrait", frames=[Frame(1.5*cm, 1.6*cm, PW-3*cm, PH-2.9*cm)], onPage=rodape_simbolo, pagesize=A4),
+    PageTemplate(id="landscape", frames=[Frame(1.5*cm, 1.6*cm, LW-3*cm, LH-2.9*cm)], onPage=rodape_simbolo, pagesize=landscape(A4)),
+])
+E = [NextPageTemplate("portrait")]
 h1c = ParagraphStyle("h1c", parent=h1, fontSize=13, alignment=1, spaceAfter=1)
 h2c = ParagraphStyle("h2c", parent=h2, fontSize=11, alignment=1, spaceBefore=2, spaceAfter=2)
 subc = ParagraphStyle("subc", parent=sub, fontSize=8, alignment=1, spaceAfter=0)
@@ -297,33 +312,35 @@ E.append(P("Relatório Gerencial Mensal", h2c))
 E.append(P(f"Gerado em {HOJE_LABEL} · Fonte: Controlle · Ref.: {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} — regime de caixa", subc))
 E.append(Spacer(1, 6))
 
-# 1. comparativo 13m (receitas primeiro, despesas depois)
-E.append(P(f"Comparativo dos Últimos 13 Meses por Categoria ({MESES13[0][2]} a {MESES13[-1][2]}) — regime de caixa", h2))
-E.append(P("Meses sem movimentação foram excluídos do comparativo.", sub))
+# 1. comparativo 13m (receitas primeiro, despesas depois) — página PAISAGEM inteira (KeepTogether)
+E.append(NextPageTemplate("landscape"))
+E.append(PageBreak())
+bloco_comp = [P(f"Comparativo dos Últimos 13 Meses por Categoria ({MESES13[0][2]} a {MESES13[-1][2]}) — regime de caixa", h2)]
 cat_names = sorted({c for c in matriz_13}, key=lambda c: sum(matriz_13[c].values()), reverse=True)
 n_col = len(meses_com_mov)
-w_cat = max(4.5, 16.5 - 1.3 * n_col - 2.8)
-cm_rows = [[P("<b>Categoria</b>", cell)] + [P(f"<b>{lab}</b>", cellr) for _, lab in meses_com_mov] + [P("<b>Média</b>", cellr), P("<b>Total</b>", cellr)]]
+cm_rows = [[P("<b>Categoria</b>", cell6)] + [P(f"<b>{lab}</b>", cell6r) for _, lab in meses_com_mov] + [P("<b>Média</b>", cell6r), P("<b>Total</b>", cell6r)]]
 for cat in cat_names:
-    row = [P(cat, cell)]
+    row = [P(cat, cell6)]
     vals = [matriz_13[cat].get(fim_m_iso[:7], 0) for fim_m_iso, _ in meses_com_mov]
     for v in vals:
-        row.append(P_val_int(v, cellr) if v else P("—", cellr))
-    row.append(P_val_int(round(sum(vals) / len(vals)), cellrb))
-    row.append(P_val_int(sum(vals), cellrb))
+        row.append(P_val_int(v, cell6r) if v else P("—", cell6r))
+    row.append(P_val_int(round(sum(vals) / len(vals)), cell6rb))
+    row.append(P_val_int(sum(vals), cell6rb))
     cm_rows.append(row)
-res_row = [P("<b>Resultado do mês</b>", cellb)]
+res_row = [P("<b>Resultado do mês</b>", cell6b)]
 for fim_m_iso, _ in meses_com_mov:
     tot_mes = sum(v[fim_m_iso[:7]] for v in matriz_13.values())
-    res_row.append(P_val_int(tot_mes, cellrb))
+    res_row.append(P_val_int(tot_mes, cell6rb))
 _res_mensais = [sum(v[fim_m_iso[:7]] for v in matriz_13.values()) for fim_m_iso, _ in meses_com_mov]
-res_row.append(P_val_int(round(sum(_res_mensais) / len(_res_mensais)), cellrb))
-res_row.append(P_val_int(sum(_res_mensais), cellrb))
+res_row.append(P_val_int(round(sum(_res_mensais) / len(_res_mensais)), cell6rb))
+res_row.append(P_val_int(sum(_res_mensais), cell6rb))
 cm_rows.append(res_row)
-if n_col <= 7:
-    E.append(tabela(cm_rows, [w_cat*cm] + [1.3*cm]*n_col + [1.4*cm, 1.4*cm], fs=6.5))
-else:
-    E.append(tabela(cm_rows, [4.5*cm] + [1.05*cm]*n_col + [1.2*cm, 1.2*cm], fs=5.8))
+# larguras em PAISAGEM (27,2cm úteis) + padding compacto: cabe 13 meses + média + total
+t_comp = tabela(cm_rows, [5.5*cm] + [1.4*cm]*n_col + [1.5*cm, 1.6*cm], fs=6)
+t_comp.setStyle(TableStyle([("TOPPADDING", (0,0), (-1,-1), 1.5), ("BOTTOMPADDING", (0,0), (-1,-1), 1.5)]))
+bloco_comp.append(t_comp)
+E.append(KeepTogether(bloco_comp))
+E.append(NextPageTemplate("portrait"))
 
 # 2. mês anterior
 E.append(PageBreak())
@@ -384,7 +401,7 @@ E.append(P(f"Previsão de Fluxo de Caixa — Próximos 12 Meses ({MES_PT[MES_COR
 E.append(t)
 E.append(P(f"Observação: a inadimplência de {brl(total_inad)} (receitas em aberto até {FIM_MES_ANT_LABEL}) "
            f"entra como previsão de receber em {MES_PT[MES_INAD.month].capitalize()} de {MES_INAD.year} "
-           f"(dois meses à frente do relatório). Saldo de partida = saldo real em {FIM_MES_ANT_LABEL}; "
+           f"(um mês à frente do relatório). Saldo de partida = saldo real em {FIM_MES_ANT_LABEL}; "
            "movimentos = lançamentos previstos do Controlle.", sub))
 
 E.append(Spacer(1, 10))
@@ -399,7 +416,7 @@ E.append(t)
 
 E.append(Spacer(1, 10))
 E.append(P("Gerado automaticamente pela Terceirizou · dados do Controlle", sub))
-doc.build(E, onFirstPage=rodape_simbolo, onLaterPages=rodape_simbolo)
+doc.build(E)
 print(f"OK: {ARQ_PDF}")
 
 # ===== Excel =====
