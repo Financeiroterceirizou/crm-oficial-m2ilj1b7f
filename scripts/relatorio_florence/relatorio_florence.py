@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
-# Relatórios Semanais — FLORENCE (Içara / Maracajá / Global) — v2.1, 2026-10-13 (motor v1.4 Bem Viver)
-#   v2.1 (feedback Vinícius 13/10): manter o dedup multi-conjunto — lançamentos DUPLICADOS entre
+# Relatórios Semanais — FLORENCE (Içara / Maracajá / Global) — v2.2, 2026-10-13 (motor v1.4 Bem Viver)
+#   v2.2 (feedback Vinícius 13/10): projeção 12m e saldo nas contas FILTRADOS pela unidade do
+#     pacote (CC + contas) — balancesPreview da API não filtra por CC e mostrava a licença
+#     inteira no pacote Maracajá. Projeção = saldo real das contas do pacote + lançamentos
+#     previstos (sit 0) do CC, dedup entre licenças. Contas por pacote: icara = nomes com
+#     "FLORENCE ICARA" ou "ICARA FLOR"; maracaja = "FLORENCE MARACAJA"; global = todas ativas.
+#   v2.1 (13/10): manter o dedup multi-conjunto — lançamentos DUPLICADOS entre
 #     as licenças (mesma compra sincronizada nas 2, ex. ago/26 espelho) contam UMA vez; os
 #     exclusivos de cada licença entram normalmente. Vinícius não pode deletar na origem.
 #   v2.0 (13/10): soma sem dedup — REVERTIDA no mesmo dia (duplicava ago inteiro).
@@ -154,11 +159,21 @@ SEM_LABEL = f"{INI_SEM.strftime('%d/%m/%Y')} até {FIM_SEM.strftime('%d/%m/%Y')}
 # ===== dados =====
 # Duas licenças com DEDUP (v2.1): duplicados entre licenças contam UMA vez; exclusivos entram.
 # Pacotes: icara = CC Içara (lic ICARA) · maracaja = CC Maracajá (2 licenças, dedup) · global = tudo (dedup).
-# saldos por conta no dia anterior (todas as contas ativas das 2 licenças, com sufixo da licença)
+# saldos por conta no dia anterior — SÓ as contas do pacote (v2.2: o pacote Maracajá mostrava
+# as contas da licença Içara; o saldo da unidade é a CORA FLORENCE MARACAJA)
 saldos_conta = []
 for lic_nome, tok in [("Içara", TOK_ICARA), ("Maracajá", TOK_MARACAJA)]:
+    if PACOTE == "icara" and tok != TOK_ICARA:
+        continue
+    if PACOTE == "maracaja" and tok != TOK_MARACAJA:
+        continue
     contas = [c for c in req(f"{BASE}/account/v1/accounts", tok).get("results", []) if c.get("status") == 1]
     for c in contas:
+        ds = (c.get("ds_account") or "").upper()
+        if PACOTE == "icara" and not ("FLORENCE ICARA" in ds or "ICARA FLOR" in ds):
+            continue
+        if PACOTE == "maracaja" and "FLORENCE MARACAJA" not in ds:
+            continue
         b = req(f"{BASE}/transaction/v1/transactions/balances?start_date=2017-01-01&end_date={DIA_ANT.isoformat()}&id_account_main={c['id']}", tok)["results"]
         if b["balanceDone"] != 0:
             saldos_conta.append((f"{c['ds_account']} ({lic_nome})", b["balanceDone"]))
@@ -277,16 +292,51 @@ sem_boleto = [t for t in sem_rec if tem_tag(t, TAG_BOLETO_ICARA)]
 g_sem_boleto = agrupa_por_categoria(sem_boleto)
 total_sem_boleto = sum(v for v, _ in g_sem_boleto.values())
 
-# projeção próximos 12 meses (mês corrente → +11) — soma das 2 licenças
+# projeção próximos 12 meses (mês corrente → +11) — POR LANÇAMENTOS com filtro de CC do pacote
+# (v2.2: balancesPreview da API NÃO filtra por centro de custo — mostrava a licença inteira no
+# pacote Maracajá). Saldo de partida = saldo real (balanceDone) das contas ATIVAS do pacote;
+# mês a mês = lançamentos previstos (situation=0, dt_due) do CC do pacote, dedup entre licenças.
+def tx_previstos(ini, fim):
+    """Lançamentos previstos (situation=0) no CC do pacote, das 2 licenças, com dedup."""
+    out = []
+    for licenca, tok, cc in [("icara", TOK_ICARA, CC_MARACAJA_IC), ("maracaja", TOK_MARACAJA, CC_MARACAJA_MA)]:
+        if PACOTE == "icara":
+            if licenca != "icara": continue
+            cc = CC_ICARA
+        elif PACOTE == "maracaja":
+            if licenca != "maracaja": continue
+        raw, page = [], 1
+        while True:
+            url = (f"{BASE}/transaction/v1/transactions/list?start_date={ini}&end_date={fim}"
+                   f"&page={page}&orderBy=date&orderByCardinality=ASC&situation=[0]")
+            tl = req(url, tok).get("results", {}).get("transactionsList", [])
+            raw.extend(tl)
+            if len(tl) < 100: break
+            page += 1
+        for t in raw:
+            if ok_florence(t, licenca, ccs_permitidos=[cc] if PACOTE != "global" else None):
+                t["_lic"] = licenca
+                out.append(t)
+    if PACOTE == "icara":
+        return out
+    # dedup entre licenças: Içara é a base; extras da Maracajá que não casam entram
+    ic = [t for t in out if t.get("_lic") == "icara"]
+    ma = [t for t in out if t.get("_lic") == "maracaja"]
+    return dedup_multi(ic, ma)
+
+partida = sum(v for _, v in saldos_conta)
 proj = []
+acum = partida
 for i in range(0, 12):
     ini_m = add_months(MES_REF, i)
     fim_m = add_months(ini_m, 1) - timedelta(days=1)
-    rev = exp = sal = 0
-    for tok in (TOK_ICARA, TOK_MARACAJA):
-        b = req(f"{BASE}/transaction/v1/transactions/balances?start_date={ini_m.isoformat()}&end_date={fim_m.isoformat()}", tok)["results"]
-        rev += b["revenuesPreview"]; exp += b["expensesPreview"]; sal += b["balancePreview"]
-    proj.append((label_curto(ini_m), rev, exp, sal))
+    rev = exp = 0
+    for t in tx_previstos(ini_m.isoformat(), fim_m.isoformat()):
+        v = t["value_in_cent"]
+        if v > 0: rev += v
+        else: exp += v
+    acum += rev + exp
+    proj.append((label_curto(ini_m), rev, exp, acum))
 
 # ===== PDF =====
 styles = getSampleStyleSheet()
