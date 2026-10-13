@@ -1,18 +1,14 @@
 #!/usr/bin/env python3
-# Relatórios Semanais — FLORENCE (Içara / Maracajá / Global) — v1.0, 2026-09-22 (motor v1.4 Bem Viver)
+# Relatórios Semanais — FLORENCE (Içara / Maracajá / Global) — v2.0, 2026-10-13 (motor v1.4 Bem Viver)
+#   v2.0 (feedback Vinícius 13/10): SOMA dos lançamentos das DUAS licenças (sem dedup) — o CC
+#     FLORENCE MARACAJÁ existe nas duas licenças (170264 na lic ICARA + 171849 na lic MA) e os
+#     valores devem ser SOMADOS; 3 grupos de relatórios: ICARA, MARACAJÁ (soma das 2 licenças)
+#     e GLOBAL (soma de tudo).
+#   v1.0, 2026-09-22 (motor v1.4 Bem Viver): dedup multi-conjunto — SUBSTITUÍDO pela soma em v2.0.
 # Uso: python3 relatorio_florence.py [YYYY-MM-DD] [icara|maracaja|global]  (default: hoje, global)
 # Gera UM PDF + UM Excel por pacote com os 11 relatórios + Comparativo 13 meses em PDF PAISAGEM.
-# Fonte: API Controlle v1 — DUAS licenças (Içara + Maracajá) juntas com dedup multi-conjunto.
+# Fonte: API Controlle v1 — DUAS licenças (Içara + Maracajá) SOMADAS.
 # Envio: segunda-feira 15:00 → raulroliveira@hotmail.com + financeirodaflorence@gmail.com
-#
-# Estrutura das licenças (verificado em 22/09):
-#   - Licença ICARA: CC Florence Içara (169871), CC Florence Maracajá (170264), CC Florence Criciúma (170265)
-#   - Licença MARACAJÁ: CC Florence Maracajá (171849) — duplica parte dos lançamentos da ICARA
-#   - Realizado (match com balances Done): situation in (1,2) [pago+agendado], sem transferências
-#   - Dedup multi-conjunto: conta ocorrências por (data, valor, descrição) — lançamentos legítimos
-#     repetidos no mesmo dia NÃO são descartados
-#   - TAG Boleto Emitido: ICARA 130028; licença Maracajá NÃO tem boleto (sai vazio)
-#   - Nenhuma das duas tem categorias 01.97/01.99 (somatório "excluindo" some quando vazio)
 import json, os, sys, urllib.request
 from collections import defaultdict
 from datetime import date, timedelta
@@ -23,6 +19,8 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
                                 PageBreak, KeepTogether)
+from reportlab.graphics.shapes import Drawing, String
+from reportlab.graphics.charts.barcharts import VerticalBarChart
 
 BASE = "https://api-v1.controlle.com"
 _dir = os.path.dirname(os.path.abspath(__file__))
@@ -59,23 +57,6 @@ def tx_list(start, end, token, **filtros):
         if len(tl) < 100:
             return out
         page += 1
-
-def chave_dedup(t):
-    return ((t.get("dt_billing") or t.get("dt_due") or "")[:10], t["value_in_cent"], (t.get("ds_transaction") or "")[:30])
-
-def dedup_multi(base_txs, extra_txs):
-    """Junta duas licenças sem duplicar: base inteira + extras que excedam a contagem
-    de ocorrências da mesma chave (data, valor, descrição) na base."""
-    from collections import Counter
-    conta_base = Counter(chave_dedup(t) for t in base_txs)
-    vistos = Counter()
-    novos = []
-    for t in extra_txs:
-        k = chave_dedup(t)
-        vistos[k] += 1
-        if vistos[k] > conta_base.get(k, 0):
-            novos.append(t)
-    return base_txs + novos
 
 def brl(cents):
     v = cents / 100
@@ -123,6 +104,16 @@ def ok_florence(t, licenca, ccs_permitidos=None):
             return False
     return True
 
+def agrupa_por_categoria(txs, so_negativas=False, so_positivas=False):
+    g = defaultdict(lambda: [0, 0])
+    for t in txs:
+        v = t["value_in_cent"]
+        if so_negativas and v >= 0: continue
+        if so_positivas and v <= 0: continue
+        g[cat_nome(t)][0] += v
+        g[cat_nome(t)][1] += 1
+    return g
+
 # ===== datas =====
 HOJE = date.fromisoformat(sys.argv[1]) if len(sys.argv) > 1 else date.today()
 DIA_ANT = HOJE - timedelta(days=1)
@@ -144,7 +135,8 @@ FIM_MES_ANT_LABEL = FIM_MES_ANT.strftime("%d/%m/%Y")
 SEM_LABEL = f"{INI_SEM.strftime('%d/%m/%Y')} até {FIM_SEM.strftime('%d/%m/%Y')}"
 
 # ===== dados =====
-# Duas licenças: Içara (base) + Maracajá (extra, com dedup multi-conjunto).
+# Duas licenças SOMADAS (v2.0 — sem dedup): lançamentos das duas licenças são DISTINTOS.
+# Pacotes: icara = CC Içara (lic ICARA) · maracaja = CC Maracajá (ambas as licenças, SOMA) · global = tudo (SOMA).
 # saldos por conta no dia anterior (todas as contas ativas das 2 licenças, com sufixo da licença)
 saldos_conta = []
 for lic_nome, tok in [("Içara", TOK_ICARA), ("Maracajá", TOK_MARACAJA)]:
@@ -154,7 +146,7 @@ for lic_nome, tok in [("Içara", TOK_ICARA), ("Maracajá", TOK_MARACAJA)]:
         if b["balanceDone"] != 0:
             saldos_conta.append((f"{c['ds_account']} ({lic_nome})", b["balanceDone"]))
 
-# comparativo 13 meses (realizado): série (balances somados) + matriz por categoria (dedup)
+# comparativo 13 meses (realizado): série + matriz por categoria
 INI_13 = add_months(MES_REF, -12)
 meses_13 = []
 for i in range(0, 13):
@@ -168,10 +160,10 @@ for ini_m, fim_m, lab in meses_13:
         b = req(f"{BASE}/transaction/v1/transactions/balances?start_date={ini_m}&end_date={fim_m}", tok)["results"]
         rev += b["revenuesDone"]; exp += b["expensesDone"]; sal += b["balanceDone"]
     serie_13.append((lab, rev, exp, sal))
-# matriz por categoria: lançamentos realizados (sit 1,2) das 2 licenças com dedup multi-conjunto
+# matriz por categoria: lançamentos realizados (sit 1,2) das 2 licenças SOMADAS (v2.0)
 tx_icara_raw = tx_list(meses_13[0][0], min(meses_13[-1][1], DIA_ANT.isoformat()), TOK_ICARA, **{"situation": "[1,2]"})
 tx_maracaja_raw = tx_list(meses_13[0][0], min(meses_13[-1][1], DIA_ANT.isoformat()), TOK_MARACAJA, **{"situation": "[1,2]"})
-tx_global = dedup_multi(tx_icara_raw, tx_maracaja_raw)
+tx_global = tx_icara_raw + tx_maracaja_raw
 if PACOTE == "icara":
     tx_13m = [t for t in tx_icara_raw if ok_florence(t, "icara", ccs_permitidos=[CC_ICARA])]
 elif PACOTE == "maracaja":
@@ -189,16 +181,16 @@ setembro_pago = [t for t in tx_list(MES_REF.isoformat(), (add_months(MES_REF,1)-
 if PACOTE in ("maracaja", "global"):
     ma_mes = [t for t in tx_list(MES_REF.isoformat(), (add_months(MES_REF,1)-timedelta(days=1)).isoformat(), TOK_MARACAJA, **{"situation": "[1,2]"}) if ok_florence(t, "maracaja", None if PACOTE=="global" else [CC_MARACAJA_MA])]
     if PACOTE == "maracaja":
-        setembro_pago = dedup_multi([t for t in setembro_pago if ok_florence(t, "icara", [CC_MARACAJA_IC])], ma_mes)
+        setembro_pago = [t for t in setembro_pago if ok_florence(t, "icara", [CC_MARACAJA_IC])] + ma_mes
     else:
-        setembro_pago = dedup_multi(setembro_pago, ma_mes)
+        setembro_pago = setembro_pago + ma_mes
 cons_rec = agrupa_por_categoria(setembro_pago, so_positivas=True)
 cons_desp = agrupa_por_categoria(setembro_pago, so_negativas=True)
 cons_entradas = sum(v for v, _ in cons_rec.values())
 cons_saidas = sum(v for v, _ in cons_desp.values())
 cons_resultado = cons_entradas + cons_saidas
 
-# despesas em aberto até fim do mês anterior (2 licenças + dedup)
+# despesas em aberto até fim do mês anterior (2 licenças SOMADAS)
 desp_ic = [t for t in tx_list(f"{FIM_MES_ANT.year}-01-01", FIM_MES_ANT.isoformat(), TOK_ICARA, **{"activity_type": "0", "situation": "[0]"})
            if bdate(t) <= FIM_MES_ANT.isoformat()]
 desp_ma = [t for t in tx_list(f"{FIM_MES_ANT.year}-01-01", FIM_MES_ANT.isoformat(), TOK_MARACAJA, **{"activity_type": "0", "situation": "[0]"})
@@ -206,13 +198,13 @@ desp_ma = [t for t in tx_list(f"{FIM_MES_ANT.year}-01-01", FIM_MES_ANT.isoformat
 if PACOTE == "icara":
     desp_aberto = [t for t in desp_ic if ok_florence(t, "icara", [CC_ICARA])]
 elif PACOTE == "maracaja":
-    desp_aberto = dedup_multi([t for t in desp_ic if ok_florence(t, "icara", [CC_MARACAJA_IC])], [t for t in desp_ma if ok_florence(t, "maracaja", [CC_MARACAJA_MA])])
+    desp_aberto = [t for t in desp_ic if ok_florence(t, "icara", [CC_MARACAJA_IC])] + [t for t in desp_ma if ok_florence(t, "maracaja", [CC_MARACAJA_MA])]
 else:
-    desp_aberto = dedup_multi([t for t in desp_ic if ok_florence(t, "icara")], [t for t in desp_ma if ok_florence(t, "maracaja")])
+    desp_aberto = [t for t in desp_ic if ok_florence(t, "icara")] + [t for t in desp_ma if ok_florence(t, "maracaja")]
 g_desp_aberto = agrupa_por_categoria(desp_aberto)
 total_desp_aberto = sum(v for v, _ in g_desp_aberto.values())
 
-# inadimplência até fim do mês anterior (2 licenças + dedup)
+# inadimplência até fim do mês anterior (2 licenças SOMADAS)
 inad_ic = [t for t in tx_list(f"{FIM_MES_ANT.year}-01-01", FIM_MES_ANT.isoformat(), TOK_ICARA, **{"activity_type": "1", "situation": "[0]"})
            if bdate(t) <= FIM_MES_ANT.isoformat()]
 inad_ma = [t for t in tx_list(f"{FIM_MES_ANT.year}-01-01", FIM_MES_ANT.isoformat(), TOK_MARACAJA, **{"activity_type": "1", "situation": "[0]"})
@@ -220,24 +212,24 @@ inad_ma = [t for t in tx_list(f"{FIM_MES_ANT.year}-01-01", FIM_MES_ANT.isoformat
 if PACOTE == "icara":
     inad = [t for t in inad_ic if ok_florence(t, "icara", [CC_ICARA])]
 elif PACOTE == "maracaja":
-    inad = dedup_multi([t for t in inad_ic if ok_florence(t, "icara", [CC_MARACAJA_IC])], [t for t in inad_ma if ok_florence(t, "maracaja", [CC_MARACAJA_MA])])
+    inad = [t for t in inad_ic if ok_florence(t, "icara", [CC_MARACAJA_IC])] + [t for t in inad_ma if ok_florence(t, "maracaja", [CC_MARACAJA_MA])]
 else:
-    inad = dedup_multi([t for t in inad_ic if ok_florence(t, "icara")], [t for t in inad_ma if ok_florence(t, "maracaja")])
+    inad = [t for t in inad_ic if ok_florence(t, "icara")] + [t for t in inad_ma if ok_florence(t, "maracaja")]
 g_inad = agrupa_por_categoria(inad)
 total_inad = sum(v for v, _ in g_inad.values())
 inad_boleto = [t for t in inad if tem_tag(t, TAG_BOLETO_ICARA)]  # licença Maracajá não tem TAG boleto
 g_inad_boleto = agrupa_por_categoria(inad_boleto)
 total_inad_boleto = sum(v for v, _ in g_inad_boleto.values())
 
-# previsão mês corrente (pago + pendente) e mês seguinte (2 licenças + dedup)
+# previsão mês corrente (pago + pendente) e mês seguinte (2 licenças SOMADAS)
 def _pacote_mes(ini, fim):
     ic = [t for t in tx_list(ini, fim, TOK_ICARA) if ok_florence(t, "icara", None if PACOTE=="global" else ([CC_ICARA] if PACOTE=="icara" else [CC_MARACAJA_IC]))]
     ma = [t for t in tx_list(ini, fim, TOK_MARACAJA) if ok_florence(t, "maracaja", None if PACOTE=="global" else [CC_MARACAJA_MA])]
     if PACOTE == "icara":
         return ic
     if PACOTE == "maracaja":
-        return dedup_multi([t for t in ic if ok_florence(t, "icara", [CC_MARACAJA_IC])], ma)
-    return dedup_multi(ic, ma)
+        return [t for t in ic if ok_florence(t, "icara", [CC_MARACAJA_IC])] + ma
+    return ic + ma
 
 prev_mes = _pacote_mes(MES_REF.isoformat(), (add_months(MES_REF,1)-timedelta(days=1)).isoformat())
 g_prev_rec = agrupa_por_categoria(prev_mes, so_positivas=True)
@@ -251,7 +243,7 @@ g_seg_desp = agrupa_por_categoria(prev_seg, so_negativas=True)
 seg_entradas, seg_saidas = sum(v for v,_ in g_seg_rec.values()), sum(v for v,_ in g_seg_desp.values())
 seg_resultado = seg_entradas + seg_saidas
 
-# previsão de receitas da semana (não pagas) — geral e apenas boleto (2 licenças + dedup)
+# previsão de receitas da semana (não pagas) — geral e apenas boleto (2 licenças SOMADAS)
 sem_ic = [t for t in tx_list(INI_SEM.isoformat(), FIM_SEM.isoformat(), TOK_ICARA, **{"activity_type": "1", "situation": "[0]"})
           if INI_SEM.isoformat() <= bdate(t) <= FIM_SEM.isoformat()]
 sem_ma = [t for t in tx_list(INI_SEM.isoformat(), FIM_SEM.isoformat(), TOK_MARACAJA, **{"activity_type": "1", "situation": "[0]"})
@@ -259,9 +251,9 @@ sem_ma = [t for t in tx_list(INI_SEM.isoformat(), FIM_SEM.isoformat(), TOK_MARAC
 if PACOTE == "icara":
     sem_rec = [t for t in sem_ic if ok_florence(t, "icara", [CC_ICARA])]
 elif PACOTE == "maracaja":
-    sem_rec = dedup_multi([t for t in sem_ic if ok_florence(t, "icara", [CC_MARACAJA_IC])], [t for t in sem_ma if ok_florence(t, "maracaja", [CC_MARACAJA_MA])])
+    sem_rec = [t for t in sem_ic if ok_florence(t, "icara", [CC_MARACAJA_IC])] + [t for t in sem_ma if ok_florence(t, "maracaja", [CC_MARACAJA_MA])]
 else:
-    sem_rec = dedup_multi([t for t in sem_ic if ok_florence(t, "icara")], [t for t in sem_ma if ok_florence(t, "maracaja")])
+    sem_rec = [t for t in sem_ic if ok_florence(t, "icara")] + [t for t in sem_ma if ok_florence(t, "maracaja")]
 g_sem = agrupa_por_categoria(sem_rec)
 total_sem = sum(v for v, _ in g_sem.values())
 sem_boleto = [t for t in sem_rec if tem_tag(t, TAG_BOLETO_ICARA)]
@@ -304,6 +296,8 @@ def P_val_int(cents, style):
     s = ParagraphStyle("v", parent=style, textColor=(VERDE if cents > 0 else VERMELHO if cents < 0 else PRETO))
     return P(brl_int(cents), s)
 
+# NOTE: o comparativo 13 meses é gerado em PDF próprio paisagem (definido após o PDF principal).
+
 def tabela(rows, widths, fs=7.5):
     t = Table(rows, colWidths=widths, repeatRows=1)
     style = [("FONTNAME", (0,0), (-1,-1), "Helvetica"), ("FONTSIZE", (0,0), (-1,-1), fs),
@@ -326,6 +320,7 @@ def tabela_cat(titulo, grupos, positivo=True, total_label="Total"):
     rows.append([P(f"<b>{total_label}</b>", cellrb), P(f"<b>{sum(n for _, n in grupos.values())}</b>", cellc), P_val(tot, cellrb)])
     t = tabela(rows, [11*cm, 2.5*cm, 3*cm])
     t.setStyle(TableStyle([("BACKGROUND", (0,len(rows)-1), (-1,len(rows)-1), LARANJA_CLARO)]))
+    # título + tabela juntos: o relatório completo não quebra no meio
     return [KeepTogether([P(f"<b>{titulo}</b>", h2), t])]
 
 def tabela_lancamentos(txs, titulo=None, total_label="Total"):
@@ -367,7 +362,7 @@ ARQ_COMP = f"artifacts/{HOJE.strftime('%y%m%d')}_Comparativo_{SUF}.pdf"
 doc_comp = SimpleDocTemplate(ARQ_COMP, pagesize=landscape(A4), leftMargin=1.2*cm, rightMargin=1.2*cm, topMargin=1.2*cm, bottomMargin=1.2*cm)
 C = []
 C.append(P(f"<b>{NOME_PACOTE} — Comparativo dos últimos 13 meses</b>", h1))
-C.append(P(f"Gerado em {HOJE_LABEL} · Fonte: Controlle · {label_curto(INI_13)} a {label_curto(MES_REF)} · Apenas pago/recebido · Valores em R$ inteiros", sub))
+C.append(P(f"Gerado em {HOJE_LABEL} · Fonte: Controlle · {label_curto(INI_13)} a {label_curto(MES_REF)} · Apenas pago/recebido", sub))
 cm_rows = [[P("<b>Série</b>", cell)] + [P(f"<b>{lab}</b>", cellr) for _, _, lab in meses_13] + [P("<b>Média</b>", cellr), P("<b>Total</b>", cellr)]]
 for idx, nome_serie in [(1, "Entrada realizada"), (2, "Saída realizada"), (3, "Resultado do mês")]:
     row = [P(nome_serie, cell)]
@@ -421,7 +416,7 @@ E += tabela_cat("Resumo por categoria", g_inad, total_label="Total em aberto")
 excluir = [(nome, v, n) for nome, (v, n) in g_inad.items() if nome.startswith(("01.97", "01.99")) or "Judicial" in nome or "Perda" in nome]
 rows = [[P("<b>Composição do total</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)],
         [P("Somatório total (todas as categorias)", cell), P(f"<b>{len(inad)}</b>", cellc), P_val(total_inad, cellr)]]
-if excluir:  # só existe se as categorias de perda forem usadas
+if excluir:  # só existe se as categorias de perda forem usadas um dia
     rows.append([P("Somatório excluindo Negociação Judicial e Possível Perda de Receita", cell), P(f"<b>{len(inad) - sum(n for _, _, n in excluir)}</b>", cellc), P_val(total_inad - sum(v for _, v, _ in excluir), cellrb)])
 tj = tabela(rows, [11*cm, 2.5*cm, 3*cm])
 tj.setStyle(TableStyle([("BACKGROUND", (0,len(rows)-1), (-1,len(rows)-1), LARANJA_CLARO)]))
@@ -507,6 +502,7 @@ def aba(nome, linhas, larguras, pct_from=None):
     for r in linhas:
         ws.append(list(r))
     headers = [str(c.value or "") for c in ws[1]]
+    # cabeçalho (título): negrito, branco, centralizado
     for c in ws[1]:
         c.fill = FILL_H
         c.font = FH
@@ -514,7 +510,7 @@ def aba(nome, linhas, larguras, pct_from=None):
     for row in ws.iter_rows(min_row=2):
         label = str(row[0].value or "")
         is_total = label.startswith(TOT_LABELS)
-        if is_total:
+        if is_total:  # linhas de resultado: negrito e centralizado
             for c in row:
                 c.fill = FILL_T
                 c.alignment = Alignment(horizontal="center", vertical="center")
@@ -522,7 +518,7 @@ def aba(nome, linhas, larguras, pct_from=None):
         for j, c in enumerate(row[1:], 2):
             if isinstance(c.value, (int, float)):
                 hdr = headers[j-1] if j-1 < len(headers) else ""
-                if "Lançamentos" in hdr:
+                if "Lançamentos" in hdr:  # contagem: sem vírgula e sem R$
                     c.number_format = "0"
                     c.font = Font(bold=is_total)
                 elif pct_from and j >= pct_from:
