@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-# Relatórios Semanais — FLORENCE (Içara / Maracajá / Global) — v2.2, 2026-10-13 (motor v1.4 Bem Viver)
-#   v2.2 (feedback Vinícius 13/10): projeção 12m e saldo nas contas FILTRADOS pela unidade do
-#     pacote (CC + contas) — balancesPreview da API não filtra por CC e mostrava a licença
-#     inteira no pacote Maracajá. Projeção = saldo real das contas do pacote + lançamentos
-#     previstos (sit 0) do CC, dedup entre licenças. Contas por pacote: icara = nomes com
-#     "FLORENCE ICARA" ou "ICARA FLOR"; maracaja = "FLORENCE MARACAJA"; global = todas ativas.
+# Relatórios Semanais — FLORENCE (Içara / Maracajá / Global) — v2.3, 2026-10-13 (motor v1.4 Bem Viver)
+#   v2.3 (feedback Vinícius 13/10): TODOS os pacotes consideram SÓ os centros de custo da
+#     unidade — ICARA = CC 169871 (lic ICARA); MARACAJÁ = CC 170264 (lic ICARA) + CC 171849
+#     (lic MA), dedup; GLOBAL = os dois CCs (169871+170264+171849), dedup. CC Florence
+#     Criciúma (170265) e lançamentos sem CC ficam FORA de todos os pacotes. Projeção usa as
+#     duas licenças com os CCs do pacote (bug v2.2: maracaja pulava a lic ICARA).
+#   v2.2 (13/10): projeção 12m e saldo nas contas FILTRADOS pela unidade do pacote (CC + contas)
+#     — balancesPreview da API não filtra por CC e mostrava a licença inteira no pacote Maracajá.
 #   v2.1 (13/10): manter o dedup multi-conjunto — lançamentos DUPLICADOS entre
 #     as licenças (mesma compra sincronizada nas 2, ex. ago/26 espelho) contam UMA vez; os
 #     exclusivos de cada licença entram normalmente. Vinícius não pode deletar na origem.
@@ -110,6 +112,9 @@ def cat_nome(t):
 CC_ICARA = 169871   # licença ICARA
 CC_MARACAJA_IC = 170264  # licença ICARA
 CC_MARACAJA_MA = 171849  # licença MARACAJÁ
+# v2.3 (feedback Vinícius 13/10): o GLOBAL considera SÓ os dois centros de custo (Içara +
+# Maracajá) — CC Florence Criciúma (170265) e lançamentos sem CC ficam FORA de todos os pacotes.
+CCS_GLOBAL = [CC_ICARA, CC_MARACAJA_IC, CC_MARACAJA_MA]
 
 PACOTE = sys.argv[2] if len(sys.argv) > 2 else "global"  # icara | maracaja | global
 
@@ -158,7 +163,7 @@ SEM_LABEL = f"{INI_SEM.strftime('%d/%m/%Y')} até {FIM_SEM.strftime('%d/%m/%Y')}
 
 # ===== dados =====
 # Duas licenças com DEDUP (v2.1): duplicados entre licenças contam UMA vez; exclusivos entram.
-# Pacotes: icara = CC Içara (lic ICARA) · maracaja = CC Maracajá (2 licenças, dedup) · global = tudo (dedup).
+# Pacotes: icara = CC Içara (lic ICARA) · maracaja = CC Maracajá (2 licenças, dedup) · global = 2 CCs (dedup).
 # saldos por conta no dia anterior — SÓ as contas do pacote (v2.2: o pacote Maracajá mostrava
 # as contas da licença Içara; o saldo da unidade é a CORA FLORENCE MARACAJA)
 saldos_conta = []
@@ -201,7 +206,7 @@ if PACOTE == "icara":
 elif PACOTE == "maracaja":
     tx_13m = [t for t in tx_global if ok_florence(t, "icara", ccs_permitidos=[CC_MARACAJA_IC]) or ok_florence(t, "maracaja", ccs_permitidos=[CC_MARACAJA_MA])]
 else:
-    tx_13m = [t for t in tx_global if ok_florence(t, "icara")]
+    tx_13m = [t for t in tx_global if ok_florence(t, "icara", ccs_permitidos=CCS_GLOBAL) or ok_florence(t, "maracaja", ccs_permitidos=CCS_GLOBAL)]
 matriz_13 = defaultdict(lambda: defaultdict(int))
 for t in tx_13m:
     mes = bdate(t)[:7]
@@ -209,9 +214,11 @@ for t in tx_13m:
         matriz_13[c.get("ds_category") or "?"][mes] += c.get("value") or 0
 
 # consolidado do mês (realizado até agora: pago + agendado, sem transferências)
-setembro_pago = [t for t in tx_list(MES_REF.isoformat(), (add_months(MES_REF,1)-timedelta(days=1)).isoformat(), TOK_ICARA, **{"situation": "[1,2]"}) if ok_florence(t, "icara", None if PACOTE=="global" else ([CC_ICARA] if PACOTE=="icara" else [CC_MARACAJA_IC]))]
+CCS_PACOTE_IC = {"icara": [CC_ICARA], "maracaja": [CC_MARACAJA_IC], "global": CCS_GLOBAL}[PACOTE]
+CCS_PACOTE_MA = {"icara": None, "maracaja": [CC_MARACAJA_MA], "global": CCS_GLOBAL}[PACOTE]
+setembro_pago = [t for t in tx_list(MES_REF.isoformat(), (add_months(MES_REF,1)-timedelta(days=1)).isoformat(), TOK_ICARA, **{"situation": "[1,2]"}) if ok_florence(t, "icara", CCS_PACOTE_IC)]
 if PACOTE in ("maracaja", "global"):
-    ma_mes = [t for t in tx_list(MES_REF.isoformat(), (add_months(MES_REF,1)-timedelta(days=1)).isoformat(), TOK_MARACAJA, **{"situation": "[1,2]"}) if ok_florence(t, "maracaja", None if PACOTE=="global" else [CC_MARACAJA_MA])]
+    ma_mes = [t for t in tx_list(MES_REF.isoformat(), (add_months(MES_REF,1)-timedelta(days=1)).isoformat(), TOK_MARACAJA, **{"situation": "[1,2]"}) if ok_florence(t, "maracaja", CCS_PACOTE_MA)]
     if PACOTE == "maracaja":
         setembro_pago = dedup_multi([t for t in setembro_pago if ok_florence(t, "icara", [CC_MARACAJA_IC])], ma_mes)
     else:
@@ -232,7 +239,7 @@ if PACOTE == "icara":
 elif PACOTE == "maracaja":
     desp_aberto = dedup_multi([t for t in desp_ic if ok_florence(t, "icara", [CC_MARACAJA_IC])], [t for t in desp_ma if ok_florence(t, "maracaja", [CC_MARACAJA_MA])])
 else:
-    desp_aberto = dedup_multi([t for t in desp_ic if ok_florence(t, "icara")], [t for t in desp_ma if ok_florence(t, "maracaja")])
+    desp_aberto = dedup_multi([t for t in desp_ic if ok_florence(t, "icara", CCS_GLOBAL)], [t for t in desp_ma if ok_florence(t, "maracaja", CCS_GLOBAL)])
 g_desp_aberto = agrupa_por_categoria(desp_aberto)
 total_desp_aberto = sum(v for v, _ in g_desp_aberto.values())
 
@@ -246,7 +253,7 @@ if PACOTE == "icara":
 elif PACOTE == "maracaja":
     inad = dedup_multi([t for t in inad_ic if ok_florence(t, "icara", [CC_MARACAJA_IC])], [t for t in inad_ma if ok_florence(t, "maracaja", [CC_MARACAJA_MA])])
 else:
-    inad = dedup_multi([t for t in inad_ic if ok_florence(t, "icara")], [t for t in inad_ma if ok_florence(t, "maracaja")])
+    inad = dedup_multi([t for t in inad_ic if ok_florence(t, "icara", CCS_GLOBAL)], [t for t in inad_ma if ok_florence(t, "maracaja", CCS_GLOBAL)])
 g_inad = agrupa_por_categoria(inad)
 total_inad = sum(v for v, _ in g_inad.values())
 inad_boleto = [t for t in inad if tem_tag(t, TAG_BOLETO_ICARA)]  # licença Maracajá não tem TAG boleto
@@ -255,8 +262,8 @@ total_inad_boleto = sum(v for v, _ in g_inad_boleto.values())
 
 # previsão mês corrente (pago + pendente) e mês seguinte (2 licenças + dedup)
 def _pacote_mes(ini, fim):
-    ic = [t for t in tx_list(ini, fim, TOK_ICARA) if ok_florence(t, "icara", None if PACOTE=="global" else ([CC_ICARA] if PACOTE=="icara" else [CC_MARACAJA_IC]))]
-    ma = [t for t in tx_list(ini, fim, TOK_MARACAJA) if ok_florence(t, "maracaja", None if PACOTE=="global" else [CC_MARACAJA_MA])]
+    ic = [t for t in tx_list(ini, fim, TOK_ICARA) if ok_florence(t, "icara", CCS_PACOTE_IC)]
+    ma = [t for t in tx_list(ini, fim, TOK_MARACAJA) if ok_florence(t, "maracaja", CCS_PACOTE_MA)]
     if PACOTE == "icara":
         return ic
     if PACOTE == "maracaja":
@@ -285,7 +292,7 @@ if PACOTE == "icara":
 elif PACOTE == "maracaja":
     sem_rec = dedup_multi([t for t in sem_ic if ok_florence(t, "icara", [CC_MARACAJA_IC])], [t for t in sem_ma if ok_florence(t, "maracaja", [CC_MARACAJA_MA])])
 else:
-    sem_rec = dedup_multi([t for t in sem_ic if ok_florence(t, "icara")], [t for t in sem_ma if ok_florence(t, "maracaja")])
+    sem_rec = dedup_multi([t for t in sem_ic if ok_florence(t, "icara", CCS_GLOBAL)], [t for t in sem_ma if ok_florence(t, "maracaja", CCS_GLOBAL)])
 g_sem = agrupa_por_categoria(sem_rec)
 total_sem = sum(v for v, _ in g_sem.values())
 sem_boleto = [t for t in sem_rec if tem_tag(t, TAG_BOLETO_ICARA)]
@@ -299,12 +306,13 @@ total_sem_boleto = sum(v for v, _ in g_sem_boleto.values())
 def tx_previstos(ini, fim):
     """Lançamentos previstos (situation=0) no CC do pacote, das 2 licenças, com dedup."""
     out = []
-    for licenca, tok, cc in [("icara", TOK_ICARA, CC_MARACAJA_IC), ("maracaja", TOK_MARACAJA, CC_MARACAJA_MA)]:
-        if PACOTE == "icara":
-            if licenca != "icara": continue
-            cc = CC_ICARA
-        elif PACOTE == "maracaja":
-            if licenca != "maracaja": continue
+    # pacote -> CCs usados na lic ICARA e na lic MA (icara não tem CC Içara na lic MA)
+    mapa = {"icara": ([CC_ICARA], None),
+            "maracaja": ([CC_MARACAJA_IC], [CC_MARACAJA_MA]),
+            "global": (CCS_GLOBAL, CCS_GLOBAL)}[PACOTE]
+    for licenca, tok, ccs in [("icara", TOK_ICARA, mapa[0]), ("maracaja", TOK_MARACAJA, mapa[1])]:
+        if ccs is None:
+            continue  # pacote não usa CC desta licença (icara não tem CC Içara na lic MA)
         raw, page = [], 1
         while True:
             url = (f"{BASE}/transaction/v1/transactions/list?start_date={ini}&end_date={fim}"
@@ -314,7 +322,7 @@ def tx_previstos(ini, fim):
             if len(tl) < 100: break
             page += 1
         for t in raw:
-            if ok_florence(t, licenca, ccs_permitidos=[cc] if PACOTE != "global" else None):
+            if ok_florence(t, licenca, ccs_permitidos=ccs):
                 t["_lic"] = licenca
                 out.append(t)
     if PACOTE == "icara":
