@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-# Relatórios Semanais — FLORENCE (Içara / Maracajá / Global) — v2.0, 2026-10-13 (motor v1.4 Bem Viver)
-#   v2.0 (feedback Vinícius 13/10): SOMA dos lançamentos das DUAS licenças (sem dedup) — o CC
-#     FLORENCE MARACAJÁ existe nas duas licenças (170264 na lic ICARA + 171849 na lic MA) e os
-#     valores devem ser SOMADOS; 3 grupos de relatórios: ICARA, MARACAJÁ (soma das 2 licenças)
-#     e GLOBAL (soma de tudo).
-#   v1.0, 2026-09-22 (motor v1.4 Bem Viver): dedup multi-conjunto — SUBSTITUÍDO pela soma em v2.0.
+# Relatórios Semanais — FLORENCE (Içara / Maracajá / Global) — v2.1, 2026-10-13 (motor v1.4 Bem Viver)
+#   v2.1 (feedback Vinícius 13/10): manter o dedup multi-conjunto — lançamentos DUPLICADOS entre
+#     as licenças (mesma compra sincronizada nas 2, ex. ago/26 espelho) contam UMA vez; os
+#     exclusivos de cada licença entram normalmente. Vinícius não pode deletar na origem.
+#   v2.0 (13/10): soma sem dedup — REVERTIDA no mesmo dia (duplicava ago inteiro).
+#   v1.0, 2026-09-22 (motor v1.4 Bem Viver).
 # Uso: python3 relatorio_florence.py [YYYY-MM-DD] [icara|maracaja|global]  (default: hoje, global)
 # Gera UM PDF + UM Excel por pacote com os 11 relatórios + Comparativo 13 meses em PDF PAISAGEM.
-# Fonte: API Controlle v1 — DUAS licenças (Içara + Maracajá) SOMADAS.
+# Fonte: API Controlle v1 — DUAS licenças (Içara + Maracajá) com dedup entre elas.
 # Envio: segunda-feira 15:00 → raulroliveira@hotmail.com + financeirodaflorence@gmail.com
 import json, os, sys, urllib.request
 from collections import defaultdict
@@ -57,6 +57,23 @@ def tx_list(start, end, token, **filtros):
         if len(tl) < 100:
             return out
         page += 1
+
+def dedup_multi(base_txs, extra_txs):
+    """Junta duas licenças sem duplicar: base inteira + extras que excedam a contagem
+    de ocorrências da mesma chave (data, valor, descrição) na base."""
+    from collections import Counter
+    conta_base = Counter(chave_dedup(t) for t in base_txs)
+    vistos = Counter()
+    novos = []
+    for t in extra_txs:
+        k = chave_dedup(t)
+        vistos[k] += 1
+        if vistos[k] > conta_base.get(k, 0):
+            novos.append(t)
+    return base_txs + novos
+
+def chave_dedup(t):
+    return ((t.get("dt_billing") or t.get("dt_due") or "")[:10], t["value_in_cent"], (t.get("ds_transaction") or "")[:30])
 
 def brl(cents):
     v = cents / 100
@@ -135,8 +152,8 @@ FIM_MES_ANT_LABEL = FIM_MES_ANT.strftime("%d/%m/%Y")
 SEM_LABEL = f"{INI_SEM.strftime('%d/%m/%Y')} até {FIM_SEM.strftime('%d/%m/%Y')}"
 
 # ===== dados =====
-# Duas licenças SOMADAS (v2.0 — sem dedup): lançamentos das duas licenças são DISTINTOS.
-# Pacotes: icara = CC Içara (lic ICARA) · maracaja = CC Maracajá (ambas as licenças, SOMA) · global = tudo (SOMA).
+# Duas licenças com DEDUP (v2.1): duplicados entre licenças contam UMA vez; exclusivos entram.
+# Pacotes: icara = CC Içara (lic ICARA) · maracaja = CC Maracajá (2 licenças, dedup) · global = tudo (dedup).
 # saldos por conta no dia anterior (todas as contas ativas das 2 licenças, com sufixo da licença)
 saldos_conta = []
 for lic_nome, tok in [("Içara", TOK_ICARA), ("Maracajá", TOK_MARACAJA)]:
@@ -160,10 +177,10 @@ for ini_m, fim_m, lab in meses_13:
         b = req(f"{BASE}/transaction/v1/transactions/balances?start_date={ini_m}&end_date={fim_m}", tok)["results"]
         rev += b["revenuesDone"]; exp += b["expensesDone"]; sal += b["balanceDone"]
     serie_13.append((lab, rev, exp, sal))
-# matriz por categoria: lançamentos realizados (sit 1,2) das 2 licenças SOMADAS (v2.0)
+# matriz por categoria: lançamentos realizados (sit 1,2) das 2 licenças com dedup multi-conjunto
 tx_icara_raw = tx_list(meses_13[0][0], min(meses_13[-1][1], DIA_ANT.isoformat()), TOK_ICARA, **{"situation": "[1,2]"})
 tx_maracaja_raw = tx_list(meses_13[0][0], min(meses_13[-1][1], DIA_ANT.isoformat()), TOK_MARACAJA, **{"situation": "[1,2]"})
-tx_global = tx_icara_raw + tx_maracaja_raw
+tx_global = dedup_multi(tx_icara_raw, tx_maracaja_raw)
 if PACOTE == "icara":
     tx_13m = [t for t in tx_icara_raw if ok_florence(t, "icara", ccs_permitidos=[CC_ICARA])]
 elif PACOTE == "maracaja":
@@ -181,16 +198,16 @@ setembro_pago = [t for t in tx_list(MES_REF.isoformat(), (add_months(MES_REF,1)-
 if PACOTE in ("maracaja", "global"):
     ma_mes = [t for t in tx_list(MES_REF.isoformat(), (add_months(MES_REF,1)-timedelta(days=1)).isoformat(), TOK_MARACAJA, **{"situation": "[1,2]"}) if ok_florence(t, "maracaja", None if PACOTE=="global" else [CC_MARACAJA_MA])]
     if PACOTE == "maracaja":
-        setembro_pago = [t for t in setembro_pago if ok_florence(t, "icara", [CC_MARACAJA_IC])] + ma_mes
+        setembro_pago = dedup_multi([t for t in setembro_pago if ok_florence(t, "icara", [CC_MARACAJA_IC])], ma_mes)
     else:
-        setembro_pago = setembro_pago + ma_mes
+        setembro_pago = dedup_multi(setembro_pago, ma_mes)
 cons_rec = agrupa_por_categoria(setembro_pago, so_positivas=True)
 cons_desp = agrupa_por_categoria(setembro_pago, so_negativas=True)
 cons_entradas = sum(v for v, _ in cons_rec.values())
 cons_saidas = sum(v for v, _ in cons_desp.values())
 cons_resultado = cons_entradas + cons_saidas
 
-# despesas em aberto até fim do mês anterior (2 licenças SOMADAS)
+# despesas em aberto até fim do mês anterior (2 licenças + dedup)
 desp_ic = [t for t in tx_list(f"{FIM_MES_ANT.year}-01-01", FIM_MES_ANT.isoformat(), TOK_ICARA, **{"activity_type": "0", "situation": "[0]"})
            if bdate(t) <= FIM_MES_ANT.isoformat()]
 desp_ma = [t for t in tx_list(f"{FIM_MES_ANT.year}-01-01", FIM_MES_ANT.isoformat(), TOK_MARACAJA, **{"activity_type": "0", "situation": "[0]"})
@@ -198,13 +215,13 @@ desp_ma = [t for t in tx_list(f"{FIM_MES_ANT.year}-01-01", FIM_MES_ANT.isoformat
 if PACOTE == "icara":
     desp_aberto = [t for t in desp_ic if ok_florence(t, "icara", [CC_ICARA])]
 elif PACOTE == "maracaja":
-    desp_aberto = [t for t in desp_ic if ok_florence(t, "icara", [CC_MARACAJA_IC])] + [t for t in desp_ma if ok_florence(t, "maracaja", [CC_MARACAJA_MA])]
+    desp_aberto = dedup_multi([t for t in desp_ic if ok_florence(t, "icara", [CC_MARACAJA_IC])], [t for t in desp_ma if ok_florence(t, "maracaja", [CC_MARACAJA_MA])])
 else:
-    desp_aberto = [t for t in desp_ic if ok_florence(t, "icara")] + [t for t in desp_ma if ok_florence(t, "maracaja")]
+    desp_aberto = dedup_multi([t for t in desp_ic if ok_florence(t, "icara")], [t for t in desp_ma if ok_florence(t, "maracaja")])
 g_desp_aberto = agrupa_por_categoria(desp_aberto)
 total_desp_aberto = sum(v for v, _ in g_desp_aberto.values())
 
-# inadimplência até fim do mês anterior (2 licenças SOMADAS)
+# inadimplência até fim do mês anterior (2 licenças + dedup)
 inad_ic = [t for t in tx_list(f"{FIM_MES_ANT.year}-01-01", FIM_MES_ANT.isoformat(), TOK_ICARA, **{"activity_type": "1", "situation": "[0]"})
            if bdate(t) <= FIM_MES_ANT.isoformat()]
 inad_ma = [t for t in tx_list(f"{FIM_MES_ANT.year}-01-01", FIM_MES_ANT.isoformat(), TOK_MARACAJA, **{"activity_type": "1", "situation": "[0]"})
@@ -212,24 +229,24 @@ inad_ma = [t for t in tx_list(f"{FIM_MES_ANT.year}-01-01", FIM_MES_ANT.isoformat
 if PACOTE == "icara":
     inad = [t for t in inad_ic if ok_florence(t, "icara", [CC_ICARA])]
 elif PACOTE == "maracaja":
-    inad = [t for t in inad_ic if ok_florence(t, "icara", [CC_MARACAJA_IC])] + [t for t in inad_ma if ok_florence(t, "maracaja", [CC_MARACAJA_MA])]
+    inad = dedup_multi([t for t in inad_ic if ok_florence(t, "icara", [CC_MARACAJA_IC])], [t for t in inad_ma if ok_florence(t, "maracaja", [CC_MARACAJA_MA])])
 else:
-    inad = [t for t in inad_ic if ok_florence(t, "icara")] + [t for t in inad_ma if ok_florence(t, "maracaja")]
+    inad = dedup_multi([t for t in inad_ic if ok_florence(t, "icara")], [t for t in inad_ma if ok_florence(t, "maracaja")])
 g_inad = agrupa_por_categoria(inad)
 total_inad = sum(v for v, _ in g_inad.values())
 inad_boleto = [t for t in inad if tem_tag(t, TAG_BOLETO_ICARA)]  # licença Maracajá não tem TAG boleto
 g_inad_boleto = agrupa_por_categoria(inad_boleto)
 total_inad_boleto = sum(v for v, _ in g_inad_boleto.values())
 
-# previsão mês corrente (pago + pendente) e mês seguinte (2 licenças SOMADAS)
+# previsão mês corrente (pago + pendente) e mês seguinte (2 licenças + dedup)
 def _pacote_mes(ini, fim):
     ic = [t for t in tx_list(ini, fim, TOK_ICARA) if ok_florence(t, "icara", None if PACOTE=="global" else ([CC_ICARA] if PACOTE=="icara" else [CC_MARACAJA_IC]))]
     ma = [t for t in tx_list(ini, fim, TOK_MARACAJA) if ok_florence(t, "maracaja", None if PACOTE=="global" else [CC_MARACAJA_MA])]
     if PACOTE == "icara":
         return ic
     if PACOTE == "maracaja":
-        return [t for t in ic if ok_florence(t, "icara", [CC_MARACAJA_IC])] + ma
-    return ic + ma
+        return dedup_multi([t for t in ic if ok_florence(t, "icara", [CC_MARACAJA_IC])], ma)
+    return dedup_multi(ic, ma)
 
 prev_mes = _pacote_mes(MES_REF.isoformat(), (add_months(MES_REF,1)-timedelta(days=1)).isoformat())
 g_prev_rec = agrupa_por_categoria(prev_mes, so_positivas=True)
@@ -243,7 +260,7 @@ g_seg_desp = agrupa_por_categoria(prev_seg, so_negativas=True)
 seg_entradas, seg_saidas = sum(v for v,_ in g_seg_rec.values()), sum(v for v,_ in g_seg_desp.values())
 seg_resultado = seg_entradas + seg_saidas
 
-# previsão de receitas da semana (não pagas) — geral e apenas boleto (2 licenças SOMADAS)
+# previsão de receitas da semana (não pagas) — geral e apenas boleto (2 licenças + dedup)
 sem_ic = [t for t in tx_list(INI_SEM.isoformat(), FIM_SEM.isoformat(), TOK_ICARA, **{"activity_type": "1", "situation": "[0]"})
           if INI_SEM.isoformat() <= bdate(t) <= FIM_SEM.isoformat()]
 sem_ma = [t for t in tx_list(INI_SEM.isoformat(), FIM_SEM.isoformat(), TOK_MARACAJA, **{"activity_type": "1", "situation": "[0]"})
@@ -251,9 +268,9 @@ sem_ma = [t for t in tx_list(INI_SEM.isoformat(), FIM_SEM.isoformat(), TOK_MARAC
 if PACOTE == "icara":
     sem_rec = [t for t in sem_ic if ok_florence(t, "icara", [CC_ICARA])]
 elif PACOTE == "maracaja":
-    sem_rec = [t for t in sem_ic if ok_florence(t, "icara", [CC_MARACAJA_IC])] + [t for t in sem_ma if ok_florence(t, "maracaja", [CC_MARACAJA_MA])]
+    sem_rec = dedup_multi([t for t in sem_ic if ok_florence(t, "icara", [CC_MARACAJA_IC])], [t for t in sem_ma if ok_florence(t, "maracaja", [CC_MARACAJA_MA])])
 else:
-    sem_rec = [t for t in sem_ic if ok_florence(t, "icara")] + [t for t in sem_ma if ok_florence(t, "maracaja")]
+    sem_rec = dedup_multi([t for t in sem_ic if ok_florence(t, "icara")], [t for t in sem_ma if ok_florence(t, "maracaja")])
 g_sem = agrupa_por_categoria(sem_rec)
 total_sem = sum(v for v, _ in g_sem.values())
 sem_boleto = [t for t in sem_rec if tem_tag(t, TAG_BOLETO_ICARA)]
