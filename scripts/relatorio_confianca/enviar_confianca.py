@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # Envio dos Relatórios Mensais ARAGUARI / DIAMANTINA / UNIFICADO por e-mail (Resend).
 # Uso: python3 enviar_confianca.py <unidade>  (araguari | diamantina | ambas | ... | ipatinga1)
+# Destinatários (14/10, pedido Vinícius): vinicius@ + henrique@terceirizou.com.br.
 import base64, json, os, sys, urllib.request
 from datetime import date
 
@@ -20,7 +21,7 @@ UN = UNIDADES[_un]
 
 API = "https://api.resend.com/emails"
 FROM = "Terceirizou <financeiro@terceirizou.com.br>"
-TO = ["vinicius@terceirizou.com.br"]
+TO = ["vinicius@terceirizou.com.br", "henrique@terceirizou.com.br"]
 
 _key_path = os.environ.get("RESEND_KEY_PATH") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "95b7f382c0a1ba1d", "resend_key.txt")
 KEY = os.environ.get("RESEND_API_KEY") or (open(_key_path).read().strip() if os.path.exists(_key_path) else "")
@@ -60,7 +61,8 @@ payload = {
 req = urllib.request.Request(API, data=json.dumps(payload).encode(), method="POST")
 req.add_header("Authorization", f"Bearer {KEY}")
 req.add_header("User-Agent", "terceirizou-relatorio-confianca/1.0")
-req.add_header("Idempotency-Key", f"relatorio-confianca-{_un}-{hora_pdf}-{len(anexos)}")
+destinos = "-".join(TO)
+req.add_header("Idempotency-Key", f"relatorio-confianca-{_un}-{hora_pdf}-{len(anexos)}-{destinos}")
 req.add_header("Content-Type", "application/json")
 
 with urllib.request.urlopen(req, timeout=60) as resp:

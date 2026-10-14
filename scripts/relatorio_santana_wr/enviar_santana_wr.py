@@ -3,13 +3,13 @@
 # Uso: python3 enviar_santana_wr.py [caminho-do-pdf]
 #   Sem argumento: usa o PDF de hoje (artifacts/YYMMDD_Relatorio_Santana_WR.pdf).
 # Chave Resend: scripts/95b7f382c0a1ba1d/resend_key.txt (fora do repo) ou env RESEND_API_KEY.
-# Destinatários: vinicius@terceirizou.com.br (to).
+# Destinatários (14/10, pedido Vinícius): vinicius@ + henrique@terceirizou.com.br.
 import base64, json, os, sys, urllib.request
 from datetime import date
 
 API = "https://api.resend.com/emails"
 FROM = "Terceirizou <financeiro@terceirizou.com.br>"
-TO = ["vinicius@terceirizou.com.br"]
+TO = ["vinicius@terceirizou.com.br", "henrique@terceirizou.com.br"]
 BCC = []
 
 _key_path = os.environ.get("RESEND_KEY_PATH") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "95b7f382c0a1ba1d", "resend_key.txt")
