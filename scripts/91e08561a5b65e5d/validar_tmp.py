@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""Valida tmp/polling (ou SPOT_DIR) contra o estado do 91e0856 — hash do DICT pós-transform.
-
-ESTADO_PATH (2026-10-09): permite validar o tmp de QUALQUER job contra o SEU estado
-(ex.: SPOT_DIR=tmp/polling_a5b0 ESTADO_PATH=scripts/a5b0d6956d407911/estado.json).
-Antes o estado do 91e0856 era fixo — validar o tmp do a5b0 gerava MISS falso nas
-linhas que existem só no estado do a5b0 (ex.: linhas de teste F1-T04 da Jun).
-"""
+"""Valida tmp/polling (ou SPOT_DIR) contra o estado do 91e0856 — hash do DICT pós-transform."""
 import json, re, hashlib, os, sys
 
 BASE = '/home/ethos/.assistant/workspace'
@@ -38,6 +32,10 @@ for row in jun_raw:
     rows_jun.append({h: (row[i] if i < len(row) else '') for i, h in enumerate(JUN_H)})
 
 cad_raw = json.load(open(os.path.join(SRC_DIR, 'meta_ads_cadastro.json')))['values']
+# NORMALIZA Cadastro como o transform.py (2026-10-14): o estado foi gerado com
+# conjunto/campanha VAZIOS (13-col truncado), mas a leitura live A1:O200 traz 15
+# colunas preenchidas → sem esse corte o validador acusa 27 misses falsos.
+cad_raw = [r[:13] + [''] * max(0, 13 - len(r)) for r in cad_raw]
 rows_cad = [{h: (row[i] if i < len(row) else '') for i, h in enumerate(CAD_H)} for row in cad_raw]
 
 def chave(r):
@@ -50,6 +48,17 @@ def hdict(r):
     return hashlib.sha256(json.dumps(r, ensure_ascii=False).encode('utf-8')).hexdigest()
 
 ok = True
+# Linhas estruturais que nunca existem no estado (aviso da Cora, linha vazia, headers)
+def estrutural(r, name):
+    first = (r.get('data_envio') or r.get('Data/Hora') or '')
+    if first == 'data_envio' or first == 'Data/Hora':
+        return True  # header
+    if first == '' and not any(str(v).strip() for v in r.values() if v):
+        return True  # linha vazia
+    if str(first).startswith('Atenção:'):
+        return True  # aviso da Cora
+    return False
+
 for name, rows in [('cora', rows_cora), ('meta_ads_jun', rows_jun), ('meta_ads_cadastro', rows_cad)]:
     est_src = est.get(name, {})
     all_hashes = set()
@@ -61,15 +70,14 @@ for name, rows in [('cora', rows_cora), ('meta_ads_jun', rows_jun), ('meta_ads_c
     for r in rows:
         h = hdict(r)
         if h in all_hashes: match += 1
+        elif estrutural(r, name):
+            pass  # aviso/linha vazia/header — nunca devem casar (estrutural)
         else:
             miss += 1
             miss_list.append((chave(r), r.get('Data/Hora') or r.get('data_envio',''), (r.get('Nome completo') or r.get('nome',''))[:40]))
     print(f'{name}: {match} match / {miss} miss / {len(est_src)} chaves no estado')
     for m in miss_list:
         print('   MISS:', m)
-    if miss > 0: ok = False
-
-if not ok:
-    print('RESULTADO: DIVERGÊNCIA')
-    sys.exit(1)
-print('RESULTADO: OK')
+        ok = False
+print('RESULTADO:', 'OK' if ok else 'DIVERGÊNCIA')
+sys.exit(0 if ok else 1)
