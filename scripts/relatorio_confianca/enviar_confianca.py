@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
-# Envio dos Relatórios Mensais das VISTORIAS da licença CONFIANÇA por e-mail (Resend).
-# Uso: python3 enviar_confianca.py <unidade>
-# Unidades: araguari | diamantina | caratinga | pirapora | joao_monlevade | teofoli_otoni | ambas | quatro
-# Chave Resend: scripts/95b7f382c0a1ba1d/resend_key.txt (fora do repo) ou env RESEND_API_KEY.
-# Destinatário: vinicius@terceirizou.com.br.
+# Envio dos Relatórios Mensais ARAGUARI / DIAMANTINA / UNIFICADO por e-mail (Resend).
+# Uso: python3 enviar_confianca.py <unidade>  (araguari | diamantina | ambas | ... | ipatinga1)
 import base64, json, os, sys, urllib.request
 from datetime import date
 
@@ -14,6 +11,7 @@ UNIDADES = {
     "pirapora":   {"nome": "PIRAPORA VISTORIA",   "arq": "Pirapora"},
     "joao_monlevade": {"nome": "JOÃO MONLEVADE VISTORIA", "arq": "Joao_Monlevade"},
     "teofoli_otoni":  {"nome": "TEÓFILO OTONI VISTORIA",  "arq": "Teofoli_Otoni"},
+    "ipatinga1":  {"nome": "IPATINGA 1 VISTORIA",  "arq": "Ipatinga_1"},
     "ambas":      {"nome": "ARAGUARI + DIAMANTINA VISTORIA (unificado)", "arq": "Araguari_Diamantina"},
     "quatro":     {"nome": "PIRAPORA + CARATINGA + JOÃO MONLEVADE + TEÓFILO OTONI VISTORIA (unificado)", "arq": "Quatro_Unidades"},
 }
