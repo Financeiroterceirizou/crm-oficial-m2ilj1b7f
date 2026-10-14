@@ -6,6 +6,13 @@ BASE = '/home/ethos/.assistant/workspace'
 SRC_DIR = os.environ.get('SPOT_DIR', os.path.join(BASE, 'tmp/polling'))
 est = json.load(open(os.environ.get('ESTADO_PATH', os.path.join(BASE, 'scripts/91e08561a5b65e5d/estado.json'))))
 
+def _load_values(path):
+    d = json.load(open(path))
+    if isinstance(d, dict) and 'values' not in d and isinstance(d.get('data'), dict):
+        d = d['data']
+    return d['values']
+
+
 def normalizar_telefone(t):
     if not t: return ''
     d = re.sub(r'\D', '', str(t))
@@ -21,17 +28,17 @@ CORA_H = ['data_envio','nome','cnpj_ou_cpf','tipo_empresa','email','telefone','s
 JUN_H = ['Data/Hora','Nome completo','Email','Telefone','segmento','cargo','gestao_financeira','problema','motivacao','anuncio','conjunto','campanha']
 CAD_H = ['Data/Hora','Nome completo','Email','Telefone','cargo','funcionarios','faturamento','gestao_financeira','problema','interesse','investimento','motivacao','anuncio','conjunto','campanha']
 
-cora_raw = json.load(open(os.path.join(SRC_DIR, 'cora.json')))['values']
+cora_raw = _load_values(os.path.join(SRC_DIR, 'cora.json'))
 rows_cora = [{h: (row[i] if i < len(row) else '') for i, h in enumerate(CORA_H)} for row in cora_raw]
 
-jun_raw = json.load(open(os.path.join(SRC_DIR, 'meta_ads_jun.json')))['values']
+jun_raw = _load_values(os.path.join(SRC_DIR, 'meta_ads_jun.json'))
 rows_jun = []
 for row in jun_raw:
     if len(row) > 12:
         row = row[:4] + row[5:]
     rows_jun.append({h: (row[i] if i < len(row) else '') for i, h in enumerate(JUN_H)})
 
-cad_raw = json.load(open(os.path.join(SRC_DIR, 'meta_ads_cadastro.json')))['values']
+cad_raw = _load_values(os.path.join(SRC_DIR, 'meta_ads_cadastro.json'))
 # NORMALIZA Cadastro como o transform.py (2026-10-14): o estado foi gerado com
 # conjunto/campanha VAZIOS (13-col truncado), mas a leitura live A1:O200 traz 15
 # colunas preenchidas → sem esse corte o validador acusa 27 misses falsos.

@@ -31,12 +31,7 @@ HEADERS = {
         'servico_desejado', 'ramo_atividade', 'segmento', 'estado', 'cidade',
         'preferencia_atendimento', 'status_atendimento', 'observação/comentários'
     ],
-    # A aba Jun TINHA a coluna extra "É prestador de serviços?" (índice 4),
-    # descartada. FIX 2026-09-17: a planilha foi editada e PERDEU essa coluna
-    # (12 colunas ao vivo) — o descarte fixo por índice deslocava tudo:
-    # segmento cortado, anuncio recebendo conjunto, respostas erradas no CRM
-    # (14 updates errados em 17/09 02:10, revertidos via PATCH admin).
-    # Agora o descarte só ocorre se o header real tiver >12 colunas.
+    # A aba Jun tem a coluna extra "É prestador de serviços?" (índice 4), descartada.
     'meta_ads_jun': [
         'Data/Hora', 'Nome completo', 'Email', 'Telefone',
         'segmento', 'cargo', 'gestao_financeira', 'problema', 'motivacao',
@@ -74,6 +69,11 @@ def main():
             data = json.load(f)
 
         # MCP format: {"values": [[row1], [row2], ...]} — tolera lista crua.
+        # (2026-10-14) tolera também o wrapper {"data": {"values": [...]}} que o
+        # values_get do googlesheets retorna — sem isso o transform pula a fonte
+        # inteira (WARN) e regrava o canônico sem ela.
+        if isinstance(data, dict) and 'values' not in data and isinstance(data.get('data'), dict):
+            data = data['data']
         if isinstance(data, dict):
             raw_values = data.get('values', [])
         elif isinstance(data, list):
@@ -96,11 +96,23 @@ def main():
             if header_idx is not None:
                 raw_values = raw_values[header_idx + 1:]
 
-        # Jun: descarta a coluna extra "É prestador de serviços?" APENAS se
-        # presente no header real (>12 colunas). Ver fix 2026-09-17 acima.
+        # Jun: descarta a coluna extra "É prestador de serviços?" APENAS se presente
+        # no header real (fix 2026-09-17: a planilha Jun foi editada e PERDEU essa
+        # coluna — ficou com 12 colunas; o descarte fixo por índice deslocava tudo:
+        # segmento cortado, anuncio recebendo conjunto, respostas erradas no CRM).
         if source_name == 'meta_ads_jun':
             if raw_values and len(raw_values[0]) > 12:
                 raw_values = [r[:4] + r[5:] for r in raw_values]
+
+        # Cadastro: NORMALIZA para o formato canônico do estado (2026-10-13).
+        # Os hashes do estado.json (91e0856 E a5b0) foram gerados com conjunto/
+        # campanha VAZIOS (formato 13-col truncado antigo), mas a leitura MCP ao
+        # vivo (A1:O200) traz as 2 colunas PREENCHIDAS → sem essa normalização cada
+        # rodada ao vivo diverge 0/27 do estado e aplicaria ~27 updates de campanha
+        # no CRM (ping-pong com o cache 13-col na rodada seguinte). Zerar aqui deixa
+        # o pipeline idempotente nos dois formatos de entrada.
+        if source_name == 'meta_ads_cadastro':
+            raw_values = [r[:13] + [''] * max(0, 13 - len(r)) for r in raw_values]
 
         output[source_name] = transform_rows(raw_values, headers)
 
@@ -109,7 +121,7 @@ def main():
         # → processar.py re-processaria TODAS as linhas (re-sync em massa).
         # Aborta (exit 1) antes de gravar o input; o run.sh (set -euo pipefail)
         # interrompe antes do processar.py. Agente deve re-ler as planilhas com
-        # value_render_option=FORMATTED_VALUE e salvar tmp/polling/*.json de novo.
+        # value_render_option=FORMATTED_VALUE e salvar tmp/polling/{source_name}.json de novo.
         col_data = 'data_envio' if source_name == 'cora' else 'Data/Hora'
         suspeitas = [r.get(col_data) for r in output[source_name]
                      if isinstance(r.get(col_data), (int, float))

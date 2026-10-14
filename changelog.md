@@ -2,6 +2,8 @@
 
 > Registro de tudo que acontece no projeto, em ordem cronológica inversa.
 
+- 2026-10-14 · [Adapta/Ethos] · Polling F1-T05 (`91e0856`): fix de tolerância ao wrapper `{"data":{"values":[...]}}` no `transform.py` e no `validar_tmp.py` — o `values_get` do googlesheets retorna esse envelope, e o transform pulava a fonte inteira (WARN) e regravava o canônico sem ela (incidente 00:40). Rodada 00:47 com leitura MCP ao vivo (Cora 72, Jun 21, Cad 27 == canônico): 0 criados / 0 atualizados / 38 ignorados, estado 71/21/27, CRM intocado, sem lead novo (última Jun: Ricardo 01/10).
+
 - 2026-10-06 · [Vinícius/Champion] · B4-201 F4 `5ef4b7cd` fechado: basta ter motivo de perda explícito, sem lista adicional de motivos permitidos; prestador de serviço com CNPJ; captação há pelo menos 90 dias; sem interação há pelo menos 60 dias. Descadastro/`nao_contatar`/bounce permanente continuam fora. Nenhum código alterado.
 - 2026-10-06 · [Vinícius/Champion] · Decisão B4-202 F4 `5ef4b7cd`: consentimento explícito não será requisito obrigatório; uma base legal alternativa aplicável a cada lead deve ser documentada e validada antes da inclusão na fila. Descadastro/`nao_contatar` seguem excluídos e nenhum contato sai sem aprovação humana. A SPEC-4-002 ainda traz a regra anterior; a task permanece bloqueada até o consultor alinhar a SPEC e concluir a validação. Nenhum código alterado.
 
