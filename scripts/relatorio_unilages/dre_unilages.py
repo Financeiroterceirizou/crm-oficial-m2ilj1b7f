@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-# DRE GERENCIAL — UNILAGES (CC SAO JOAQUIM) — v1.0, 2026-10-15
+# DRE GERENCIAL — UNILAGES (CC SAO JOAQUIM) — v1.1, 2026-10-15
+#   v1.1 (pedido Vinícius 15/10): seção DESPESAS DETALHADAS — despesa por despesa agrupada por
+#     categoria (data, descrição, conta, valor), no PDF (página própria) e aba no Excel.
 #   Formato: entradas e saídas por categoria NA ORDEM DO PLANO DE CONTAS do Controlle
 #   (árvore pai→filho, raízes e filhos ordenados pelo CÓDIGO da categoria), só categorias com
 #   movimentação no mês de referência. Regime de CAIXA (situation in 1,2, mês por dt_billing).
@@ -14,7 +16,7 @@ from reportlab.lib.units import cm
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-                                Image as RLImage, KeepTogether)
+                                PageBreak, Image as RLImage, KeepTogether)
 
 BASE = "https://api-v1.controlle.com"
 _dir = os.path.dirname(os.path.abspath(__file__))
@@ -156,6 +158,7 @@ resultado = tot_rec + tot_desp
 styles = getSampleStyleSheet()
 h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=16, textColor=PRETO, spaceAfter=4)
 h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontSize=12, textColor=LARANJA, spaceBefore=14, spaceAfter=3)
+h3 = ParagraphStyle("h3", parent=styles["Heading3"], fontSize=10, textColor=PRETO, spaceBefore=10, spaceAfter=3)
 sub = ParagraphStyle("sub", parent=styles["Normal"], fontName="Helvetica-Oblique", fontSize=8.5, textColor=colors.HexColor("#777777"), spaceAfter=10)
 cell = ParagraphStyle("cell", parent=styles["Normal"], fontSize=8)
 cellb = ParagraphStyle("cellb", parent=styles["Normal"], fontSize=8, fontName="Helvetica-Bold")
@@ -219,6 +222,31 @@ t = tabela(dre_rows, [11*cm, 2.5*cm, 3*cm])
 t.setStyle(TableStyle([("BACKGROUND", (0,len(dre_rows)-3), (-1,len(dre_rows)-1), LARANJA_CLARO)]))
 E.append(t)
 
+# ===== Despesas detalhadas (despesa por despesa) =====
+E.append(PageBreak())
+E.append(P(f"Despesas Detalhadas — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year} (regime de caixa)", h2))
+desp_tx = sorted([t for t in mes_tx if t["value_in_cent"] < 0], key=bdate)
+por_cat_d = defaultdict(list)
+for t in desp_tx:
+    _, nome = cat_id_nome(t)
+    por_cat_d[nome].append(t)
+for cat in sorted(por_cat_d):
+    txs_c = sorted(por_cat_d[cat], key=bdate)
+    rows = [[P("<b>Data</b>", cell), P("<b>Descrição</b>", cell), P("<b>Conta</b>", cell), P("<b>Valor</b>", cellr)]]
+    for t in txs_c:
+        d = bdate(t)
+        rows.append([P(f"{d[8:10]}/{d[5:7]}/{d[:4]}", cell), P((t.get("ds_transaction") or "")[:70], cell),
+                     P(t.get("ds_account_main") or "", cell), P_val(t["value_in_cent"], cellr)])
+    rows.append([P("<b>Total</b>", cellrb), P(f"<b>{cat}</b>", cellrb), P(f"<b>{len(txs_c)}</b>", cellc), P_val(sum(t["value_in_cent"] for t in txs_c), cellrb)])
+    tt = tabela(rows, [2.2*cm, 8.3*cm, 3.5*cm, 3*cm])
+    tt.setStyle(TableStyle([("BACKGROUND", (0,len(rows)-1), (-1,len(rows)-1), LARANJA_CLARO)]))
+    E.append(KeepTogether([P(f"<b>{cat}</b>", h3), tt]))
+tot_d = sum(t["value_in_cent"] for t in desp_tx)
+td_rows = [[P("<b>Total de Despesas do mês</b>", cellrb), P(f"<b>{len(desp_tx)}</b>", cellc), P_val(tot_d, cellrb, True)]]
+t = tabela(td_rows, [11*cm, 2.5*cm, 3*cm])
+t.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), LARANJA_CLARO)]))
+E.append(t)
+
 E.append(Spacer(1, 10))
 E.append(P("Gerado automaticamente pela Terceirizou · dados do Controlle", sub))
 doc.build(E, onFirstPage=rodape_simbolo, onLaterPages=rodape_simbolo)
@@ -277,5 +305,43 @@ ws.column_dimensions["A"].width = 50
 ws.column_dimensions["B"].width = 14
 ws.column_dimensions["C"].width = 16
 ws.freeze_panes = "A3"
+
+# aba de despesas detalhadas (despesa por despesa)
+ws2 = wb.create_sheet(("Detalhe Despesas " + MES_REF.strftime("%m%y"))[:31])
+ws2.append((f"Despesas Detalhadas — Unilages {CC_NOME} — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year} (regime de caixa)",))
+ws2.merge_cells(start_row=1, start_column=1, end_row=1, end_column=5)
+c2 = ws2.cell(row=1, column=1)
+c2.font = Font(bold=True, size=12, color="FF501C")
+c2.alignment = Alignment(horizontal="center", vertical="center")
+ws2.row_dimensions[1].height = 22
+ws2.append(("Categoria", "Data", "Descrição", "Conta", "Valor"))
+for cc in ws2[2]:
+    cc.fill = FILL_H
+    cc.font = FH
+    cc.alignment = Alignment(horizontal="center", vertical="center")
+for cat in sorted(por_cat_d):
+    for t in sorted(por_cat_d[cat], key=bdate):
+        d = bdate(t)
+        ws2.append((cat, f"{d[8:10]}/{d[5:7]}/{d[:4]}", (t.get("ds_transaction") or "")[:80],
+                    t.get("ds_account_main") or "", t["value_in_cent"] / 100))
+    ws2.append((f"Total {cat}", "", "", "", sum(t["value_in_cent"] for t in por_cat_d[cat]) / 100))
+    r = ws2.max_row
+    for cc in ws2[r]:
+        cc.font = Font(bold=True)
+        cc.fill = FILL_T
+ws2.append(("Total de Despesas do mês", "", "", "", tot_d / 100))
+r = ws2.max_row
+for cc in ws2[r]:
+    cc.font = Font(bold=True)
+    cc.fill = FILL_T
+for row in ws2.iter_rows(min_row=3):
+    cc = row[4]
+    if isinstance(cc.value, (int, float)):
+        cc.number_format = '"R$" #,##0.00'
+        cc.font = Font(bold=bool(row[0].font and row[0].font.bold),
+                       color=(VERDE_XL if cc.value > 0 else VERMELHO_XL if cc.value < 0 else "1A1A1A"))
+for col, w in zip("ABCDE", (40, 12, 55, 24, 16)):
+    ws2.column_dimensions[col].width = w
+ws2.freeze_panes = "A3"
 wb.save(ARQ_XLSX)
 print(f"OK: {ARQ_XLSX}")
