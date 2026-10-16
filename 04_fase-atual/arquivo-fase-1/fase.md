@@ -2,7 +2,7 @@
 
 **Fonte de verdade técnica:** projeto CRM Oficial no Skip, projectId 51268.  
 **Última atualização:** 2026-09-23.  
-**Status:** Fase 4 em andamento — 3/8 tasks concluídas.
+**Status:** Fase 1 concluída — 10/10 tasks (arquivada em 16/10/2026 durante a consolidação das pastas de fase).
 
 ## Tasks
 

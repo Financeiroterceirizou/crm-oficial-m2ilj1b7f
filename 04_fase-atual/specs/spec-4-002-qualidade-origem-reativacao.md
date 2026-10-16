@@ -144,8 +144,8 @@ Ciclo controlado: baseline (leads históricos conhecidos), montagem da fila, apr
 
 ## Tasks vinculadas
 
-| ID          | Task                                                                    | Dono    | SPEC  | Critério     | Recorte da prova                             | Evidência esperada | Pré-condições                | Status                   |
-| ----------- | ----------------------------------------------------------------------- | ------- | ----- | ------------ | -------------------------------------------- | ------------------ | ---------------------------- | ------------------------ |
-| b7c2faea    | Criar uma tela que compare quantidade e qualidade de leads por campanha | Cliente | 4-002 | CA-4-201     | GREEN qualidade com fonte/período            | tela + registros   | cd704a1c ou fallback interno | CONCLUÍDA 23/09/2026     |
-| 5ef4b7cd    | Criar uma lista de leads antigos que podem receber uma nova abordagem   | Cliente | 4-002 | CA-4-202/203 | RED sem critério + fila aprovada sem contato | fila + aceites     | b7c2faea                     | DESBLOQUEADA 16/10/2026  |
-| id pendente | Exibir qualificação e follow-up na tela do lead                         | Cliente | 4-002 | CA-4-204/205 | GREEN tela + prova negativa RLS              | tela + logs        | b7c2faea                     | BLOQUEADA · aguarda UUID |
+| ID                                   | Task                                                                    | Dono    | SPEC  | Critério     | Recorte da prova                             | Evidência esperada | Pré-condições                | Status                      |
+| ------------------------------------ | ----------------------------------------------------------------------- | ------- | ----- | ------------ | -------------------------------------------- | ------------------ | ---------------------------- | --------------------------- |
+| b7c2faea                             | Criar uma tela que compare quantidade e qualidade de leads por campanha | Cliente | 4-002 | CA-4-201     | GREEN qualidade com fonte/período            | tela + registros   | cd704a1c ou fallback interno | CONCLUÍDA 23/09/2026        |
+| 5ef4b7cd                             | Criar uma lista de leads antigos que podem receber uma nova abordagem   | Cliente | 4-002 | CA-4-202/203 | RED sem critério + fila aprovada sem contato | fila + aceites     | b7c2faea                     | CONCLUÍDA 16/10/2026        |
+| 8c2483a7-99f4-4966-a55b-0a1e7bceff9a | Exibir qualificação e follow-up na tela do lead                         | Cliente | 4-002 | CA-4-204/205 | GREEN tela + prova negativa RLS              | tela + logs        | b7c2faea                     | BLOQUEADA · aguarda análise |

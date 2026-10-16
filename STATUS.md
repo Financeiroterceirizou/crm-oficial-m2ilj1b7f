@@ -31,8 +31,9 @@
 - `src/components/dashboard/MetaLeadsRealCard.tsx`
 - `src/components/dashboard/LeadQualityCard.tsx`
 - `src/pages/Index.tsx`
-- `04-fase-atual/specs/spec-4-001-conector-meta-leitura.md`
-- `04-fase-atual/specs/spec-4-002-qualidade-origem-reativacao.md`
+- `04_fase-atual/specs/spec-4-001-conector-meta-leitura.md`
+- `04_fase-atual/specs/spec-4-002-qualidade-origem-reativacao.md`
+- `04_fase-atual/specs/spec-4-003-loops-l41-l42.md`
 
 ## `b7c2faea` — concluída
 
