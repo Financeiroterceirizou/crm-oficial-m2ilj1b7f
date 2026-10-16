@@ -42,17 +42,18 @@ routerAdd(
 
     const temCnpj = (rec) => {
       let resp = rec.get('respostas')
-      if (typeof resp === 'string') {
-        try {
-          resp = JSON.parse(resp)
-        } catch (_) {
-          resp = null
-        }
+      try {
+        // Normaliza qualquer formato do JSVM (objeto goja, Map, string) para dict puro.
+        if (typeof resp !== 'string') resp = JSON.stringify(resp)
+        resp = JSON.parse(resp)
+      } catch (_) {
+        return false
       }
       if (!resp || typeof resp !== 'object') return false
-      for (const chave in resp) {
-        if (String(chave).toLowerCase().indexOf('cnpj') !== -1) {
-          const valor = String(resp[chave] || '').trim()
+      const chaves = Object.keys(resp)
+      for (let c = 0; c < chaves.length; c++) {
+        if (String(chaves[c]).toLowerCase().indexOf('cnpj') !== -1) {
+          const valor = String(resp[chaves[c]] || '').trim()
           if (valor !== '' && valor !== '-' && valor !== 'null') return true
         }
       }
