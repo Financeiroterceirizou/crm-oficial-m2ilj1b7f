@@ -56,4 +56,4 @@
 
 ## Próximo passo
 
-Obter o alinhamento da SPEC-4-002 e a validação consultiva de B4-202; depois disso, fazer nova análise/autorização de implementação.
+B4-202 fechado em 16/10/2026: registro documental da base legal alternativa concluído e validado pelo champion (`06_notas/registro-base-legal-b4-202.md` v1.1 — legítimo interesse, art. 7º IX c/c art. 10 LGPD). SPEC-4-002 realinhada (RN-4-202/CA-4-202). Task `5ef4b7cd` desbloqueada — nova análise e autorização de implementação são o próximo passo. Pendências abertas que não bloqueiam o 1º lote: frequência máxima de reabordagem, revisão jurídica formal e política de retenção.
