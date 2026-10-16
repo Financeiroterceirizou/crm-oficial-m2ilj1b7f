@@ -131,29 +131,49 @@ routerAdd(
 
     // Marca os elegíveis como aprovados e registra a comprovação da base (v1.1).
     const agoraIso = new Date().toISOString()
-    for (let i = 0; i < registros.length; i++) {
-      const rec = registros[i]
-      if (elegiveis.indexOf(String(rec.get('lead_id'))) === -1) continue
-      let registro = rec.get('reativacao_registro')
-      if (typeof registro === 'string') {
-        try {
-          registro = JSON.parse(registro)
-        } catch (_) {
-          registro = null
+    try {
+      for (let i = 0; i < registros.length; i++) {
+        const rec = registros[i]
+        if (elegiveis.indexOf(String(rec.get('lead_id'))) === -1) continue
+        let registro = rec.get('reativacao_registro')
+        if (
+          registro !== null &&
+          registro !== undefined &&
+          typeof registro === 'object' &&
+          typeof registro.length === 'number' &&
+          typeof registro[0] === 'number'
+        ) {
+          let s = ''
+          for (let i = 0; i < registro.length; i++) s += String.fromCharCode(registro[i])
+          registro = s
         }
+        if (typeof registro === 'string') {
+          try {
+            registro = JSON.parse(registro)
+          } catch (_) {
+            registro = null
+          }
+        }
+        if (!registro || typeof registro !== 'object' || Array.isArray(registro)) registro = {}
+        registro.base = 'legitimo_interesse'
+        registro.finalidade = 'reativacao_comercial'
+        registro.versao = '1.1'
+        registro.data_avaliacao = agoraIso
+        registro.avaliado_por = operador
+        rec.set('reativacao_registro', JSON.stringify(registro))
+        rec.set('estado_fila', 'aprovado')
+        $app.save(rec)
       }
-      if (!registro || typeof registro !== 'object') registro = {}
-      registro.base = 'legitimo_interesse'
-      registro.finalidade = 'reativacao_comercial'
-      registro.versao = '1.1'
-      registro.data_avaliacao = agoraIso
-      registro.avaliado_por = operador
-      rec.set('reativacao_registro', JSON.stringify(registro))
-      rec.set('estado_fila', 'aprovado')
-      $app.save(rec)
+    } catch (err) {
+      return e.json(500, { error: 'falha_marcando_leads', detalhe: String(err) })
     }
 
-    const lote = new Record($app.findCollectionByNameOrId('reativacao_lote'))
+    let lote
+    try {
+      lote = new Record($app.findCollectionByNameOrId('reativacao_lote'))
+    } catch (err) {
+      return e.json(500, { error: 'falha_criando_lote', detalhe: String(err) })
+    }
     lote.set('lote_id', loteId)
     lote.set('regra_versao', '1.1')
     lote.set(
@@ -171,7 +191,11 @@ routerAdd(
     lote.set('aprovado_em', agoraIso)
     lote.set('estado', 'aprovado')
     lote.set('observacao', observacao)
-    $app.save(lote)
+    try {
+      $app.save(lote)
+    } catch (err) {
+      return e.json(500, { error: 'falha_salvando_lote', detalhe: String(err) })
+    }
 
     return e.json(201, {
       status: 'lote_aprovado',
