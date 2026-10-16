@@ -2,8 +2,8 @@
 // F4 5ef4b7cd: fixture de QA para provar o caminho ELEGÍVEL da fila de reativação.
 //
 // Por que migration: o caminho elegível exige lead captado há >= 90 dias; `created`
-// é autodate e não pode ser retroativo via API. Precedente: migration 0002 já semeou
-// lead de teste. A fixture é TEMPORÁRIA e claramente marcada — removida após o teste
+// é autodate e não pode ser retroativo via API. Precedente: migration 0014 re-executa
+// idempotente. A fixture é TEMPORÁRIA e claramente marcada — removida após o teste
 // humano (ver changelog 16/10/2026). Rollback (down) remove a fixture.
 //
 // Condições da fixture: qualificado (prestador, regra F2), CNPJ nas respostas,
@@ -12,14 +12,14 @@
 
 migrate(
   (app) => {
-    const collection = app.findCollectionByNameOrId('leads')
-    const existentes = $app.findRecordsByFilter('leads', 'dedup_key = {:dk}', '-created', 1, 0, {
+    const existentes = app.findRecordsByFilter('leads', 'dedup_key = {:dk}', '-created', 1, 0, {
       dk: 'fixture-reativacao-qa-20261016',
     })
     if (existentes.length > 0) {
       console.log('Migration 0014: fixture ja existe, nada a fazer')
       return
     }
+    const collection = app.findCollectionByNameOrId('leads')
     const rec = new Record(collection)
     rec.set('lead_id', 'LEAD-FIXTURE-REATIVACAO-QA')
     rec.set('opportunity_id', 'OPP-FIXTURE-REATIVACAO-QA')
@@ -45,10 +45,10 @@ migrate(
       }),
     )
     app.save(rec)
-    console.log('Migration 0014 aplicada: fixture de reativacao criada (temporaria)')
+    console.log('Migration 0014 aplicada: fixture de reativação criada (temporária)')
   },
   (app) => {
-    const existentes = $app.findRecordsByFilter('leads', 'dedup_key = {:dk}', '-created', 1, 0, {
+    const existentes = app.findRecordsByFilter('leads', 'dedup_key = {:dk}', '-created', 1, 0, {
       dk: 'fixture-reativacao-qa-20261016',
     })
     for (let i = 0; i < existentes.length; i++) {
@@ -56,6 +56,6 @@ migrate(
         app.delete(existentes[i])
       } catch (_) {}
     }
-    console.log('Migration 0014 revertida: fixture de reativacao removida')
+    console.log('Migration 0014 revertida: fixture de reativação removida')
   },
 )

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-16T14:07:05.602Z",
+  "generatedAt": "2026-10-16T15:01:35.806Z",
   "collections": [
     {
       "name": "users",
@@ -29,21 +29,31 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "role",
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["admin", "comercial", "marketing", "integracao"]
+          "selectValues": [
+            "admin",
+            "comercial",
+            "marketing",
+            "integracao"
+          ]
         }
       ],
       "indexes": [
@@ -97,7 +107,12 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["meta_ads", "cora", "indicacao", "manual"]
+          "selectValues": [
+            "meta_ads",
+            "cora",
+            "indicacao",
+            "manual"
+          ]
         },
         {
           "name": "campanha",
@@ -122,7 +137,11 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["capturado", "aguardando_dados", "encerrado_entrada_invalida"]
+          "selectValues": [
+            "capturado",
+            "aguardando_dados",
+            "encerrado_entrada_invalida"
+          ]
         },
         {
           "name": "responsavel",
@@ -153,14 +172,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "estado_qualificacao",
@@ -245,7 +269,11 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["ativo", "cancelado", "no_show"]
+          "selectValues": [
+            "ativo",
+            "cancelado",
+            "no_show"
+          ]
         },
         {
           "name": "followup_estado",
@@ -324,6 +352,42 @@
           "type": "json",
           "required": false,
           "system": false
+        },
+        {
+          "name": "motivo_perda",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ultima_interacao",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "estado_fila",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": [
+            "elegivel",
+            "na_fila",
+            "aprovado",
+            "excluido"
+          ]
+        },
+        {
+          "name": "motivo_exclusao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "reativacao_registro",
+          "type": "json",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -355,7 +419,9 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "source_event_id",
@@ -401,7 +467,12 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["pendente", "em_analise", "resolvido", "encerrado"]
+          "selectValues": [
+            "pendente",
+            "em_analise",
+            "resolvido",
+            "encerrado"
+          ]
         },
         {
           "name": "dono",
@@ -444,19 +515,132 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
         "CREATE INDEX idx_estado_error_log ON error_log (estado)",
         "CREATE INDEX idx_categoria_error_log ON error_log (categoria)"
+      ]
+    },
+    {
+      "name": "reativacao_lote",
+      "type": "base",
+      "apiRules": {
+        "list": "",
+        "view": "",
+        "create": "",
+        "update": "@request.auth.role = 'admin'",
+        "delete": "@request.auth.role = 'admin'"
+      },
+      "fields": [
+        {
+          "name": "lote_id",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "criterio_aplicado",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "regra_versao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "leads_incluidos",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "leads_excluidos",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "total_incluidos",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "total_excluidos",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "aprovado_por",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "aprovado_em",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "estado",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "aguardando",
+            "aprovado",
+            "executado",
+            "cancelado"
+          ]
+        },
+        {
+          "name": "observacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate"
+          ]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_lote_id_reativacao ON reativacao_lote (lote_id)",
+        "CREATE INDEX idx_estado_reativacao_lote ON reativacao_lote (estado)"
       ]
     }
   ]
