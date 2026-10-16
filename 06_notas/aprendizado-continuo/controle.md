@@ -13,3 +13,4 @@ Registro da triagem interna de aprendizado. Esta rotina é silenciosa: nada aqui
 - 2026-09-22T20:55:00-03:00 · task cd704a1c · capturado: 06_notas/aprendizado-continuo/AP-2026-09-22-2055-regressao-fluxo-operacional.md
 - 2026-09-22T20:56:00-03:00 · task cd704a1c · aprendizado validado pelo aceite humano registrado no changelog e no estado atual
 - 2026-09-23T18:58:00-03:00 · task b7c2faea · capturado: 06_notas/aprendizado-continuo/AP-2026-09-23-1858-qualidade-sem-dado.md
+- 2026-10-16T13:20:00-03:00 · task 5ef4b7cd · capturado: 06_notas/aprendizado-continuo/AP-2026-10-16-1315-quirk-json-bytes.md
