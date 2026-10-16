@@ -45,15 +45,15 @@
 - **QA:** Skip v0.0.100 / `c53c171`; setup, análise estática, build, integrações e testes passaram.
 - **Produção:** publicada em `https://crm-oficial-65bb8.goskip.app`; validação visual confirmou o painel e o período de 28 dias.
 
-## `5ef4b7cd` — bloqueada por decisão de negócio
+## `5ef4b7cd` — implementada, aguardando teste humano (16/10/2026)
 
-- **B4-201 fechado pelo champion em 06/10/2026:** basta ter motivo de perda explícito, sem lista adicional de motivos permitidos; o lead deve ser prestador de serviço com CNPJ, ter sido captado há pelo menos 90 dias e estar sem interação há pelo menos 60 dias. Descadastro/`nao_contatar` e bounce permanente ficam excluídos. Nenhuma regra foi implementada.
-- **B4-202 decidido pelo champion em 06/10/2026:** consentimento explícito não será requisito obrigatório; uma base legal alternativa aplicável ao lead deve ser documentada e validada antes da inclusão na fila.
-- **Alinhamento necessário:** a SPEC-4-002 ainda exclui leads sem consentimento. O consultor deve alinhar a SPEC à decisão e validar/documentar a base alternativa antes de retomar a análise.
-- **Salvaguardas mantidas:** descadastro/`nao_contatar` excluídos; aprovação humana do lote obrigatória; nenhum contato automático.
-- **Lacuna técnica:** a collection `leads` possui `respostas`, `historico`, `followup_parada` e datas, mas não tem contrato estruturado para os critérios nem collection de lote/aprovação.
-- **Estado:** nenhum código da `5ef4b7cd` foi alterado.
+- **B4-201 fechado pelo champion em 06/10/2026:** basta ter motivo de perda explícito, sem lista adicional de motivos permitidos; o lead deve ser prestador de serviço com CNPJ, ter sido captado há pelo menos 90 dias e estar sem interação há pelo menos 60 dias. Descadastro/`nao_contatar` e bounce permanente ficam excluídos.
+- **B4-202 fechado em 16/10/2026:** registro documental da base legal validado (`06_notas/registro-base-legal-b4-202.md` v1.1 — legítimo interesse, art. 7º IX c/c art. 10 LGPD). Decisões: "não tenho interesse agora" = objeção; WhatsApp com mensagem padrão do SDR; validação por lead por qualquer usuário.
+- **Implementação (16/10/2026):** migration 0013 (contrato de reativação + collection `reativacao_lote`), 0014/0015 (fixture de QA com backdate SQL), rota GET `/backend/v1/fila-reativacao` (8 condições da base legal v1.1 + B4-201), rota POST `/backend/v1/reativacao/aprovar` (aprovação humana idempotente, nenhum contato disparado), tela `/reativacao`.
+- **Verificação automática:** 401 sem token (RN-4-205); 400 sem lote_id; 201 aprovação (1 incluído/130 excluídos); 200 idempotência HTTP; 201 novo lote com 0 incluídos (idempotência de lote); QA Skip 5/5 (v0.0.115/c4a51cd).
+- **Achado de baseline:** 0 de 130 leads com CNPJ nas respostas — a fila nasce vazia até o CNPJ entrar na captura (pendência do prompt 5); fixture de QA prova o caminho elegível.
+- **Estado:** aguardando teste humano do champion na tela `/reativacao` do preview.
 
 ## Próximo passo
 
-B4-202 fechado em 16/10/2026: registro documental da base legal alternativa concluído e validado pelo champion (`06_notas/registro-base-legal-b4-202.md` v1.1 — legítimo interesse, art. 7º IX c/c art. 10 LGPD). SPEC-4-002 realinhada (RN-4-202/CA-4-202). Task `5ef4b7cd` desbloqueada — nova análise e autorização de implementação são o próximo passo. Pendências abertas que não bloqueiam o 1º lote: frequência máxima de reabordagem, revisão jurídica formal e política de retenção.
+Teste humano da fila de reativação (`5ef4b7cd`) na tela `/reativacao` do preview. Depois do aceite: remover a fixture de QA (dedup_key `fixture-reativacao-qa-20261016`), atualizar fase.md/STATUS/changelog e seguir para a próxima task da Fase 4 (SPEC-4-003 — loops L4.1/L4.2). Pendências abertas que não bloqueiam o 1º lote: frequência máxima de reabordagem, revisão jurídica formal, política de retenção e CNPJ na captura (prompt 5).
