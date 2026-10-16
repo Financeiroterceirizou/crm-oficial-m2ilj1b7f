@@ -3,11 +3,11 @@
 - task_id: 5ef4b7cd (Fase 4 — lista de leads antigos para nova abordagem)
 - champion: Vinicius (CEO)
 - spec: 04-fase-atual/specs/spec-4-002-qualidade-origem-reativacao.md
-- etapa: sem_task
-- autorizacao_implementacao: ausente
-- teste_humano: nao_aplicavel
-- verificacao_automatica: pendente
+- etapa: aguardando_autorizacao
+- autorizacao_implementacao: ausente — análise entregue em 16/10/2026; aguarda "pode implementar"
+- teste_humano: pendente
+- verificacao_automatica: pendente — baseline executado (somente leitura): 130 leads, 0 CNPJ, 0 elegíveis pelas janelas (1º em 18/11/2026), sem motivo_perda no schema
 - aprendizado: pendente
-- ultima_acao: B4-202 fechado — registro documental da base legal alternativa concluído e validado pelo champion em 16/10/2026 (06_notas/registro-base-legal-b4-202.md v1.1); SPEC-4-002 realinhada (RN-4-202/CA-4-202); task 5ef4b7cd desbloqueada. Nenhum código alterado
-- proxima_acao: nova análise da task 5ef4b7cd (proxima-task) com a SPEC realinhada, antes de qualquer implementação
-- atualizado_em: 2026-10-16T11:50:00-03:00
+- ultima_acao: análise profunda da 5ef4b7cd concluída contra a SPEC-4-002 realinhada; plano, matriz critério→prova, riscos e roteiro de testes entregues ao champion. Nenhum código alterado
+- proxima_acao: aguardar autorização para implementar
+- atualizado_em: 2026-10-16T11:55:00-03:00
