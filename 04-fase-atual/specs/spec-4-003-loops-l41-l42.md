@@ -1,7 +1,7 @@
 # SPEC-4-003 — Loops assistidos: análise de aprendizados (L4.1) e monitor de qualidade por origem (L4.2)
 
 **Fase:** 4 — Sistema de inteligência de campanhas e operação assistida
-**Status:** planejada — criada em 16/10/2026 para destravar as tasks `1a38ea22` (L4.1) e a task de monitor de qualidade (L4.2) do fase.md
+**Status:** ativa — bloqueios B4-301..304 aprovados pelo champion em 16/10/2026; criada em 16/10/2026 para destravar as tasks `1a38ea22` (L4.1) e a task de monitor de qualidade (L4.2) do fase.md
 **Dono:** champion define cadência, teto, pausa e limiar; responsável comercial valida recomendações; assistente executa e audita
 **Origem no escopo:** `02-Escopo-Definitivo.md`, Fase 4 (loops de análise e monitor de qualidade); tasks `1a38ea22`, `82524cff` e a task "Monitorar queda de qualidade por origem com baseline" do fase.md
 **Degrau da solução:** análise e monitor assistidos — nenhum toque em campanha, orçamento ou público; recomendação sempre com trilha de auditoria; veredito sempre humano
@@ -11,7 +11,7 @@
 - **Estado atual:** a Fase 4 tem espelho Meta (SPEC-4-001), painel de qualidade por campanha (CA-4-201) e fila de reativação concluída (`5ef4b7cd`). Não existe loop de análise nem monitor de queda de qualidade: as duas tasks estão no fase.md sem SPEC e bloqueadas.
 - **Estado desejado:** dois loops assistidos, **um por vez** — L4.1 primeiro; L4.2 só depois do L4.1 concluído. L4.1 gera aprendizados de campanha (fato observado, fonte, período, limitação, recomendação) com trilha de auditoria que reconstrói fonte e período. L4.2 sinaliza queda ou diferença de qualificação por origem **somente contra baseline registrado**; sem baseline, o sinal sai rotulado como hipótese.
 - **Decisões fechadas:** um loop por vez; loop não publica anúncio nem modifica campanha (bloqueio demonstrado por prova negativa); loop não altera regras de qualificação sozinho; sem baseline o sinal é hipótese, nunca fato.
-- **Bloqueios (B4-301..304) — a aprovar pelo champion, sem inferência:** (B4-301) cadência do L4.1; (B4-302) teto de custo por execução; (B4-303) gatilho e comportamento de pausa do loop; (B4-304) definição operacional de "queda relevante" para o L4.2 (limiar contra baseline). Nenhum loop entra em produção com bloqueio aberto.
+- **Bloqueios (B4-301..304) — APROVADOS pelo champion em 16/10/2026:** (B4-301) cadência do L4.1 = semanal, toda segunda-feira, antes da revisão de KPIs; (B4-302) teto de custo = 20 créditos por execução (revisão após o 1º mês com custo real); (B4-303) pausa automática em 3 gatilhos — teto estourado, divergência CRM × espelho Meta, tentativa de escrita no Meta — com retomada manual pelo champion e sinal no resumo diário; (B4-304) "queda relevante" = queda ≥ 30% na taxa de qualificação da origem contra o baseline, com mínimo de 10 leads da origem na janela de 28 dias (mesma janela do B4-203). Nenhum loop entra em produção com bloqueio aberto.
 
 ## Resultado observável
 
@@ -35,18 +35,18 @@ O champion recebe, na cadência aprovada, uma análise com fato observado, fonte
 | loop L4.1 → registro de análise          | CRM (registro append-only) | fato, fonte, período, limitação, recomendação, trilha             | registro por rodada       | idempotente por rodada                   | rodada sem dado válido → "sem sinal" registrado    |
 | loop L4.2 → baseline + sinal             | CRM                        | baseline por origem (período, valores), sinal rotulado            | leitura + registro        | comparação só contra baseline registrado | sem baseline → hipótese rotulada                   |
 
-| Regra    | Condição                                 | Ação/resultado                       | Exceção                       |
-| -------- | ---------------------------------------- | ------------------------------------ | ----------------------------- |
-| RN-4-301 | bloqueio B4-301/302/303 aberto           | loop L4.1 não entra em produção      | pendência visível ao champion |
-| RN-4-302 | execução acima do teto de custo (B4-302) | pausa automática + registro          | champion decide a retomada    |
-| RN-4-303 | análise sem fato verificável no período  | registra limitação, não publica fato | sem invenção de dado          |
-| RN-4-304 | sinal sem baseline registrado (B4-304)   | sai rotulado como hipótese           | nunca como fato               |
-| RN-4-305 | tentativa de publicar/modificar campanha | bloqueada e registrada               | prova negativa obrigatória    |
-| RN-4-306 | L4.2 ativado com L4.1 ainda ativo        | ativação recusada — um loop por vez  | pendência visível ao champion |
+| Regra    | Condição                                                                                         | Ação/resultado                       | Exceção                       |
+| -------- | ------------------------------------------------------------------------------------------------ | ------------------------------------ | ----------------------------- |
+| RN-4-301 | bloqueio B4-301/302/303 aberto                                                                   | loop L4.1 não entra em produção      | pendência visível ao champion |
+| RN-4-302 | teto estourado (B4-302), divergência CRM × espelho Meta ou tentativa de escrita no Meta (B4-303) | pausa automática + registro          | retomada só pelo champion     |
+| RN-4-303 | análise sem fato verificável no período                                                          | registra limitação, não publica fato | sem invenção de dado          |
+| RN-4-304 | sinal sem baseline registrado (B4-304)                                                           | sai rotulado como hipótese           | nunca como fato               |
+| RN-4-305 | tentativa de publicar/modificar campanha                                                         | bloqueada e registrada               | prova negativa obrigatória    |
+| RN-4-306 | L4.2 ativado com L4.1 ainda ativo                                                                | ativação recusada — um loop por vez  | pendência visível ao champion |
 
 ## Fluxo e regras
 
-1. Champion aprova B4-301/302/303 (cadência, teto, pausa).
+1. Champion aprovou B4-301/302/303 em 16/10/2026 (cadência semanal na segunda; teto 20 créditos; pausa em 3 gatilhos com retomada manual).
 2. Prompt do L4.1 é homologado e versionado antes da primeira rodada.
 3. Cada rodada do L4.1: lê dados do período declarado → gera fato/fonte/período/limitação/recomendação → registra com trilha de auditoria → para. Nada toca o Meta.
 4. Responsável comercial revisa as recomendações (task `82524cff`) e registra decisão com autor e data.
@@ -69,10 +69,10 @@ O champion recebe, na cadência aprovada, uma análise com fato observado, fonte
 
 ## Checklist de execução
 
-- [ ] cadência do L4.1 aprovada pelo champion (B4-301)
-- [ ] teto de custo por execução aprovado (B4-302)
-- [ ] gatilho e comportamento de pausa aprovados (B4-303)
-- [ ] definição operacional de "queda relevante" aprovada (B4-304)
+- [x] cadência do L4.1 aprovada pelo champion (B4-301) — 16/10/2026: semanal, toda segunda antes da revisão de KPIs
+- [x] teto de custo por execução aprovado (B4-302) — 16/10/2026: 20 créditos
+- [x] gatilho e comportamento de pausa aprovados (B4-303) — 16/10/2026: teto estourado, divergência CRM × espelho Meta e tentativa de escrita no Meta pausam; retomada manual pelo champion
+- [x] definição operacional de "queda relevante" aprovada (B4-304) — 16/10/2026: queda ≥ 30% na taxa de qualificação da origem contra baseline, mínimo 10 leads da origem em 28 dias
 - [ ] prompt do L4.1 homologado e versionado
 - [ ] prova negativa de escrita no Meta executada e registrada
 - [ ] baseline do L4.2 registrado antes do primeiro sinal
@@ -144,12 +144,12 @@ Ciclo controlado: baseline conhecido, rodada do L4.1 com trilha reconstruída pa
 - **Como demonstrar:** rodar uma rodada do L4.1, reconstruir a trilha, tentar escrita no Meta (bloqueio registrado), rodar sinal do L4.2 com e sem baseline.
 - **Como operar:** responsável comercial revisa recomendações; champion mantém cadência/teto/limiar; assistente executa e registra.
 - **Como monitorar:** rodadas executadas, custo por execução, pausas, sinais rotulados, tentativas bloqueadas.
-- **Pendência conhecida:** B4-301..304 dependem do champion; L4.2 só após L4.1 concluído.
+- **Pendência conhecida:** B4-301..304 aprovados em 16/10/2026; L4.2 só após L4.1 concluído.
 
 ## Tasks vinculadas
 
-| ID                                   | Task                                                                                            | Dono          | SPEC  | Critério         | Recorte da prova                          | Evidência esperada | Pré-condições                        | Status                            |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------- | ------------- | ----- | ---------------- | ----------------------------------------- | ------------------ | ------------------------------------ | --------------------------------- |
-| 1a38ea22                             | Configurar uma análise que sugira aprendizados sobre campanhas sem alterar orçamento ou público | Cliente       | 4-003 | CA-4-301/302/305 | GREEN análise com trilha + prova negativa | registros + logs   | B4-301/302/303 aprovados             | BLOQUEADA — aguarda B4-301..303   |
-| 82524cff                             | Revisar dez recomendações de campanha e registrar quais serão usadas                            | Felipe Navaar | 4-003 | CA-4-304         | revisão registrada com autor e data       | registros          | 1a38ea22 concluída                   | AGUARDANDO L4.1                   |
-| afe03044-121e-4c89-8990-c236f83396ec | Monitorar queda de qualidade por origem com baseline                                            | Cliente       | 4-003 | CA-4-303         | sinal com/sem baseline rotulado           | registros          | 1a38ea22 concluída + B4-304 aprovado | BLOQUEADA — aguarda L4.1 + B4-304 |
+| ID                                   | Task                                                                                            | Dono          | SPEC  | Critério         | Recorte da prova                          | Evidência esperada | Pré-condições                                   | Status                             |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------- | ------------- | ----- | ---------------- | ----------------------------------------- | ------------------ | ----------------------------------------------- | ---------------------------------- |
+| 1a38ea22                             | Configurar uma análise que sugira aprendizados sobre campanhas sem alterar orçamento ou público | Cliente       | 4-003 | CA-4-301/302/305 | GREEN análise com trilha + prova negativa | registros + logs   | B4-301/302/303 aprovados 16/10/2026             | DESBLOQUEADA 16/10/2026            |
+| 82524cff                             | Revisar dez recomendações de campanha e registrar quais serão usadas                            | Felipe Navaar | 4-003 | CA-4-304         | revisão registrada com autor e data       | registros          | 1a38ea22 concluída                              | AGUARDANDO L4.1                    |
+| afe03044-121e-4c89-8990-c236f83396ec | Monitorar queda de qualidade por origem com baseline                                            | Cliente       | 4-003 | CA-4-303         | sinal com/sem baseline rotulado           | registros          | 1a38ea22 concluída + B4-304 aprovado 16/10/2026 | BLOQUEADA — aguarda L4.1 concluído |
