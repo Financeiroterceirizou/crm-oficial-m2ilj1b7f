@@ -1,13 +1,13 @@
 # STATUS — Projeto Terceirizou Terceirização Empresarial
 
-> **Atualizado em:** 2026-09-23 19:46 · **Fonte técnica:** Skip projectId 51268
+> **Atualizado em:** 2026-10-06 · **Fonte técnica:** Skip projectId 51268
 
 ## Onde estamos
 
 - **Fase 1:** concluída — 10/10 tasks.
 - **Fase 2:** concluída — 5/5 tasks.
 - **Fase 3:** concluída — 7/7 tasks, aceite final do champion em 2026-09-16.
-- **Fase 4:** em andamento — **3/8 tasks concluídas** (`e4c77e80`, `cd704a1c`, `b7c2faea`); `5ef4b7cd` bloqueada aguardando B4-201/B4-202; prazo 30/09/2026.
+- **Fase 4:** em andamento — **3/8 tasks concluídas** (`e4c77e80`, `cd704a1c`, `b7c2faea`); `5ef4b7cd` bloqueada pelo alinhamento da SPEC-4-002 e pela validação/documentação da base alternativa de B4-202; prazo 30/09/2026.
 - **Task `cd704a1c`:** concluída após QA técnico, correção de regressão, verificação no preview e aceite humano do champion em 22/09/2026 — "Aparece o formulário".
 - **Skip:** CRM Oficial; correção funcional e fechamento documental aprovados com QA 5/5.
 - **Preview:** https://crm-oficial-65bb8--preview.goskip.app
@@ -47,12 +47,13 @@
 
 ## `5ef4b7cd` — bloqueada por decisão de negócio
 
-- **B4-201 pendente:** faltam motivos de perda elegíveis, janela da última interação e exclusões.
-- **B4-202 pendente:** faltam campo/fonte de consentimento ou base legal e regra operacional para descadastro/`nao_contatar`.
-- **Lacuna técnica:** a collection `leads` possui `respostas`, `historico`, `followup_parada` e datas, mas não possui contrato estruturado para esses critérios nem collection de lote/aprovação.
-- **Regra:** não criar fila nem inferir elegibilidade; nenhum contato ou tarefa pode nascer sem aprovação humana.
+- **B4-201 fechado pelo champion em 06/10/2026:** basta ter motivo de perda explícito, sem lista adicional de motivos permitidos; o lead deve ser prestador de serviço com CNPJ, ter sido captado há pelo menos 90 dias e estar sem interação há pelo menos 60 dias. Descadastro/`nao_contatar` e bounce permanente ficam excluídos. Nenhuma regra foi implementada.
+- **B4-202 decidido pelo champion em 06/10/2026:** consentimento explícito não será requisito obrigatório; uma base legal alternativa aplicável ao lead deve ser documentada e validada antes da inclusão na fila.
+- **Alinhamento necessário:** a SPEC-4-002 ainda exclui leads sem consentimento. O consultor deve alinhar a SPEC à decisão e validar/documentar a base alternativa antes de retomar a análise.
+- **Salvaguardas mantidas:** descadastro/`nao_contatar` excluídos; aprovação humana do lote obrigatória; nenhum contato automático.
+- **Lacuna técnica:** a collection `leads` possui `respostas`, `historico`, `followup_parada` e datas, mas não tem contrato estruturado para os critérios nem collection de lote/aprovação.
 - **Estado:** nenhum código da `5ef4b7cd` foi alterado.
 
 ## Próximo passo
 
-Fechar B4-201 e B4-202; depois disso, fazer nova análise/autorização de implementação.
+Obter o alinhamento da SPEC-4-002 e a validação consultiva de B4-202; depois disso, fazer nova análise/autorização de implementação.
