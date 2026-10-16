@@ -1,19 +1,10 @@
 // pocketbase/hooks/fila_reativacao.js
 // F4 5ef4b7cd: fila de reativação assistida (SPEC-4-002 realinhada 16/10/2026).
 // GET /backend/v1/fila-reativacao
-//
-// Aplica as 8 condições da base legal (registro v1.1) + critério B4-201:
-//   1. contato fornecido voluntariamente (origem registrada)
-//   2. prestador de serviço com CNPJ (B4-201)
-//   3. captação >= 90 dias E sem interação >= 60 dias (B4-201)
-//   4. sem descadastro/nao_contatar (permanente)
-//   5. sem bounce permanente (followup_parada = 'bounce' — migration 0011)
-//   6. sem objeção (incl. "não tenho interesse agora" — decisão 16/10)
-//   7. sem dado sensível no tratamento (fila usa nome/email/telefone apenas)
-//   8. registro de base legal gerado na montagem (reativacao_registro)
-// Exclusões: estado_fila = 'excluido' (RN-4-202) sai da fila com motivo registrado.
-// RLS herdada: exige autenticação (401 sem) — RN-4-205.
-// Vazio ≠ zero: lead sem dado exibe estado explícito (RN-4-204).
+// Condições (registro base legal v1.1 + B4-201): prestador com CNPJ; captado >= 90d;
+// sem interação >= 60d; sem descadastro/nao_contatar/bounce (permanente); sem objeção
+// (incl. "não tenho interesse agora"); registro de base gerado na montagem.
+// RLS: exige autenticação (401) — RN-4-205. Vazio ≠ zero — RN-4-204.
 
 routerAdd(
   'GET',
@@ -23,9 +14,9 @@ routerAdd(
     const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.trunc(limitRaw), 1), 500) : 200
 
     const registros = $app.findRecordsByFilter('leads', '', '-created', limit, 0)
-    const agora = new Date()
-    const noventaDias = 90 * 24 * 60 * 60 * 1000
-    const sessentaDias = 60 * 24 * 60 * 60 * 1000
+    const agora = new Date().getTime()
+    const noventa = 90 * 24 * 60 * 60 * 1000
+    const sessenta = 60 * 24 * 60 * 60 * 1000
 
     const temCnpj = (rec) => {
       // Padrão provado em qualificar_lead_create.js: campo JSON pode chegar como
@@ -62,13 +53,10 @@ routerAdd(
       }
       return false
     }
-=======
 
     const temObjecao = (rec) => {
-      // Descadastro/nao_contatar (F3) e bounce (0011) são paradas permanentes.
       const parada = String(rec.get('followup_parada') || '')
       if (parada === 'descadastro' || parada === 'nao_contatar' || parada === 'bounce') return true
-      // Objeção registrada no motivo de perda (decisão 16/10: "não tenho interesse agora").
       const motivo = String(rec.get('motivo_perda') || '').toLowerCase()
       if (
         motivo.indexOf('nao tenho interesse') !== -1 ||
@@ -91,18 +79,16 @@ routerAdd(
       const ultima = rec.get('ultima_interacao')
         ? rec.getDateTime('ultima_interacao')
         : rec.getDateTime('updated')
-
       const captadoMs = criado ? new Date(criado.string()).getTime() : 0
       const interacaoMs = ultima ? new Date(ultima.string()).getTime() : 0
-      const captadoHa90 = captadoMs > 0 && agora.getTime() - captadoMs >= noventaDias
-      const semInteracao60 = interacaoMs > 0 && agora.getTime() - interacaoMs >= sessentaDias
+      const captadoHa90 = captadoMs > 0 && agora - captadoMs >= noventa
+      const semInteracao60 = interacaoMs > 0 && agora - interacaoMs >= sessenta
 
       const cnpj = temCnpj(rec)
       const qualificado = String(rec.get('estado_qualificacao') || '') === 'qualificado'
       const parada = String(rec.get('followup_parada') || '')
       const estadoFila = String(rec.get('estado_fila') || '')
 
-      // Condição 4/6: exclusões permanentes — sai da fila com motivo (RN-4-202).
       if (estadoFila === 'excluido') {
         excluidos.push({
           id: rec.get('id'),
@@ -112,7 +98,6 @@ routerAdd(
         })
         continue
       }
-      // Já aprovado em lote anterior — não reentra (idempotência de lote).
       if (estadoFila === 'aprovado') {
         excluidos.push({
           id: rec.get('id'),
@@ -140,8 +125,6 @@ routerAdd(
         })
         continue
       }
-
-      // Condições 2 e 3: sem CNPJ ou janelas não cumpridas — não elegível ainda.
       if (!cnpj || !qualificado || !captadoHa90 || !semInteracao60) {
         semDado.push({
           id: rec.get('id'),
@@ -155,8 +138,6 @@ routerAdd(
         })
         continue
       }
-
-      // Todas as condições atendidas — elegível com registro de base legal (condição 8).
       elegiveis.push({
         id: rec.get('id'),
         lead_id: rec.get('lead_id'),
@@ -178,8 +159,7 @@ routerAdd(
       total_excluidos: excluidos.length,
       total_nao_elegiveis: semDado.length,
       criterio: {
-        b4_201:
-          'prestador_com_cnpj + captado_90d + sem_interacao_60d + motivo_perda_explcito_ou_ausente',
+        b4_201: 'prestador_com_cnpj + captado_90d + sem_interacao_60d',
         b4_202: 'base_legal_legitimo_interesse_v1.1',
         fonte: 'SPEC-4-002 realinhada 16/10/2026 + 06_notas/registro-base-legal-b4-202.md v1.1',
       },
