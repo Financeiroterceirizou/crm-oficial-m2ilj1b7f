@@ -1,23 +1,24 @@
 import React from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   BarChart3,
   Compass,
   FileSpreadsheet,
   Globe,
   HelpCircle,
+  Kanban,
   Layers,
   PieChart,
   Radio,
   Settings,
-  Users,
   X,
 } from 'lucide-react'
 
 export type NavTab = 'overview' | 'realtime' | 'acquisition' | 'retention' | 'explore'
 
 interface GaSidebarProps {
-  activeTab: NavTab
-  onSelectTab: (tab: NavTab) => void
+  activeTab?: NavTab
+  onSelectTab?: (tab: NavTab) => void
   isOpenMobile: boolean
   onCloseMobile: () => void
 }
@@ -28,12 +29,32 @@ export const GaSidebar: React.FC<GaSidebarProps> = ({
   isOpenMobile,
   onCloseMobile,
 }) => {
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  // Determina aba ativa pela rota se estiver na rota de aquisição ou fila, senão pela prop activeTab
+  const currentTab: NavTab =
+    location.pathname === '/aquisicao'
+      ? 'acquisition'
+      : location.pathname === '/'
+        ? activeTab || 'overview'
+        : activeTab || 'overview'
+
   const mainNavItems = [
     {
       id: 'overview' as NavTab,
       label: 'Relatórios',
       sublabel: 'Visão geral',
       icon: BarChart3,
+      path: '/',
+    },
+    {
+      id: 'acquisition' as NavTab,
+      label: 'Aquisição',
+      sublabel: 'Pipeline de vendas',
+      icon: Kanban,
+      badge: 'Pipeline',
+      path: '/aquisicao',
     },
     {
       id: 'realtime' as NavTab,
@@ -41,24 +62,21 @@ export const GaSidebar: React.FC<GaSidebarProps> = ({
       sublabel: 'Últimos 30 min',
       icon: Radio,
       badge: 'Ao vivo',
+      path: '/',
     },
     {
       id: 'explore' as NavTab,
       label: 'Explorar',
       sublabel: 'Análise livre',
       icon: Compass,
-    },
-    {
-      id: 'acquisition' as NavTab,
-      label: 'Aquisição',
-      sublabel: 'Tráfego e canais',
-      icon: Users,
+      path: '/',
     },
     {
       id: 'retention' as NavTab,
       label: 'Rentabilidade',
       sublabel: 'Produtos e BPO',
       icon: PieChart,
+      path: '/',
     },
   ]
 
@@ -116,12 +134,17 @@ export const GaSidebar: React.FC<GaSidebarProps> = ({
 
         {mainNavItems.map((item) => {
           const Icon = item.icon
-          const isActive = activeTab === item.id
+          const isActive = currentTab === item.id
           return (
             <button
               key={item.id}
               onClick={() => {
-                onSelectTab(item.id)
+                if (item.path) {
+                  navigate(item.path)
+                }
+                if (onSelectTab) {
+                  onSelectTab(item.id)
+                }
                 onCloseMobile()
               }}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
@@ -144,7 +167,13 @@ export const GaSidebar: React.FC<GaSidebarProps> = ({
                 </div>
               </div>
               {item.badge && (
-                <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse font-semibold">
+                <span
+                  className={`px-1.5 py-0.5 text-[10px] rounded-full font-semibold ${
+                    item.id === 'acquisition'
+                      ? 'bg-amber-500/25 text-amber-300 border border-amber-500/40'
+                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse'
+                  }`}
+                >
                   {item.badge}
                 </span>
               )}

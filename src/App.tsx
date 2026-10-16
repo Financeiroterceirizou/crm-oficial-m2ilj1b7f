@@ -6,6 +6,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import Index from './pages/Index'
 import NotFound from './pages/NotFound'
 import FilaRecuperacao from './pages/FilaRecuperacao'
+import Aquisicao from './pages/Aquisicao'
 import Layout from './components/Layout'
 
 // ONLY IMPORT AND RENDER WORKING PAGES, NEVER ADD PLACEHOLDER COMPONENTS OR PAGES IN THIS FILE
@@ -19,6 +20,7 @@ const App = () => (
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<Index />} />
+          <Route path="/aquisicao" element={<Aquisicao />} />
           <Route path="/fila" element={<FilaRecuperacao />} />
           {/* ADD ALL CUSTOM ROUTES MUST BE ADDED HERE */}
         </Route>
