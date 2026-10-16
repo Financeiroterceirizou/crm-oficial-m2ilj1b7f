@@ -39,5 +39,5 @@ Marque `[x]` para concluir e adicione linhas novas à vontade: elas entram no qu
   > SPEC-4-003 · CA-4-304 · Conferir com o Cliente se cada recomendação está sustentada pelos dados e registrar aceita, rejeitada ou precisa de mais informação, com autor e data.
 - [ ] Exibir qualificação e follow-up na tela do lead @Cliente !25/09/2026 [interno]
   > SPEC-4-002 · CA-4-204/205 · Evolução aceita em 17/09 (painel visual do follow-up): colunas estado/score/motivo/próxima ação e linha do tempo do follow-up na tela do lead, consumindo os eventos da SPEC-3-002. RLS herdado com prova negativa de acesso cruzado.
-- [ ] Monitorar queda de qualidade por origem com baseline @Cliente !30/09/2026 [interno]
-  > SPEC-4-003 · CA-4-303 · Loop L4.2 configurado após o L4.1 (um loop por vez). Sinaliza queda ou diferença de qualificação por origem somente contra baseline registrado (B4-304); sem baseline, o sinal sai rotulado como hipótese. Não altera regras sozinho.
+- [ ] Monitorar queda de qualidade por origem com baseline @Cliente !30/09/2026 [interno] <!-- id:afe03044-121e-4c89-8990-c236f83396ec -->
+  > SPEC-4-003 · CA-4-303 · B4-304 · Loop L4.2 configurado após o L4.1 (um loop por vez). Sinaliza queda ou diferença de qualificação por origem somente contra baseline registrado (B4-304); sem baseline, o sinal sai rotulado como hipótese. Não altera regras sozinho. SPEC-4-003 criada em 16/10/2026.
