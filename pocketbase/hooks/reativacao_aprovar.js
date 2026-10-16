@@ -83,6 +83,10 @@ routerAdd(
         })
         continue
       }
+      if (estadoFila === 'aprovado') {
+        excluidos.push({ lead_id: rec.get('lead_id'), motivo: 'aprovado_em_lote' })
+        continue
+      }
       if (parada === 'descadastro' || parada === 'nao_contatar' || parada === 'bounce') {
         excluidos.push({ lead_id: rec.get('lead_id'), motivo: 'parada_permanente_' + parada })
         continue

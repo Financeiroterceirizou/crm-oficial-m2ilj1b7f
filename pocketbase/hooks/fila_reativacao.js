@@ -95,6 +95,16 @@ routerAdd(
         })
         continue
       }
+      // Já aprovado em lote anterior — não reentra (idempotência de lote).
+      if (estadoFila === 'aprovado') {
+        excluidos.push({
+          id: rec.get('id'),
+          lead_id: rec.get('lead_id'),
+          nome: rec.get('nome'),
+          motivo_exclusao: 'aprovado_em_lote',
+        })
+        continue
+      }
       if (parada === 'descadastro' || parada === 'nao_contatar' || parada === 'bounce') {
         excluidos.push({
           id: rec.get('id'),

@@ -2,9 +2,9 @@
 // F4 5ef4b7cd: fixture de QA para provar o caminho ELEGÍVEL da fila de reativação.
 //
 // Por que migration: o caminho elegível exige lead captado há >= 90 dias; `created`
-// é autodate e não pode ser retroativo via API. Precedente: migration 0014 re-executa
-// idempotente. A fixture é TEMPORÁRIA e claramente marcada — removida após o teste
-// humano (ver changelog 16/10/2026). Rollback (down) remove a fixture.
+// é autodate e não pode ser retroativo via API — a fixture usa SQL direto (db.newQuery)
+// para backdate de `created`/`updated`, que não passa pela camada autodate. A fixture é
+// TEMPORÁRIA e claramente marcada — removida após o teste humano (changelog 16/10/2026).
 //
 // Condições da fixture: qualificado (prestador, regra F2), CNPJ nas respostas,
 // captada 2026-07-01 (>= 90 dias em 16/10), última interação 2026-08-01 (>= 60 dias),
@@ -21,8 +21,8 @@ migrate(
     }
     const collection = app.findCollectionByNameOrId('leads')
     const rec = new Record(collection)
-    rec.set('lead_id', 'LEAD-FIXTURE-REATIVACAO-QA')
-    rec.set('opportunity_id', 'OPP-FIXTURE-REATIVACAO-QA')
+    rec.set('lead_id', 'LEAD-FX-REATIVACAO-QA')
+    rec.set('opportunity_id', 'OPP-FX-REATIVACAO-QA')
     rec.set('nome', 'FIXTURE Reativação QA (remover após teste)')
     rec.set('email', 'fixture.reativacao@qa.local')
     rec.set('telefone', '5599000000000')
@@ -45,7 +45,14 @@ migrate(
       }),
     )
     app.save(rec)
-    console.log('Migration 0014 aplicada: fixture de reativação criada (temporária)')
+    // Backdate de created/updated via SQL direto (autodate não retroage via API/ORM).
+    app
+      .db()
+      .newQuery(
+        "UPDATE leads SET created = '2026-07-01 12:00:00.000Z', updated = '2026-08-01 12:00:00.000Z' WHERE dedup_key = 'fixture-reativacao-qa-20261016'",
+      )
+      .execute()
+    console.log('Migration 0014 aplicada: fixture criada e backdate aplicado (temporária)')
   },
   (app) => {
     const existentes = app.findRecordsByFilter('leads', 'dedup_key = {:dk}', '-created', 1, 0, {
