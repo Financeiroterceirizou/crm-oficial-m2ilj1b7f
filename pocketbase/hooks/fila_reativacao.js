@@ -28,13 +28,29 @@ routerAdd(
     const sessentaDias = 60 * 24 * 60 * 60 * 1000
 
     const temCnpj = (rec) => {
-      let resp = rec.get('respostas')
-      try {
-        // Normaliza qualquer formato do JSVM (objeto goja, Map, string) para dict puro.
-        if (typeof resp !== 'string') resp = JSON.stringify(resp)
-        resp = JSON.parse(resp)
-      } catch (_) {
-        return false
+      // Padrão provado em qualificar_lead_create.js: campo JSON pode chegar como
+      // string, objeto OU array de bytes (Uint8Array) no runtime goja do PocketBase.
+      let raw = rec.get('respostas')
+      if (
+        raw !== null &&
+        raw !== undefined &&
+        typeof raw === 'object' &&
+        typeof raw.length === 'number' &&
+        typeof raw[0] === 'number'
+      ) {
+        let s = ''
+        for (let i = 0; i < raw.length; i++) s += String.fromCharCode(raw[i])
+        raw = s
+      }
+      let resp = null
+      if (typeof raw === 'string') {
+        try {
+          resp = JSON.parse(raw)
+        } catch (_) {
+          resp = null
+        }
+      } else if (raw && typeof raw === 'object') {
+        resp = raw
       }
       if (!resp || typeof resp !== 'object') return false
       const chaves = Object.keys(resp)
@@ -46,6 +62,7 @@ routerAdd(
       }
       return false
     }
+=======
 
     const temObjecao = (rec) => {
       // Descadastro/nao_contatar (F3) e bounce (0011) são paradas permanentes.
