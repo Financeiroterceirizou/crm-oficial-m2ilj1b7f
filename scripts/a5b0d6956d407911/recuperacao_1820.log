@@ -1,0 +1,23 @@
+18:30:27 probe 1: 400
+CRM voltou — rodando pipeline
+=== RODADA 1 ===
+  cora: 72 rows
+  meta_ads_jun: 21 rows
+  meta_ads_cadastro: 27 rows
+  Total: 120 rows → /home/ethos/.assistant/workspace/scripts/a5b0d6956d407911/leads_input.json
+{
+  "criados": [],
+  "atualizados": [],
+  "ignorados": 38
+}
+=== RODADA 2 ===
+  cora: 72 rows
+  meta_ads_jun: 21 rows
+  meta_ads_cadastro: 27 rows
+  Total: 120 rows → /home/ethos/.assistant/workspace/scripts/a5b0d6956d407911/leads_input.json
+{
+  "criados": [],
+  "atualizados": [],
+  "ignorados": 38
+}
+FIM

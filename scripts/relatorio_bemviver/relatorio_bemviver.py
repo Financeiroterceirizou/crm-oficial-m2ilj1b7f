@@ -20,7 +20,9 @@
 #   inadimplência com todos os lançamentos; títulos únicos.
 # v1.1 (feedback 21/09): filtro centro de custo BEM VIVER + transferências fora; comparativo paisagem.
 # v1.0 (2026-09-21): pacote original com 11 relatórios.
-import json, os, sys, urllib.request
+# v1.5 (2026-10-05): FIX retry — req() com retry (4 tentativas, backoff 5/10/15s) para 500/502/503
+#   da API Controlle (mesmo padrão do fix do v4 Terceirizou e Pouso Alegre). 1º run de 05/10 falhou com HTTP 502.
+import json, os, sys, time, urllib.request, urllib.error
 from collections import defaultdict
 from datetime import date, timedelta
 
@@ -44,12 +46,19 @@ MES_PT = {1:"janeiro",2:"fevereiro",3:"março",4:"abril",5:"maio",6:"junho",7:"j
 MES_AB = {1:"jan",2:"fev",3:"mar",4:"abr",5:"mai",6:"jun",7:"jul",8:"ago",9:"set",10:"out",11:"nov",12:"dez"}
 TAG_BOLETO = 130213  # "Boleto Emitido"
 
-def req(url):
+def req(url, _tent=0):
     r = urllib.request.Request(url)
     for k, v in UA.items():
         r.add_header(k, v)
-    with urllib.request.urlopen(r, timeout=120) as resp:
-        return json.loads(resp.read().decode("utf-8", "replace"))
+    try:
+        with urllib.request.urlopen(r, timeout=120) as resp:
+            return json.loads(resp.read().decode("utf-8", "replace"))
+    except urllib.error.HTTPError as e:
+        # 500/502/503 = instabilidade da API Controlle — retry com backoff (4 tentativas)
+        if e.code in (500, 502, 503) and _tent < 3:
+            time.sleep(5 * (_tent + 1))
+            return req(url, _tent + 1)
+        raise
 
 def tx_list(start, end, **filtros):
     out, page = [], 1
