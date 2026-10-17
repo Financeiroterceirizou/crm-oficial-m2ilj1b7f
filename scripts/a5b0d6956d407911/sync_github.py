@@ -13,7 +13,8 @@ HDRS.update({'Content-Type': 'application/json', 'Accept': 'application/json, te
 OWNER, REPO, BRANCH = 'Financeiroterceirizou', 'crm-oficial-m2ilj1b7f', 'main'
 BASE = '/home/ethos/.assistant/workspace/scripts/a5b0d6956d407911'
 PREFIX = 'scripts/a5b0d6956d407911'
-FILES = ['leads_input.json', 'estado.json', 'fetch_mcp_live.py', 'sync_github.py']
+FILES = ['leads_input.json', 'estado.json', 'fetch_mcp_live.py', 'sync_github.py',
+         'cache/cora.json', 'cache/meta_ads_jun.json', 'cache/meta_ads_cadastro.json']
 
 _id = [0]
 
