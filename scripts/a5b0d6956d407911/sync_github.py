@@ -67,7 +67,7 @@ def main():
         return
     for f, _, motivo in changed:
         print(f'divergente ({motivo}): {f}')
-    msg = 'Polling a5b0: fetch_mcp_live.py (leitura JSON-RPC GOOGLESHEETS_VALUES_GET) + leads_input/estado (2026-10-16 00:15)'
+    msg = 'Polling a5b0: cache live 72/21/27 (NFC lead teste cad) + leads_input NFC (2026-10-17 03:20)'
     r = rpc('push_files', {'owner': OWNER, 'repo': REPO, 'branch': BRANCH, 'message': msg,
                            'files': [{'path': f'{PREFIX}/{f}', 'content': c}
                                      for f, c, _ in changed]})
