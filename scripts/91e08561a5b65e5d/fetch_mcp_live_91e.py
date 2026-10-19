@@ -109,4 +109,10 @@ for art, out in [('jun_live.json', 'meta_ads_jun.json'),
     with open(os.path.join(TMP, out), 'w', encoding='utf-8') as f:
         json.dump({'values': vals}, f, ensure_ascii=False)
     print('%s: %d linhas (header + dados)' % (out, len(vals)))
+# Marcador .mcp-fresh: certifica que os crus em tmp/polling vieram desta
+# leitura MCP ao vivo (protocolo 2026-10-08). Sem ele a guarda do run.sh
+# pula a rodada (incidente 04:30: fetch OK, runs skipped).
+with open(os.path.join(TMP, '.mcp-fresh'), 'w') as f:
+    f.write('ok')
+print('marcador .mcp-fresh criado')
 print('fetch concluido')
