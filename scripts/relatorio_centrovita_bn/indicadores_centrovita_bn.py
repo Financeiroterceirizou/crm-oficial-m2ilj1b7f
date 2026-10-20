@@ -210,10 +210,38 @@ DEF = [
     ("Distribuição aos Sócios", distrib_row, "moeda"),
 ]
 
-# ===== PDF (paisagem, 1 folha) =====
+# ===== agrupamento em 3 blocos =====
+BLOCOS = [
+    ("OCUPAÇÃO", [
+        ("Nº Hóspedes", hosp_row, "qtd"),
+        ("Ticket Médio", ticket_row, "ticket"),
+    ]),
+    ("RESULTADO OPERACIONAL E FINANCEIRO", [
+        ("Receitas Operacionais", rec_row, "moeda"),
+        ("Despesas Operacionais", desp_row, "moeda"),
+        ("Resultado Operacional", resop_row, "res"),
+        ("Aportes", apor_row, "moeda"),
+        ("Juros Aplicação Financeira", juros_row, "moeda"),
+        ("Entrada de Empréstimos", entemp_row, "moeda"),
+        ("Investimentos", inv_row, "moeda"),
+        ("Saída de Empréstimos", saiemp_row, "moeda"),
+        ("Despesas Financeiras", despfin_row, "moeda"),
+        ("Resultado Financeiro", resfin_row, "res"),
+    ]),
+    ("INADIMPLÊNCIA E DISTRIBUIÇÃO", [
+        ("Inadimplência", inad_row, "moeda_pos"),
+        ("Despesas em Aberto", despab_row, "moeda_pos"),
+        ("Distribuição aos Sócios", distrib_row, "moeda"),
+    ]),
+]
+# cores de fundo por bloco (harmonia: laranja suave, cinza claro, bege claro)
+FUNDO_BLOCO = {0: colors.HexColor("#fff3ec"), 1: colors.HexColor("#f2f6f2"), 2: colors.HexColor("#f7f4ee")}
+
+# ===== PDF (paisagem, 1 folha, 3 blocos) =====
 styles = getSampleStyleSheet()
-h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=14, textColor=PRETO, spaceAfter=2)
-sub = ParagraphStyle("sub", parent=styles["Normal"], fontName="Helvetica-Oblique", fontSize=8, textColor=colors.HexColor("#777777"), spaceAfter=8)
+h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=13, textColor=PRETO, spaceAfter=1)
+sub = ParagraphStyle("sub", parent=styles["Normal"], fontName="Helvetica-Oblique", fontSize=7, textColor=colors.HexColor("#777777"), spaceAfter=4)
+bt = ParagraphStyle("bt", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=8.5, textColor=colors.white)
 cell = ParagraphStyle("cell", parent=styles["Normal"], fontSize=7)
 cellb = ParagraphStyle("cellb", parent=cell, fontName="Helvetica-Bold")
 cellr = ParagraphStyle("cellr", parent=cell, alignment=2)
@@ -223,127 +251,189 @@ P = Paragraph
 
 ARQ_PDF = f"artifacts/{date.today().strftime('%y%m%d')}_Indicadores_Centrovita_BN_{ANO}.pdf"
 doc = SimpleDocTemplate(ARQ_PDF, pagesize=landscape(A4), leftMargin=1.2*cm, rightMargin=1.2*cm,
-                        topMargin=1.2*cm, bottomMargin=1.5*cm,
+                        topMargin=1.1*cm, bottomMargin=1.3*cm,
                         title=f"Indicadores Gerenciais — Centrovita Braço do Norte {ANO}")
 E = []
-if os.path.exists(LOGO_CV):
-    img = RLImage(LOGO_CV, width=4*cm, height=4*cm*1501/2668)
-    img.hAlign = "CENTER"
-    E.append(img)
-E.append(Spacer(1, 4))
-E.append(P("<b>CENTROVITA BRAÇO DO NORTE — Indicadores Gerenciais</b>", h1))
-E.append(P(f"Ano {ANO} · Gerado em {HOJE_LABEL} · Fonte: Controlle (caixa) + planilha de ocupação · Terceirizou — mais do que terceirizar o financeiro", sub))
-E.append(Spacer(1, 4))
 
-hdr = [P("<b>Indicador</b>", cell)] + [P(f"<b>{MES_PT[m][:3]}</b>", cellc) for m in range(1, 13)] + [P("<b>Total</b>", cellc)]
-rows = [hdr]
+# cabeçalho: logo Centrovita (esquerda) + logo Terceirizou (direita)
+if os.path.exists(LOGO_CV):
+    logo_cv = RLImage(LOGO_CV, width=3.6*cm, height=3.6*cm*1501/2668)
+    logo_cv.hAlign = "LEFT"
+    cab = []
+    if os.path.exists(SIMBOLO):
+        logo_tz = RLImage(SIMBOLO, width=1.5*cm, height=1.5*cm)
+        logo_tz.hAlign = "RIGHT"
+        cab = [[logo_cv, logo_tz]]
+    else:
+        cab = [[logo_cv, ""]]
+    t_cab = Table(cab, colWidths=[16*cm, 6*cm])
+    t_cab.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+                               ("ALIGN", (1,0), (1,0), "RIGHT")]))
+    E.append(t_cab)
+    E.append(Spacer(1, 2))
+E.append(P("<b>CENTROVITA BRAÇO DO NORTE — Indicadores Gerenciais</b>", h1))
+E.append(P(f"Ano {ANO} · Gerado em {HOJE_LABEL} · Regime de caixa · Fonte: Controlle + planilha de ocupação · Terceirizou — mais do que terceirizar o financeiro", sub))
+
 def fmt(v, tipo):
     if v is None:
-        return "—"
+        return ""
     if tipo == "qtd":
         return str(int(v))
     if tipo in ("moeda", "moeda_pos", "res", "ticket"):
-        # compacto: sem R$ e sem centavos (o mês cabe em 1 linha)
         vv = int(round(v))
         s = f"{abs(vv):,}".replace(",", ".")
         return ("-" if vv < 0 else "") + s
     return brl(int(round(v * 100)))
-for label, vals, tipo in DEF:
-    is_res = tipo == "res"
-    st_name = "cellrb" if is_res else ("cellr" if tipo in ("moeda", "moeda_pos", "qtd") else "cellc")
-    st_lbl = "cellb" if is_res else "cell"
-    row = [P(label, ParagraphStyle(f"l{label}", parent=globals()[st_lbl], alignment=0))]
-    for v in vals:
-        if tipo == "moeda_pos" and v:
-            s = ParagraphStyle(f"p{label}{v}", parent=cellr, textColor=VERMELHO)
-            row.append(P(fmt(v, tipo), s))
-        elif tipo == "res":
-            cor = VERDE if (v or 0) > 0 else VERMELHO if (v or 0) < 0 else PRETO
-            s = ParagraphStyle(f"r{label}{v}", parent=cellrb, textColor=cor)
-            row.append(P(fmt(v, tipo), s))
-        else:
-            row.append(P(fmt(v, tipo), globals()[st_name]))
-    # total (só faz sentido para moeda; hóspede/ticket: média ou último)
-    if tipo == "moeda":
-        tot = sum(v for v in vals if v is not None)
-        row.append(P(brl(int(round(tot * 100))), ParagraphStyle(f"t{label}", parent=cellrb, textColor=(VERDE if tot > 0 else VERMELHO if tot < 0 else PRETO), fontName="Helvetica-Bold")))
-    elif tipo == "qtd":
-        ult = next((v for v in reversed(vals) if v is not None), None)
-        row.append(P(str(int(ult)) if ult is not None else "—", cellrb))
-    elif tipo == "ticket":
-        ts = [v for v in vals if v is not None]
-        med = round(sum(ts) / len(ts), 2) if ts else None
-        row.append(P(fmt(med, "moeda"), cellrb))
-    elif tipo == "moeda_pos":
-        row.append(P("—", cellrb))
-    else:
-        row.append(P("—", cellrb))
-    rows.append(row)
-t = Table(rows, colWidths=[5.2*cm] + [1.85*cm]*12 + [2.2*cm], repeatRows=1)
-style = [("FONTNAME", (0,0), (-1,-1), "Helvetica"), ("FONTSIZE", (0,0), (-1,-1), 7),
-         ("TOPPADDING", (0,0), (-1,-1), 2), ("BOTTOMPADDING", (0,0), (-1,-1), 2),
-         ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-         ("BACKGROUND", (0,0), (-1,0), LARANJA), ("TEXTCOLOR", (0,0), (-1,0), colors.white),
-         ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
-         ("LINEBELOW", (0,-1), (-1,-1), 0.7, LARANJA)]
-for i, (label, vals, tipo) in enumerate(DEF, start=1):
-    if tipo == "res":
-        style.append(("BACKGROUND", (0,i), (-1,i), LARANJA_CLARO))
-    elif i % 2 == 0:
-        style.append(("BACKGROUND", (0,i), (-1,i), CINZA))
-t.setStyle(TableStyle(style))
-E.append(t)
 
-E.append(Spacer(1, 8))
-E.append(P("Nº Hóspedes e Ticket Médio: planilha de ocupação (fev–ago) e informação mensal da operação (set). Inadimplência e Despesas em Aberto: fev–ago da planilha de ocupação; a partir de setembro, Controlle (receitas/despesas em aberto até o último dia do mês). Demais indicadores: Controlle, regime de caixa. Janeiro: casa em implantação (sem operação).", sub))
+CW = [4.6*cm] + [1.95*cm]*12 + [2.3*cm]
+for bi, (titulo, defs) in enumerate(BLOCOS):
+    # título do bloco mesclado nas 14 colunas (não quebra linha)
+    t_tit = Table([[P(f"<b>{titulo}</b>", bt)]] , colWidths=[sum(CW)])
+    t_tit.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,-1), LARANJA),
+                               ("TOPPADDING", (0,0), (-1,-1), 3), ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+                               ("LEFTPADDING", (0,0), (-1,-1), 6)]))
+    E.append(t_tit)
+    rows = [[P("<b>Indicador</b>", cellb)] + [P(f"<b>{MES_PT[m][:3]}</b>", cellc) for m in range(1, 13)] + [P("<b>Total</b>", cellc)]]
+    for label, vals, tipo in defs:
+        is_res = tipo == "res"
+        st_lbl = "cellb" if is_res else "cell"
+        row = [P(label, ParagraphStyle(f"l{bi}{label}", parent=globals()[st_lbl]))]
+        for v in vals:
+            if tipo == "moeda_pos" and v:
+                s = ParagraphStyle(f"p{bi}{label}{v}", parent=cellr, textColor=VERMELHO)
+                row.append(P(fmt(v, tipo), s))
+            elif tipo == "res":
+                cor = VERDE if (v or 0) > 0 else VERMELHO if (v or 0) < 0 else PRETO
+                s = ParagraphStyle(f"r{bi}{label}{v}", parent=cellrb, textColor=cor)
+                row.append(P(fmt(v, tipo), s))
+            else:
+                row.append(P(fmt(v, tipo), globals()[st_name if False else ("cellrb" if is_res else ("cellr" if tipo in ("moeda","moeda_pos","qtd") else "cellc"))]))
+        if tipo == "moeda":
+            tot = sum(v for v in vals if v is not None)
+            row.append(P(brl(int(round(tot * 100))), ParagraphStyle(f"t{bi}{label}", parent=cellrb, textColor=(VERDE if tot > 0 else VERMELHO if tot < 0 else PRETO))))
+        elif tipo == "qtd":
+            ult = next((v for v in reversed(vals) if v is not None), None)
+            row.append(P(str(int(ult)) if ult is not None else "", cellrb))
+        elif tipo == "ticket":
+            ts = [v for v in vals if v is not None]
+            row.append(P(fmt(round(sum(ts) / len(ts), 2) if ts else None, "moeda"), cellrb))
+        else:
+            row.append(P("", cellrb))
+        rows.append(row)
+    t = Table(rows, colWidths=CW, repeatRows=1)
+    st = [("FONTNAME", (0,0), (-1,-1), "Helvetica"), ("FONTSIZE", (0,0), (-1,-1), 7),
+          ("TOPPADDING", (0,0), (-1,-1), 2), ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+          ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+          ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#3d3d3d")), ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+          ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+          ("BACKGROUND", (0,1), (0,-1), FUNDO_BLOCO[bi]),
+          ("LINEBELOW", (0,-1), (-1,-1), 0.7, LARANJA)]
+    for i, (label, vals, tipo) in enumerate(defs, start=1):
+        if tipo == "res":
+            st.append(("BACKGROUND", (0,i), (-1,i), LARANJA_CLARO))
+        elif i % 2 == 0:
+            st.append(("BACKGROUND", (0,i), (-1,i), colors.white))
+    t.setStyle(TableStyle(st))
+    E.append(t)
+    E.append(Spacer(1, 6))
+
+E.append(P("Nº Hóspedes e Ticket Médio: planilha de ocupação (fev–ago) e informação mensal da operação (set). Inadimplência e Despesas em Aberto: fev–ago da planilha de ocupação; a partir de setembro, Controlle (receitas/despesas em aberto até o último dia do mês). Demais indicadores: Controlle, regime de caixa. Janeiro: casa em implantação (sem operação). Meses sem informação: em branco.", sub))
 doc.build(E)
 print(f"OK: {ARQ_PDF}")
 
-# ===== Excel =====
+# ===== Excel (3 blocos na MESMA aba) =====
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
 ARQ_XLSX = f"artifacts/{date.today().strftime('%y%m%d')}_Indicadores_Centrovita_BN_{ANO}.xlsx"
 wb = Workbook()
 ws = wb.active
 ws.title = f"Indicadores {ANO}"
-ws.append((f"CENTROVITA BRAÇO DO NORTE — Indicadores Gerenciais {ANO}",))
-ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=14)
-c = ws.cell(row=1, column=1)
-c.font = Font(bold=True, size=13, color="FF501C")
-c.alignment = Alignment(horizontal="center", vertical="center")
-ws.row_dimensions[1].height = 24
-ws.append(("Indicador",) + tuple(MES_PT[m] for m in range(1, 13)) + ("Total",))
 FILL_H = PatternFill("solid", fgColor="FF501C")
 FILL_T = PatternFill("solid", fgColor="FFE3D6")
+FILL_B = {0: PatternFill("solid", fgColor="FFF3EC"), 1: PatternFill("solid", fgColor="F2F6F2"), 2: PatternFill("solid", fgColor="F7F4EE")}
 FH = Font(bold=True, color="FFFFFF")
 FB = Font(bold=True)
 VERDE_XL = "1A7F37"
 VERMELHO_XL = "C0392B"
-for cc in ws[2]:
-    cc.fill = FILL_H
-    cc.font = FH
-    cc.alignment = Alignment(horizontal="center", vertical="center")
-for label, vals, tipo in DEF:
-    ws.append((label,) + tuple(vals) + (None,))
-    r = ws.max_row
-    if tipo == "res":
-        for cc in ws[r]:
-            cc.fill = FILL_T
-        ws.cell(row=r, column=1).font = FB
-    for j, cc in enumerate(ws[r][1:], 2):
-        if isinstance(cc.value, (int, float)):
-            if tipo == "qtd":
-                cc.number_format = "0"
-            else:
-                cc.number_format = '"R$" #,##0.00'
-                cor = VERMELHO_XL if tipo == "moeda_pos" and cc.value else (VERDE_XL if cc.value > 0 else VERMELHO_XL if cc.value < 0 else "1A1A1A")
-                cc.font = Font(bold=tipo == "res", color=cor)
-ws.column_dimensions["A"].width = 28
+thin = Side(style="thin", color="DDDDDD")
+BORDA = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=14)
+c = ws.cell(row=1, column=1, value=f"CENTROVITA BRAÇO DO NORTE — Indicadores Gerenciais {ANO}")
+c.font = Font(bold=True, size=13, color="FF501C")
+c.alignment = Alignment(horizontal="center", vertical="center")
+ws.row_dimensions[1].height = 24
+
+linha = 3
+for bi, (titulo, defs) in enumerate(BLOCOS):
+    ws.cell(row=linha, column=1, value=titulo)
+    ws.merge_cells(start_row=linha, start_column=1, end_row=linha, end_column=14)
+    ct = ws.cell(row=linha, column=1)
+    ct.fill = FILL_H
+    ct.font = FH
+    ct.alignment = Alignment(horizontal="left", vertical="center")
+    for j in range(1, 15):
+        ws.cell(row=linha, column=j).fill = FILL_H
+    ws.row_dimensions[linha].height = 18
+    linha += 1
+    ws.cell(row=linha, column=1, value="Indicador")
+    for m in range(1, 13):
+        ws.cell(row=linha, column=1 + m, value=MES_PT[m])
+    ws.cell(row=linha, column=14, value="Total")
+    for cc in ws[linha]:
+        cc.font = Font(bold=True, size=9)
+        cc.alignment = Alignment(horizontal="center" if cc.column > 1 else "left", vertical="center")
+        cc.border = BORDA
+    linha += 1
+    for label, vals, tipo in defs:
+        ws.cell(row=linha, column=1, value=label).font = Font(bold=tipo == "res", size=9)
+        ws.cell(row=linha, column=1).fill = FILL_B[bi]
+        ws.cell(row=linha, column=1).border = BORDA
+        for j, v in enumerate(vals, 2):
+            cc = ws.cell(row=linha, column=j)
+            if v is not None:
+                cc.value = v
+                if tipo == "qtd":
+                    cc.number_format = "0"
+                else:
+                    cc.number_format = '"R$" #,##0.00'
+                if tipo == "moeda_pos" and v:
+                    cc.font = Font(color=VERMELHO_XL, size=9)
+                elif tipo == "res":
+                    cc.font = Font(bold=True, color=(VERDE_XL if v > 0 else VERMELHO_XL if v < 0 else "1A1A1A"), size=9)
+                else:
+                    cc.font = Font(size=9)
+            cc.border = BORDA
+            cc.fill = FILL_T if tipo == "res" else PatternFill("solid", fgColor="FFFFFF")
+        # total
+        ct2 = ws.cell(row=linha, column=14)
+        if tipo == "moeda":
+            tot = sum(v for v in vals if v is not None)
+            ct2.value = tot
+            ct2.number_format = '"R$" #,##0.00'
+            ct2.font = Font(bold=True, color=(VERDE_XL if tot > 0 else VERMELHO_XL if tot < 0 else "1A1A1A"), size=9)
+        elif tipo == "qtd":
+            ult = next((v for v in reversed(vals) if v is not None), None)
+            if ult is not None:
+                ct2.value = ult
+                ct2.number_format = "0"
+            ct2.font = Font(bold=True, size=9)
+        elif tipo == "ticket":
+            ts = [v for v in vals if v is not None]
+            if ts:
+                ct2.value = round(sum(ts) / len(ts), 2)
+                ct2.number_format = '"R$" #,##0.00'
+            ct2.font = Font(bold=True, size=9)
+        ct2.border = BORDA
+        linha += 1
+    linha += 2  # espaço entre blocos
+
+ws.column_dimensions["A"].width = 30
 for j in range(2, 14):
     ws.column_dimensions[get_column_letter(j)].width = 13
 ws.column_dimensions[get_column_letter(14)].width = 15
-ws.freeze_panes = "B3"
+ws.freeze_panes = "B4"
 wb.save(ARQ_XLSX)
 print(f"OK: {ARQ_XLSX}")
