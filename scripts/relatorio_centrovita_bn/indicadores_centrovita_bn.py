@@ -212,7 +212,7 @@ DEF = [
 
 # ===== agrupamento em 3 blocos =====
 BLOCOS = [
-    ("OCUPAÇÃO", [
+    ("RESULTADO ADMINISTRATIVO", [
         ("Nº Hóspedes", hosp_row, "qtd"),
         ("Ticket Médio", ticket_row, "ticket"),
     ]),
@@ -228,7 +228,7 @@ BLOCOS = [
         ("Despesas Financeiras", despfin_row, "moeda"),
         ("Resultado Financeiro", resfin_row, "res"),
     ]),
-    ("INADIMPLÊNCIA E DISTRIBUIÇÃO", [
+    ("ATRASADOS E DISTRIBUIÇÃO", [
         ("Inadimplência", inad_row, "moeda_pos"),
         ("Despesas em Aberto", despab_row, "moeda_pos"),
         ("Distribuição aos Sócios", distrib_row, "moeda"),
@@ -242,7 +242,7 @@ styles = getSampleStyleSheet()
 h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=13, textColor=PRETO, spaceAfter=1)
 sub = ParagraphStyle("sub", parent=styles["Normal"], fontName="Helvetica-Oblique", fontSize=7, textColor=colors.HexColor("#777777"), spaceAfter=4)
 bt = ParagraphStyle("bt", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=8.5, textColor=colors.white)
-cell = ParagraphStyle("cell", parent=styles["Normal"], fontSize=7)
+cell = ParagraphStyle("cell", parent=styles["Normal"], fontSize=6.8)
 cellb = ParagraphStyle("cellb", parent=cell, fontName="Helvetica-Bold")
 cellr = ParagraphStyle("cellr", parent=cell, alignment=2)
 cellrb = ParagraphStyle("cellrb", parent=cellb, alignment=2)
@@ -260,8 +260,12 @@ if os.path.exists(LOGO_CV):
     logo_cv = RLImage(LOGO_CV, width=3.6*cm, height=3.6*cm*1501/2668)
     logo_cv.hAlign = "LEFT"
     cab = []
-    if os.path.exists(SIMBOLO):
-        logo_tz = RLImage(SIMBOLO, width=1.5*cm, height=1.5*cm)
+    LOGO_TZ = os.path.join(_dir, "logo-terceirizou-completa.png")
+    if os.path.exists(LOGO_TZ):
+        # proporção real da logo completa (não distorcer)
+        from PIL import Image as PILImage
+        w0, h0 = PILImage.open(LOGO_TZ).size
+        logo_tz = RLImage(LOGO_TZ, width=4.2*cm, height=4.2*cm*h0/w0)
         logo_tz.hAlign = "RIGHT"
         cab = [[logo_cv, logo_tz]]
     else:
@@ -285,7 +289,7 @@ def fmt(v, tipo):
         return ("-" if vv < 0 else "") + s
     return brl(int(round(v * 100)))
 
-CW = [4.6*cm] + [1.95*cm]*12 + [2.3*cm]
+CW = [3.8*cm] + [1.75*cm]*12 + [2.0*cm]  # 26,8cm < 27,3cm úteis (A4 paisagem com margens 1,2cm)
 for bi, (titulo, defs) in enumerate(BLOCOS):
     # título do bloco mesclado nas 14 colunas (não quebra linha)
     t_tit = Table([[P(f"<b>{titulo}</b>", bt)]] , colWidths=[sum(CW)])
@@ -308,20 +312,14 @@ for bi, (titulo, defs) in enumerate(BLOCOS):
                 row.append(P(fmt(v, tipo), s))
             else:
                 row.append(P(fmt(v, tipo), globals()[st_name if False else ("cellrb" if is_res else ("cellr" if tipo in ("moeda","moeda_pos","qtd") else "cellc"))]))
-        if tipo == "moeda":
+        if tipo in ("moeda", "res"):
             tot = sum(v for v in vals if v is not None)
             row.append(P(brl(int(round(tot * 100))), ParagraphStyle(f"t{bi}{label}", parent=cellrb, textColor=(VERDE if tot > 0 else VERMELHO if tot < 0 else PRETO))))
-        elif tipo == "qtd":
-            ult = next((v for v in reversed(vals) if v is not None), None)
-            row.append(P(str(int(ult)) if ult is not None else "", cellrb))
-        elif tipo == "ticket":
-            ts = [v for v in vals if v is not None]
-            row.append(P(fmt(round(sum(ts) / len(ts), 2) if ts else None, "moeda"), cellrb))
         else:
             row.append(P("", cellrb))
         rows.append(row)
     t = Table(rows, colWidths=CW, repeatRows=1)
-    st = [("FONTNAME", (0,0), (-1,-1), "Helvetica"), ("FONTSIZE", (0,0), (-1,-1), 7),
+    st = [("FONTNAME", (0,0), (-1,-1), "Helvetica"), ("FONTSIZE", (0,0), (-1,-1), 6.8),
           ("TOPPADDING", (0,0), (-1,-1), 2), ("BOTTOMPADDING", (0,0), (-1,-1), 2),
           ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
           ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#3d3d3d")), ("TEXTCOLOR", (0,0), (-1,0), colors.white),
@@ -409,23 +407,11 @@ for bi, (titulo, defs) in enumerate(BLOCOS):
             cc.fill = FILL_T if tipo == "res" else PatternFill("solid", fgColor="FFFFFF")
         # total
         ct2 = ws.cell(row=linha, column=14)
-        if tipo == "moeda":
+        if tipo in ("moeda", "res"):
             tot = sum(v for v in vals if v is not None)
             ct2.value = tot
             ct2.number_format = '"R$" #,##0.00'
             ct2.font = Font(bold=True, color=(VERDE_XL if tot > 0 else VERMELHO_XL if tot < 0 else "1A1A1A"), size=9)
-        elif tipo == "qtd":
-            ult = next((v for v in reversed(vals) if v is not None), None)
-            if ult is not None:
-                ct2.value = ult
-                ct2.number_format = "0"
-            ct2.font = Font(bold=True, size=9)
-        elif tipo == "ticket":
-            ts = [v for v in vals if v is not None]
-            if ts:
-                ct2.value = round(sum(ts) / len(ts), 2)
-                ct2.number_format = '"R$" #,##0.00'
-            ct2.font = Font(bold=True, size=9)
         ct2.border = BORDA
         linha += 1
     linha += 2  # espaço entre blocos
