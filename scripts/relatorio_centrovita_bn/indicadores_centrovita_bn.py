@@ -20,7 +20,9 @@
 #     Inadimplência: receitas em aberto (sit 0) até o último dia do mês (Controlle a partir de set;
 #       fev-ago da planilha anexa) | Despesas em Aberto: idem despesas
 #     Distribuição aos Sócios: 04.05 (9190545)
-# Envio: MENSAL → vinicius@terceirizou.com.br (Resend).
+# Envio: MENSAL dia 05 às 14:00 → vinicius@terceirizou.com.br (Resend).
+#   Regra (Vinícius 20/10): relatório do dia 05 traz dados até o mês ANTERIOR fechado
+#   (ex.: 05/11 → dados até outubro). Meses não fechados = "—" em todos os indicadores.
 import json, os, sys, urllib.request, time
 from collections import defaultdict
 from datetime import date, timedelta
@@ -154,24 +156,28 @@ apor_row, juros_row, entemp_row = [], [], []
 inv_row, saiemp_row, despfin_row = [], [], []
 resfin_row, inad_row, despab_row, distrib_row = [], [], [], []
 for mes in range(1, 13):
-    d = por_mes.get(mes, defaultdict(int))
-    m = MANUAL.get(mes, {})
-    # hóspedes/ticket: manual se existir; senão None (futuro)
-    hosp_row.append(m.get("hosp"))
-    ticket_row.append(m.get("ticket"))
-    # inad/desp_ab: manual até ago; set em diante Controlle; meses não fechados (fim do mês
-    # > hoje) = None — lançamentos futuros não são inadimplência
     fim_mes = (date(ANO, mes, 28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
     fechado = date.today() >= fim_mes
+    d = por_mes.get(mes, defaultdict(int))
+    m = MANUAL.get(mes, {})
+    if not fechado:
+        # mês em andamento ou futuro: "—" em TODOS os indicadores (relatório do dia 05
+        # mostra dados até o mês anterior fechado)
+        for _row in (hosp_row, ticket_row, rec_row, desp_row, resop_row, apor_row, juros_row,
+                     entemp_row, inv_row, saiemp_row, despfin_row, resfin_row, inad_row,
+                     despab_row, distrib_row):
+            _row.append(None)
+        continue
+    # hóspedes/ticket: manual se existir; senão None
+    hosp_row.append(m.get("hosp"))
+    ticket_row.append(m.get("ticket"))
+    # inad/desp_ab: manual até ago; a partir de setembro Controlle
     if mes < INAD_CTL_DE and mes in m:
         inad_row.append(m["inad"])
         despab_row.append(m["desp_ab"])
-    elif fechado:
+    else:
         inad_row.append(abertos[mes][0] / 100 if abertos[mes][0] else 0.0)
         despab_row.append(abertos[mes][1] / 100 if abertos[mes][1] else 0.0)
-    else:
-        inad_row.append(None)
-        despab_row.append(None)
     rec_row.append(d["rec_op"] / 100)
     desp_row.append(d["desp_op"] / 100)
     resop_row.append((d["rec_op"] + d["desp_op"]) / 100)
