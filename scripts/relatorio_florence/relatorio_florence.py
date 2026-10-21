@@ -3,18 +3,19 @@
 #   v2.3 (feedback Vinícius 13/10): TODOS os pacotes consideram SÓ os centros de custo da
 #     unidade — ICARA = CC 169871 (lic ICARA); MARACAJÁ = CC 170264 (lic ICARA) + CC 171849
 #     (lic MA), dedup; GLOBAL = os dois CCs (169871+170264+171849), dedup. CC Florence
-#     Criciúma (170265) e lançamentos sem CC ficam FORA de todos os pacotes. Projeção usa as
-#     duas licenças com os CCs do pacote (bug v2.2: maracaja pulava a lic ICARA).
-#   v2.2 (13/10): projeção 12m e saldo nas contas FILTRADOS pela unidade do pacote (CC + contas)
-#     — balancesPreview da API não filtra por CC e mostrava a licença inteira no pacote Maracajá.
-#   v2.1 (13/10): manter o dedup multi-conjunto — lançamentos DUPLICADOS entre
+#     Criciúma (170265) e lançamentos sem CC ficam FORA de todos os pacotes.
+#   v2.2 (feedback Vinícius 13/10): projeção 12m e saldo nas contas FILTRADOS pela unidade do
+#     pacote (CC + contas) — balancesPreview da API não filtra por CC e mostrava a licença
+#     inteira no pacote Maracajá. Projeção = saldo real das contas do pacote + lançamentos
+#     previstos (sit 0) do CC, dedup entre licenças.
+#   v2.1 (feedback Vinícius 13/10): manter o dedup multi-conjunto — lançamentos DUPLICADOS entre
 #     as licenças (mesma compra sincronizada nas 2, ex. ago/26 espelho) contam UMA vez; os
 #     exclusivos de cada licença entram normalmente. Vinícius não pode deletar na origem.
 #   v2.0 (13/10): soma sem dedup — REVERTIDA no mesmo dia (duplicava ago inteiro).
 #   v1.0, 2026-09-22 (motor v1.4 Bem Viver).
 # Uso: python3 relatorio_florence.py [YYYY-MM-DD] [icara|maracaja|global]  (default: hoje, global)
 # Gera UM PDF + UM Excel por pacote com os 11 relatórios + Comparativo 13 meses em PDF PAISAGEM.
-# Fonte: API Controlle v1 — DUAS licenças (Içara + Maracajá) com dedup entre elas.
+# Fonte: API Controlle v1 — DUAS licenças (Içara + Maracajá) SOMADAS.
 # Envio: segunda-feira 15:00 → raulroliveira@hotmail.com + financeirodaflorence@gmail.com
 import json, os, sys, urllib.request
 from collections import defaultdict
@@ -46,11 +47,31 @@ MES_AB = {1:"jan",2:"fev",3:"mar",4:"abr",5:"mai",6:"jun",7:"jul",8:"ago",9:"set
 TAG_BOLETO_ICARA = 130028  # "Boleto Emitido" (licença Içara); licença Maracajá não tem boleto
 
 def req(url, token):
+    """GET com retry: 4 tentativas, backoff 5/10/15s em HTTP 500/502/503 e erros de rede
+    (outages recorrentes da API Controlle ~20min)."""
     r = urllib.request.Request(url)
     for k, v in _ua(token).items():
         r.add_header(k, v)
-    with urllib.request.urlopen(r, timeout=120) as resp:
-        return json.loads(resp.read().decode("utf-8", "replace"))
+    ultimo = None
+    for tent in range(4):
+        try:
+            with urllib.request.urlopen(r, timeout=120) as resp:
+                return json.loads(resp.read().decode("utf-8", "replace"))
+        except urllib.error.HTTPError as e:
+            if e.code in (500, 502, 503):
+                ultimo = e
+                if tent < 3:
+                    import time
+                    time.sleep(5 * (tent + 1))
+                continue
+            raise
+        except (urllib.error.URLError, ConnectionResetError, TimeoutError, OSError) as e:
+            ultimo = e
+            if tent < 3:
+                import time
+                time.sleep(5 * (tent + 1))
+            continue
+    raise ultimo
 
 def tx_list(start, end, token, **filtros):
     out, page = [], 1
@@ -131,6 +152,15 @@ def ok_florence(t, licenca, ccs_permitidos=None):
             return False
     return True
 
+def filtrar_pacote(txs, licenca):
+    """Aplica o filtro do pacote escolhido."""
+    if PACOTE == "icara":
+        return [t for t in txs if ok_florence(t, licenca, ccs_permitidos=[CC_ICARA])]
+    if PACOTE == "maracaja":
+        cc = [CC_MARACAJA_IC] if licenca == "icara" else [CC_MARACAJA_MA]
+        return [t for t in txs if ok_florence(t, licenca, ccs_permitidos=cc)]
+    return [t for t in txs if ok_florence(t, licenca)]  # global: tudo
+
 def agrupa_por_categoria(txs, so_negativas=False, so_positivas=False):
     g = defaultdict(lambda: [0, 0])
     for t in txs:
@@ -163,7 +193,7 @@ SEM_LABEL = f"{INI_SEM.strftime('%d/%m/%Y')} até {FIM_SEM.strftime('%d/%m/%Y')}
 
 # ===== dados =====
 # Duas licenças com DEDUP (v2.1): duplicados entre licenças contam UMA vez; exclusivos entram.
-# Pacotes: icara = CC Içara (lic ICARA) · maracaja = CC Maracajá (2 licenças, dedup) · global = 2 CCs (dedup).
+# Pacotes: icara = CC Içara (lic ICARA) · maracaja = CC Maracajá (2 licenças, dedup) · global = tudo (dedup).
 # saldos por conta no dia anterior — SÓ as contas do pacote (v2.2: o pacote Maracajá mostrava
 # as contas da licença Içara; o saldo da unidade é a CORA FLORENCE MARACAJA)
 saldos_conta = []
@@ -190,14 +220,10 @@ for i in range(0, 13):
     ini_m = add_months(INI_13, i)
     fim_m = add_months(ini_m, 1) - timedelta(days=1)
     meses_13.append((ini_m.isoformat(), fim_m.isoformat(), label_curto(ini_m)))
-serie_13 = []
-for ini_m, fim_m, lab in meses_13:
-    rev = exp = sal = 0
-    for tok in (TOK_ICARA, TOK_MARACAJA):
-        b = req(f"{BASE}/transaction/v1/transactions/balances?start_date={ini_m}&end_date={fim_m}", tok)["results"]
-        rev += b["revenuesDone"]; exp += b["expensesDone"]; sal += b["balanceDone"]
-    serie_13.append((lab, rev, exp, sal))
-# matriz por categoria: lançamentos realizados (sit 1,2) das 2 licenças com dedup multi-conjunto
+# v2.3 (21/10, pedido Vinícius): a SÉRIE do comparativo agora vem dos LANÇAMENTOS (dedup entre
+# as 2 licenças + filtro de CC do pacote) — antes usava balances das licenças INTEIRAS, sem
+# filtro de CC, misturando Içara no pacote Maracajá. Mesma regra do consolidado do mês:
+# value_in_cent total dos lançamentos filtrados.
 tx_icara_raw = tx_list(meses_13[0][0], min(meses_13[-1][1], DIA_ANT.isoformat()), TOK_ICARA, **{"situation": "[1,2]"})
 tx_maracaja_raw = tx_list(meses_13[0][0], min(meses_13[-1][1], DIA_ANT.isoformat()), TOK_MARACAJA, **{"situation": "[1,2]"})
 tx_global = dedup_multi(tx_icara_raw, tx_maracaja_raw)
@@ -207,6 +233,12 @@ elif PACOTE == "maracaja":
     tx_13m = [t for t in tx_global if ok_florence(t, "icara", ccs_permitidos=[CC_MARACAJA_IC]) or ok_florence(t, "maracaja", ccs_permitidos=[CC_MARACAJA_MA])]
 else:
     tx_13m = [t for t in tx_global if ok_florence(t, "icara", ccs_permitidos=CCS_GLOBAL) or ok_florence(t, "maracaja", ccs_permitidos=CCS_GLOBAL)]
+serie_13 = []
+for ini_m, fim_m, lab in meses_13:
+    mes_t = [t for t in tx_13m if ini_m <= bdate(t) <= fim_m]
+    rev = sum(t["value_in_cent"] for t in mes_t if t["value_in_cent"] > 0)
+    exp = sum(t["value_in_cent"] for t in mes_t if t["value_in_cent"] < 0)
+    serie_13.append((lab, rev, exp, rev + exp))
 matriz_13 = defaultdict(lambda: defaultdict(int))
 for t in tx_13m:
     mes = bdate(t)[:7]
@@ -491,7 +523,7 @@ E += tabela_cat("Resumo por categoria", g_inad, total_label="Total em aberto")
 excluir = [(nome, v, n) for nome, (v, n) in g_inad.items() if nome.startswith(("01.97", "01.99")) or "Judicial" in nome or "Perda" in nome]
 rows = [[P("<b>Composição do total</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)],
         [P("Somatório total (todas as categorias)", cell), P(f"<b>{len(inad)}</b>", cellc), P_val(total_inad, cellr)]]
-if excluir:  # só existe se as categorias de perda forem usadas um dia
+if excluir:  # só existe na BN se as categorias de perda forem usadas um dia
     rows.append([P("Somatório excluindo Negociação Judicial e Possível Perda de Receita", cell), P(f"<b>{len(inad) - sum(n for _, _, n in excluir)}</b>", cellc), P_val(total_inad - sum(v for _, v, _ in excluir), cellrb)])
 tj = tabela(rows, [11*cm, 2.5*cm, 3*cm])
 tj.setStyle(TableStyle([("BACKGROUND", (0,len(rows)-1), (-1,len(rows)-1), LARANJA_CLARO)]))
