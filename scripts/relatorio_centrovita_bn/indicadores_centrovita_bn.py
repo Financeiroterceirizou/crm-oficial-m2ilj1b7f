@@ -235,7 +235,7 @@ BLOCOS = [
     ]),
 ]
 # cores de fundo por bloco (harmonia: laranja suave, cinza claro, bege claro)
-FUNDO_BLOCO = {0: colors.HexColor("#fff3ec"), 1: colors.HexColor("#f2f6f2"), 2: colors.HexColor("#f7f4ee")}
+FUNDO_BLOCO = {0: colors.HexColor("#fdf0e8"), 1: colors.HexColor("#f4f7f4"), 2: colors.HexColor("#f6f3ed")}
 
 # ===== PDF (paisagem, 1 folha, 3 blocos) =====
 styles = getSampleStyleSheet()
@@ -314,7 +314,7 @@ for bi, (titulo, defs) in enumerate(BLOCOS):
                 row.append(P(fmt(v, tipo), globals()[st_name if False else ("cellrb" if is_res else ("cellr" if tipo in ("moeda","moeda_pos","qtd") else "cellc"))]))
         if tipo in ("moeda", "res"):
             tot = sum(v for v in vals if v is not None)
-            row.append(P(brl(int(round(tot * 100))), ParagraphStyle(f"t{bi}{label}", parent=cellrb, textColor=(VERDE if tot > 0 else VERMELHO if tot < 0 else PRETO))))
+            row.append(P(fmt(tot, "moeda"), ParagraphStyle(f"t{bi}{label}", parent=cellrb, textColor=(VERDE if tot > 0 else VERMELHO if tot < 0 else PRETO))))
         else:
             row.append(P("", cellrb))
         rows.append(row)
@@ -324,13 +324,13 @@ for bi, (titulo, defs) in enumerate(BLOCOS):
           ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
           ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#3d3d3d")), ("TEXTCOLOR", (0,0), (-1,0), colors.white),
           ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
-          ("BACKGROUND", (0,1), (0,-1), FUNDO_BLOCO[bi]),
           ("LINEBELOW", (0,-1), (-1,-1), 0.7, LARANJA)]
     for i, (label, vals, tipo) in enumerate(defs, start=1):
         if tipo == "res":
             st.append(("BACKGROUND", (0,i), (-1,i), LARANJA_CLARO))
-        elif i % 2 == 0:
-            st.append(("BACKGROUND", (0,i), (-1,i), colors.white))
+        else:
+            # cor do bloco na LINHA INTEIRA (leitura facilitada)
+            st.append(("BACKGROUND", (0,i), (-1,i), FUNDO_BLOCO[bi]))
     t.setStyle(TableStyle(st))
     E.append(t)
     E.append(Spacer(1, 6))
