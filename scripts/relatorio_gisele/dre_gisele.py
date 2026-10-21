@@ -181,7 +181,7 @@ for i in range(0, 12):
     fim_m = _add_m(ini_m, 1) - timedelta(days=1)
     _lab = ini_m.strftime("%b").lower()
     _lab = {"jan":"jan","feb":"fev","mar":"mar","apr":"abr","may":"mai","jun":"jun","jul":"jul","aug":"ago","sep":"set","oct":"out","nov":"nov","dec":"dez"}[_lab]
-    meses_12.append((ini_m.isoformat()[:7], f"{_lab}{str(ini_m.year)[2:]}"))
+    meses_12.append((ini_m.isoformat()[:7], f"{_lab}/{str(ini_m.year)[2:]}"))
 _tx12 = tx_list(f"{INI_12.year}-01-01", f"{MES_REF.year + 1}-12-31")
 tx_cc12 = [t for t in _tx12 if t.get("situation") in (1, 2)
            and _tem_cc(t)
@@ -237,12 +237,13 @@ cellc_s = ParagraphStyle("cellc_s", parent=cell_s, alignment=1)
 P = Paragraph
 
 def P_val_int(cents, style, bold=False):
-    """Valor em reais (sem centavos) e sem R$ — colunas estreitas. Recebe CENTAVOS."""
+    """R$ + valor em reais (sem centavos) — colunas estreitas. Recebe CENTAVOS."""
     reais = round(cents / 100)
-    st = ParagraphStyle("vi_" + style.name, parent=style, textColor=(VERDE if cents > 0 else VERMELHO if cents < 0 else PRETO))
+    st = ParagraphStyle("vi_" + style.name, parent=style, fontSize=5.4, leading=6.4, textColor=(VERDE if cents > 0 else VERMELHO if cents < 0 else PRETO))
     if bold:
         st.fontName = "Helvetica-Bold"
-    return P((("-" if reais < 0 else "") + f"{abs(reais):,}".replace(",", ".")) if reais else "0", st)
+    txt = ("-" if reais < 0 else "") + f"{abs(reais):,}".replace(",", ".")
+    return P(f"R$ {txt}" if reais else "R$ 0", st)
 
 def P_val(cents, style, bold=False):
     st = ParagraphStyle("v", parent=style, textColor=(VERDE if cents > 0 else VERMELHO if cents < 0 else PRETO),
@@ -379,7 +380,7 @@ for m, lab in meses_12:
     row_t.append(P_val_int(sum(rec_mensal[cid][m] for cid in rec_cats), cellrb_s, True))
 row_t.append(P_val(tot_rec_12, cellrb_s, True))
 rm_rows.append(row_t)
-t = tabela(rm_rows, [3.4*cm] + [1.08*cm]*12 + [2.2*cm], fs=6.2)
+t = tabela(rm_rows, [3.0*cm] + [1.1*cm]*12 + [2.2*cm], fs=6.2)
 t.setStyle(TableStyle([("BACKGROUND", (0,len(rm_rows)-1), (-1,len(rm_rows)-1), LARANJA_CLARO)]))
 E.append(t)
 
