@@ -51,8 +51,8 @@ def req(url, tries=4):
             with urllib.request.urlopen(r, timeout=120) as resp:
                 return json.loads(resp.read().decode("utf-8", "replace"))
         except urllib.error.HTTPError as e:
-            if e.code in (500, 502, 503) and i < tries - 1:
-                time.sleep(3 * (i + 1)); continue
+            if e.code in (409, 500, 502, 503) and i < tries - 1:
+                time.sleep(8 * (i + 1)); continue
             raise
         except (http.client.IncompleteRead, urllib.error.URLError, TimeoutError, OSError) as e:
             if i < tries - 1:
@@ -120,31 +120,36 @@ pais_ordem = [p for p in _plano_ativos if not p.get("id_plan_accounts_parent")]
 _tx = tx_list(MES_REF.replace(day=1).isoformat(), FIM_MES.isoformat(), min_esperado=300)
 mes_tx = [t for t in _tx if t.get("situation") in (1, 2) and tem_cc(t) and not eh_99(t)]
 
-# DRE por categoria (agrupada no PAI — entradas e saídas por categoria)
-valores = defaultdict(lambda: [0, 0])  # cat_id → [entradas, saídas] (valor direto do pai)
+# DRE por SUBCATEGORIA (modelo São Joaquim anexado 23/10): cada subcategoria com movimento,
+# na ordem do plano de contas (pai → filhos)
+valores = defaultdict(lambda: [0, 0])  # sub_id → [entradas, saídas]
 n_por_cat = defaultdict(lambda: [0, 0])
 for t in mes_tx:
     cid = cat_id(t)
     if cid is None: continue
-    pai = _pai_de.get(cid, cid)
     v = t["value_in_cent"]
     idx = 0 if v > 0 else 1
-    valores[pai][idx] += v
-    n_por_cat[pai][idx] += 1
+    valores[cid][idx] += v
+    n_por_cat[cid][idx] += 1
 com_mov = {cid for cid, (e, s) in valores.items() if e or s}
 
-# ordenar: pais na ordem do plano, filhos com movimento abaixo
 def _cod(nome):
     import re
     m = re.match(r"(\d+)", nome or "")
     return int(m.group(1)) if m else 999
+# ordem: pai (código) → filhos (código) na ordem do plano
 linhas = []
 for pai in sorted(pais_ordem, key=lambda p: _cod(p.get("ds_category"))):
-    if pai["id"] in com_mov:
+    filhos = sorted(by_parent.get(pai["id"], []), key=lambda p: _cod(p.get("ds_category")))
+    for sub in filhos:
+        if sub["id"] in com_mov:
+            e, s = valores[sub["id"]]
+            linhas.append(("cat", sub.get("ds_category"), e + s, n_por_cat[sub["id"]][0] + n_por_cat[sub["id"]][1]))
+    if pai["id"] in com_mov:  # lançamentos direto no pai (sem subcategoria)
         e, s = valores[pai["id"]]
         linhas.append(("cat", pai.get("ds_category"), e + s, n_por_cat[pai["id"]][0] + n_por_cat[pai["id"]][1]))
-# categorias com movimento fora do plano ativo
-ids_no_plano = {p["id"] for p in pais_ordem}
+# subcategorias com movimento fora do plano ativo
+ids_no_plano = {p["id"] for p in _plano_ativos}
 for cid in sorted(com_mov - ids_no_plano, key=lambda x: valores[x][0] + valores[x][1]):
     e, s = valores[cid]
     linhas.append(("cat", "(categoria fora do plano ativo)", e + s, n_por_cat[cid][0] + n_por_cat[cid][1]))
@@ -152,45 +157,6 @@ for cid in sorted(com_mov - ids_no_plano, key=lambda x: valores[x][0] + valores[
 tot_rec = sum(e for cid, (e, s) in valores.items() if e > 0)
 tot_desp = sum(s for cid, (e, s) in valores.items() if s < 0)
 resultado = tot_rec + tot_desp
-
-# ===== resultado 12 meses + fluxo 30 dias =====
-def _add_m(d, n):
-    m = d.month - 1 + n
-    y = d.year + m // 12
-    m = m % 12 + 1
-    return date(y, m, 1)
-INI_12 = _add_m(MES_REF, -11)
-meses_12 = []
-for i in range(0, 12):
-    ini_m = _add_m(INI_12, i)
-    fim_m = _add_m(ini_m, 1) - timedelta(days=1)
-    _lab = ini_m.strftime("%b").lower()
-    _lab = {"jan":"jan","feb":"fev","mar":"mar","apr":"abr","may":"mai","jun":"jun","jul":"jul","aug":"ago","sep":"set","oct":"out","nov":"nov","dec":"dez"}[_lab]
-    meses_12.append((ini_m.isoformat()[:7], f"{_lab}/{str(ini_m.year)[2:]}"))
-_tx12 = tx_list(f"{INI_12.year}-01-01", f"{MES_REF.year + 1}-12-31", min_esperado=5000)
-tx_cc12 = [t for t in _tx12 if t.get("situation") in (1, 2) and tem_cc(t) and not eh_99(t)]
-comp12 = {m: [0, 0] for m, _ in meses_12}
-for t in tx_cc12:
-    m = bdate(t)[:7]
-    if m in comp12:
-        v = t["value_in_cent"]
-        comp12[m][0 if v > 0 else 1] += v
-tot12_e = sum(v[0] for v in comp12.values())
-tot12_s = sum(v[1] for v in comp12.values())
-res12 = tot12_e + tot12_s
-MES_COR = _add_m(MES_REF, 1)
-FIM_COR = MES_COR.replace(day=28) + timedelta(days=4)
-FIM_COR = FIM_COR - timedelta(days=FIM_COR.day)
-MES_SEG = _add_m(MES_REF, 2)
-FIM_SEG = MES_SEG.replace(day=28) + timedelta(days=4)
-FIM_SEG = FIM_SEG - timedelta(days=FIM_SEG.day)
-_tx_fc = tx_list(MES_COR.isoformat(), FIM_SEG.isoformat())
-fc_cor = [t for t in _tx_fc if bdate(t)[:7] == MES_COR.isoformat()[:7] and tem_cc(t) and not eh_99(t)]
-fc_seg = [t for t in _tx_fc if bdate(t)[:7] == MES_SEG.isoformat()[:7] and tem_cc(t) and not eh_99(t)]
-fc_cor_e = sum(t["value_in_cent"] for t in fc_cor if t["value_in_cent"] > 0)
-fc_cor_s = sum(t["value_in_cent"] for t in fc_cor if t["value_in_cent"] < 0)
-fc_seg_e = sum(t["value_in_cent"] for t in fc_seg if t["value_in_cent"] > 0)
-fc_seg_s = sum(t["value_in_cent"] for t in fc_seg if t["value_in_cent"] < 0)
 
 # ===== PDF =====
 styles = getSampleStyleSheet()
@@ -274,28 +240,6 @@ t = tabela(td_rows, [11*cm, 2.5*cm, 3*cm])
 t.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), LARANJA_CLARO)]))
 E.append(t)
 
-# ===== Resultado dos últimos 12 meses =====
-E.append(PageBreak())
-E.append(P(f"Resultado dos Últimos 12 Meses — {meses_12[0][1]} a {meses_12[-1][1]} (regime de caixa)", h2))
-rs_rows = [[P("<b>Mês</b>", cell), P("<b>Entradas</b>", cellr), P("<b>Saídas</b>", cellr), P("<b>Resultado</b>", cellr)]]
-for m, lab in meses_12:
-    e_m, s_m = comp12[m]
-    rs_rows.append([P(lab, cell), P_val(e_m, cellr), P_val(s_m, cellr), P_val(e_m + s_m, cellrb)])
-rs_rows.append([P("<b>Resultado 12 meses</b>", cellrb), P_val(tot12_e, cellrb, True), P_val(tot12_s, cellrb, True), P_val(res12, cellrb, True)])
-t = tabela(rs_rows, [3*cm, 4.3*cm, 4.3*cm, 4.4*cm])
-t.setStyle(TableStyle([("BACKGROUND", (0,len(rs_rows)-1), (-1,len(rs_rows)-1), LARANJA_CLARO)]))
-E.append(t)
-
-# ===== Fluxo de Caixa — mês corrente e mês seguinte =====
-E.append(Spacer(1, 18))
-E.append(P("Fluxo de Caixa — Previsibilidade 30 dias (regime de caixa)", h2))
-fc_rows = [[P("<b>Período</b>", cell), P("<b>Entradas</b>", cellr), P("<b>Saídas</b>", cellr), P("<b>Resultado</b>", cellr)],
-           [P(f"{MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} (pago + pendente)", cell), P_val(fc_cor_e, cellr), P_val(fc_cor_s, cellr), P_val(fc_cor_e + fc_cor_s, cellrb)],
-           [P(f"{MES_PT[MES_SEG.month].capitalize()} de {MES_SEG.year} (previsto)", cell), P_val(fc_seg_e, cellr), P_val(fc_seg_s, cellr), P_val(fc_seg_e + fc_seg_s, cellrb)]]
-t = tabela(fc_rows, [6*cm, 3.7*cm, 3.7*cm, 3.6*cm])
-t.setStyle(TableStyle([("BACKGROUND", (0,len(fc_rows)-2), (-1,len(fc_rows)-1), LARANJA_CLARO)]))
-E.append(t)
-
 E.append(Spacer(1, 10))
 E.append(P("Gerado automaticamente pela Terceirizou · dados do Controlle", sub))
 doc.build(E, onFirstPage=rodape_simbolo, onLaterPages=rodape_simbolo)
@@ -376,60 +320,5 @@ for col, w in zip("ABCDE", (40, 12, 55, 24, 16)):
     ws2.column_dimensions[col].width = w
 ws2.freeze_panes = "A3"
 
-ws3 = wb.create_sheet("Resultado 12 meses")
-ws3.append((f"Resultado dos Últimos 12 Meses — {CC_NOME} (regime de caixa)",))
-ws3.merge_cells(start_row=1, start_column=1, end_row=1, end_column=4)
-c3 = ws3.cell(row=1, column=1)
-c3.font = Font(bold=True, size=12, color="FF501C")
-c3.alignment = Alignment(horizontal="center", vertical="center")
-ws3.row_dimensions[1].height = 22
-ws3.append(("Mês", "Entradas", "Saídas", "Resultado"))
-for cc in ws3[2]:
-    cc.fill = FILL_H
-    cc.font = FH
-    cc.alignment = Alignment(horizontal="center", vertical="center")
-for m, lab in meses_12:
-    ws3.append((lab, comp12[m][0] / 100, comp12[m][1] / 100, (comp12[m][0] + comp12[m][1]) / 100))
-ws3.append(("Resultado 12 meses", tot12_e / 100, tot12_s / 100, res12 / 100))
-for r in range(ws3.max_row, ws3.max_row + 1):
-    for cc in ws3[r]:
-        cc.font = Font(bold=True)
-        cc.fill = FILL_T
-for row in ws3.iter_rows(min_row=3):
-    for cc in row[1:]:
-        if isinstance(cc.value, (int, float)):
-            cc.number_format = '"R$" #,##0.00'
-            cc.font = Font(bold=bool(row[0].font and row[0].font.bold),
-                           color=(VERDE_XL if cc.value > 0 else VERMELHO_XL if cc.value < 0 else "1A1A1A"))
-for col, w in zip("ABCD", (14, 18, 18, 18)):
-    ws3.column_dimensions[col].width = w
-ws3.freeze_panes = "A3"
-
-ws4 = wb.create_sheet("Fluxo 30 dias")
-ws4.append((f"Fluxo de Caixa — Previsibilidade 30 dias — {CC_NOME} (regime de caixa)",))
-ws4.merge_cells(start_row=1, start_column=1, end_row=1, end_column=4)
-c4 = ws4.cell(row=1, column=1)
-c4.font = Font(bold=True, size=12, color="FF501C")
-c4.alignment = Alignment(horizontal="center", vertical="center")
-ws4.row_dimensions[1].height = 22
-ws4.append(("Período", "Entradas", "Saídas", "Resultado"))
-for cc in ws4[2]:
-    cc.fill = FILL_H
-    cc.font = FH
-    cc.alignment = Alignment(horizontal="center", vertical="center")
-ws4.append((f"{MES_PT[MES_COR.month].capitalize()} de {MES_COR.year} (pago + pendente)", fc_cor_e / 100, fc_cor_s / 100, (fc_cor_e + fc_cor_s) / 100))
-ws4.append((f"{MES_PT[MES_SEG.month].capitalize()} de {MES_SEG.year} (previsto)", fc_seg_e / 100, fc_seg_s / 100, (fc_seg_e + fc_seg_s) / 100))
-for r in range(ws4.max_row - 1, ws4.max_row + 1):
-    for cc in ws4[r]:
-        cc.font = Font(bold=True)
-        cc.fill = FILL_T
-for row in ws4.iter_rows(min_row=3):
-    for cc in row[1:]:
-        if isinstance(cc.value, (int, float)):
-            cc.number_format = '"R$" #,##0.00'
-            cc.font = Font(bold=True, color=(VERDE_XL if cc.value > 0 else VERMELHO_XL if cc.value < 0 else "1A1A1A"))
-for col, w in zip("ABCD", (34, 18, 18, 18)):
-    ws4.column_dimensions[col].width = w
-ws4.freeze_panes = "A3"
 wb.save(ARQ_XLSX)
 print(f"OK: {ARQ_XLSX}")
