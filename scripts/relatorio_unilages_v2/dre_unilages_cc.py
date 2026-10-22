@@ -117,7 +117,7 @@ for p in _plano_ativos:
 pais_ordem = [p for p in _plano_ativos if not p.get("id_plan_accounts_parent")]
 
 # ===== lançamentos do mês no CC =====
-_tx = tx_list(MES_REF.isoformat(), FIM_MES.isoformat(), min_esperado=300)
+_tx = tx_list(MES_REF.replace(day=1).isoformat(), FIM_MES.isoformat(), min_esperado=300)
 mes_tx = [t for t in _tx if t.get("situation") in (1, 2) and tem_cc(t) and not eh_99(t)]
 
 # DRE por categoria (agrupada no PAI — entradas e saídas por categoria)
