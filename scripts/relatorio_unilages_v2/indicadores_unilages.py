@@ -202,6 +202,8 @@ cellb = ParagraphStyle("cellb", parent=cell, fontName="Helvetica-Bold")
 cellr = ParagraphStyle("cellr", parent=cell, alignment=2)
 cellrb = ParagraphStyle("cellrb", parent=cellb, alignment=2)
 cellc = ParagraphStyle("cellc", parent=cell, alignment=1)
+cellh = ParagraphStyle("cellh", parent=cell, fontName="Helvetica-Bold", textColor=colors.white)
+cellch = ParagraphStyle("cellch", parent=cellh, alignment=1)
 P = Paragraph
 def fmt(v, tipo):
     if v is None: return ""
@@ -234,7 +236,7 @@ E.append(P(f"Ano {ANO} · Gerado em {HOJE_LABEL} · Regime de caixa · Fonte: Co
 
 CW = [3.8*cm] + [1.75*cm]*12 + [2.0*cm]
 # UMA tabela única com seções (títulos de bloco como linhas) — cabe em 1 página
-rows = [[P("<b>Indicador</b>", cellb)] + [P(f"<b>{MES_PT[m][:3]}</b>", cellc) for m in range(1, 13)] + [P("<b>Total</b>", cellc)]]
+rows = [[P("<b>Indicador</b>", cellh)] + [P(f"<b>{MES_PT[m][:3]}</b>", cellch) for m in range(1, 13)] + [P("<b>Total</b>", cellch)]]
 sec_spans = []  # (linha, fundo) para pintar por seção
 linha = 1
 for bi, (titulo, defs, fundo) in enumerate(BLOCOS):
