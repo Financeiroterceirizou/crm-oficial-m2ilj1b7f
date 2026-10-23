@@ -14,7 +14,7 @@ OWNER, REPO, BRANCH = 'Financeiroterceirizou', 'crm-oficial-m2ilj1b7f', 'main'
 BASE = '/home/ethos/.assistant/workspace/scripts/a5b0d6956d407911'
 PREFIX = 'scripts/a5b0d6956d407911'
 FILES = ['leads_input.json', 'estado.json', 'fetch_mcp_live.py', 'sync_github.py',
-         'rodada_1400.sh',
+         'run.sh',
          'cache/cora.json', 'cache/meta_ads_jun.json', 'cache/meta_ads_cadastro.json']
 
 _id = [0]
@@ -68,7 +68,7 @@ def main():
         return
     for f, _, motivo in changed:
         print(f'divergente ({motivo}): {f}')
-    msg = 'Polling a5b0: rodada 1400 protocolo .mcp-fresh completo (2026-10-18 14:01)'
+    msg = 'Polling a5b0: quarentena Cora no run.sh + estado restaurado (2026-10-23 20:05)'
     r = rpc('push_files', {'owner': OWNER, 'repo': REPO, 'branch': BRANCH, 'message': msg,
                            'files': [{'path': f'{PREFIX}/{f}', 'content': c}
                                      for f, c, _ in changed]})

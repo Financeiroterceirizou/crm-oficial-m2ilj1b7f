@@ -33,5 +33,24 @@ if [ ! -f "$POLLING_TMP/.mcp-fresh" ]; then
 fi
 rm -f "$POLLING_TMP/.mcp-fresh"
 
+# QUARENTENA CORA (2026-10-23 20:00): a Cora esvaziou a planilha live (colunas A-L
+# sem dados; só restaram status_atendimento em M/N em 6 linhas). Rodar o transform
+# com a Cora vazia ZERA o estado cora e sobrescreve o canônico (ocorreu 18:20 e
+# 20:00). Abortar enquanto a Cora live tiver menos de 50 linhas de dados (canônico
+# tem 72). Só a decisão do Vinícius (ou planilha nova da Cora) libera.
+if ! CORA_JSON="$POLLING_TMP/cora.json" python3 - <<'EOF'
+import json, os, sys
+d = json.load(open(os.environ['CORA_JSON']))
+rows = d.get('values', d) if isinstance(d, dict) else d
+dados = [r for r in rows if r and any(str(c).strip() for c in r[:12])]
+if len(dados) < 50:
+    print(f"QUARENTENA CORA: live com {len(dados)} linhas de dados (<50; canônico 72) — rodada abortada, canônico PRESERVADO.")
+    sys.exit(1)
+EOF
+then
+  echo "Abortado pela quarentena da Cora."
+  exit 1
+fi
+
 python3 scripts/91e08561a5b65e5d/transform.py
 cat "$LEADS_INPUT_PATH" | python3 scripts/captacao_leads/processar.py
