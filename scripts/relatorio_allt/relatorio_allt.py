@@ -263,12 +263,19 @@ dre_rows.append([P("<b>Total de Receitas</b>", cellrb), P(f"<b>{sum(n2[0] for n2
 dre_rows.append([P("<b>Total de Despesas</b>", cellrb), P(f"<b>{sum(n2[1] for n2 in n_por.values())}</b>", cellc), P_val(tot_desp, cellrb, True)])
 APORTE_ID = 10186397  # 42.01 Aporte do Sócio
 aporte_mes = valores.get(APORTE_ID, [0, 0])[0]  # entradas da subcategoria 42.01
-res_op = tot_rec - aporte_mes + tot_desp  # receitas sem aporte + despesas (negativas)
-res_fin = tot_rec + tot_desp  # com tudo
-dre_rows.append([P("<b>Resultado Operacional (sem aporte do sócio)</b>", cellrb), P("", cellc), P_val(res_op, cellrb, True)])
-dre_rows.append([P("<b>Resultado Financeiro (com aporte)</b>", cellrb), P(f"<b>{len(mes_tx)}</b>", cellc), P_val(res_fin, cellrb, True)])
+if aporte_mes:
+    # com aporte no mês: mostrar Resultado Operacional (sem aporte) e Resultado Financeiro
+    res_op = tot_rec - aporte_mes + tot_desp
+    res_fin = tot_rec + tot_desp
+    dre_rows.append([P("<b>Resultado Operacional (sem aporte do sócio)</b>", cellrb), P("", cellc), P_val(res_op, cellrb, True)])
+    dre_rows.append([P("<b>Resultado Financeiro (com aporte)</b>", cellrb), P(f"<b>{len(mes_tx)}</b>", cellc), P_val(res_fin, cellrb, True)])
+    _n_res = 4
+else:
+    # sem aporte: apenas o resultado do mês
+    dre_rows.append([P("<b>Resultado do mês</b>", cellrb), P(f"<b>{len(mes_tx)}</b>", cellc), P_val(tot_rec + tot_desp, cellrb, True)])
+    _n_res = 3
 t = tabela(dre_rows, [11*cm, 2.5*cm, 3*cm])
-t.setStyle(TableStyle([("BACKGROUND", (0,len(dre_rows)-4), (-1,len(dre_rows)-1), LARANJA_CLARO)]))
+t.setStyle(TableStyle([("BACKGROUND", (0,len(dre_rows)-_n_res+1), (-1,len(dre_rows)-1), LARANJA_CLARO)]))
 E.append(KeepTogether([_dre_titulo, t]))
 
 # 3) Fluxo de Caixa do mês anterior
@@ -383,7 +390,11 @@ for nome, v, n in linhas_dre:
     linha_val(ws, (nome, n, v / 100))
 linha_val(ws, ("Total de Receitas", sum(n2[0] for n2 in n_por.values()), tot_rec / 100), bold=True, fill=True)
 linha_val(ws, ("Total de Despesas", sum(n2[1] for n2 in n_por.values()), tot_desp / 100), bold=True, fill=True)
-linha_val(ws, ("Resultado do mês", len(mes_tx), (tot_rec + tot_desp) / 100), bold=True, fill=True)
+if aporte_mes:
+    linha_val(ws, ("Resultado Operacional (sem aporte do sócio)", (tot_rec - aporte_mes + tot_desp) / 100), bold=True, fill=True)
+    linha_val(ws, ("Resultado Financeiro (com aporte)", (tot_rec + tot_desp) / 100), bold=True, fill=True)
+else:
+    linha_val(ws, ("Resultado do mês", len(mes_tx), (tot_rec + tot_desp) / 100), bold=True, fill=True)
 # 3) fluxo mês anterior
 sec(ws, f"Fluxo de Caixa — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year} (realizado)", ("Descrição", "Valor"))
 linha_val(ws, ("Saldo inicial", saldo_ini_mes_ant / 100))
