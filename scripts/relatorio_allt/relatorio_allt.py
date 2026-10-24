@@ -97,12 +97,12 @@ def _cod(nome):
 tx_13m = tx_list((MES_REF.replace(day=1) - timedelta(days=365)).isoformat(), FIM_MES.isoformat())
 pagos_13m = [t for t in tx_13m if t.get("situation") in (1, 2) and not eh_99(t)]
 mes_tx = [t for t in pagos_13m if MES_REF.replace(day=1).isoformat() <= bdate(t) <= FIM_MES.isoformat()]
-prev_atual = [t for t in tx_list(MES_ATUAL.isoformat(), FIM_ATUAL.isoformat())
-              if t.get("situation") == 0 and not eh_99(t) and bdate(t) >= HOJE.isoformat()]
-prev_pago_atual = [t for t in tx_list(MES_ATUAL.isoformat(), HOJE.isoformat())
-                   if t.get("situation") in (1, 2) and not eh_99(t)]
-# previsão completa do mês atual = realizado (sit 1,2) + pendente (sit 0)
-prev_completa = prev_pago_atual + prev_atual
+# previsão completa do mês atual = TODOS os lançamentos do mês (pagos/recebidos sit 1,2 +
+# pendentes sit 0, inclusive vencidos a pagar/receber) — pedido Vinícius 24/10 11:41
+prev_completa = [t for t in tx_list(MES_ATUAL.isoformat(), FIM_ATUAL.isoformat())
+                 if t.get("situation") in (0, 1, 2) and not eh_99(t)]
+prev_atual = [t for t in prev_completa if t.get("situation") == 0]
+prev_pago_atual = [t for t in prev_completa if t.get("situation") in (1, 2)]
 
 # comparativo 13 meses
 INI_13 = MES_REF.replace(day=1) - timedelta(days=365)
