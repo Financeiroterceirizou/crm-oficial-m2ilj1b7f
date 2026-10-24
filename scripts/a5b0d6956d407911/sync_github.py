@@ -14,7 +14,7 @@ OWNER, REPO, BRANCH = 'Financeiroterceirizou', 'crm-oficial-m2ilj1b7f', 'main'
 BASE = '/home/ethos/.assistant/workspace/scripts/a5b0d6956d407911'
 PREFIX = 'scripts/a5b0d6956d407911'
 FILES = ['leads_input.json', 'estado.json', 'fetch_mcp_live.py', 'sync_github.py',
-         'run.sh',
+         'run.sh', 'save_live_cora.py', 'extract_live_jun_cad.py',
          'cache/cora.json', 'cache/meta_ads_jun.json', 'cache/meta_ads_cadastro.json']
 
 _id = [0]

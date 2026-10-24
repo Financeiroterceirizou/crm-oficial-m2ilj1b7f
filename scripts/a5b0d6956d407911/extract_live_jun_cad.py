@@ -4,10 +4,6 @@ e grava tmp/polling_a5b0/{meta_ads_jun,meta_ads_cadastro}.json no formato cru
 {"values": [...]}, preservando as strings FORMATTED_VALUE exatas.
 Depois compara live x canônico (leads_input.json) campo a campo.
 
-Fix NFC (2026-10-14): a leitura MCP traz strings NFD (Vinicius decomposto) e o
-canônico está NFC — sem normalizar, cada rodada ao vivo diverge na linha 5 do
-Cadastro (lead de teste) e o pipeline oscila. NFC deixa o pipeline idempotente.
-
 Uso: python3 scripts/a5b0d6956d407911/extract_live_jun_cad.py <artifact.json>
 """
 import json, sys, os, unicodedata
