@@ -70,6 +70,14 @@ def cat_nome(t):
 def cat_id(t):
     cats = t.get("apportionments_plan_account") or []
     return cats[0].get("id_category") if cats else None
+def valor_efetivo(t):
+    """Valor real: payment_in_cent quando pago (sit 1,2), value_in_cent quando pendente.
+    O balances (done) usa o valor PAGO — assim a DRE bate com o fluxo e o saldo."""
+    if t.get("situation") in (1, 2) and t.get("payment_in_cent") is not None:
+        return t["payment_in_cent"]
+    return t["value_in_cent"]
+
+
 def eh_99(t):
     return any((c.get("ds_category") or "").startswith("99.") or (c.get("ds_category") or "").lower().startswith("transferencia")
                for c in (t.get("apportionments_plan_account") or []))
@@ -120,7 +128,7 @@ comp13 = {m: [0, 0] for m, _ in meses_13}
 for t in pagos_13m:
     m = bdate(t)[:7]
     if m in comp13:
-        v = t["value_in_cent"]
+        v = valor_efetivo(t)
         comp13[m][0 if v > 0 else 1] += v
 
 # saldos das contas (para fluxo de caixa)
@@ -225,7 +233,7 @@ mat13 = defaultdict(lambda: defaultdict(int))
 for t in pagos_13m:
     m = bdate(t)[:7]
     if m in comp13:
-        mat13[cat_nome(t)][m] += t["value_in_cent"]
+        mat13[cat_nome(t)][m] += valor_efetivo(t)
 for cat in sorted(mat13):
     vals = [mat13[cat].get(m, 0) for m, _ in meses_13]
     if not any(vals):
@@ -242,7 +250,7 @@ n_por = defaultdict(lambda: [0, 0])
 for t in mes_tx:
     cid = cat_id(t)
     if cid is None: continue
-    v = t["value_in_cent"]
+    v = valor_efetivo(t)
     valores[cid][0 if v > 0 else 1] += v
     n_por[cid][0 if v > 0 else 1] += 1
 com_mov = {cid for cid, (e, s) in valores.items() if e or s}
@@ -300,7 +308,7 @@ n_por_p = defaultdict(lambda: [0, 0])
 for t in prev_completa:
     cid = cat_id(t)
     if cid is None: continue
-    v = t["value_in_cent"]
+    v = valor_efetivo(t)
     valores_p[cid][0 if v > 0 else 1] += v
     n_por_p[cid][0 if v > 0 else 1] += 1
 com_mov_p = {cid for cid, (e, s) in valores_p.items() if e or s}
