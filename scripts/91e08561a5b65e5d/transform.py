@@ -121,7 +121,7 @@ def main():
         # → processar.py re-processaria TODAS as linhas (re-sync em massa).
         # Aborta (exit 1) antes de gravar o input; o run.sh (set -euo pipefail)
         # interrompe antes do processar.py. Agente deve re-ler as planilhas com
-        # value_render_option=FORMATTED_VALUE e salvar tmp/polling/{source_name}.json de novo.
+        # value_render_option=FORMATTED_VALUE e salvar tmp/polling/*.json de novo.
         col_data = 'data_envio' if source_name == 'cora' else 'Data/Hora'
         suspeitas = [r.get(col_data) for r in output[source_name]
                      if isinstance(r.get(col_data), (int, float))
@@ -134,6 +134,31 @@ def main():
             sys.exit(1)
 
         print(f'  {source_name}: {len(output[source_name])} rows', file=sys.stderr)
+
+    # GUARDA QUARENTENA CORA (2026-10-23): a planilha Cora foi esvaziada
+    # EXTERNAMENTE (live só tem resíduos sem dados de lead). Se a Cora ativa
+    # não tiver NENHUMA linha com identificador (nome/email/telefone/cnpj),
+    # substitui pela seção cora do leads_input canônico — assim o processar.py
+    # reconstrói o estado da Cora a partir do canônico (idempotente) e o
+    # leads_input.json nunca é destruído pela planilha vazia.
+    def _tem_lead_cora(rows):
+        for r in rows:
+            if any(str(r.get(k, '')).strip() for k in
+                   ('nome', 'email', 'telefone', 'cnpj_ou_cpf')):
+                return True
+        return False
+
+    if not _tem_lead_cora(output.get('cora', [])):
+        canon_path = os.environ.get('LEADS_INPUT_PATH', os.path.join(TMP, 'leads_input.json'))
+        try:
+            with open(canon_path, 'r', encoding='utf-8') as f:
+                canon = json.load(f)
+            if isinstance(canon.get('cora'), list) and _tem_lead_cora(canon['cora']):
+                print(f'  QUARENTENA CORA: live sem leads ({len(output.get("cora", []))} linhas residuais); '
+                      f'usando canônico ({len(canon["cora"])} leads)', file=sys.stderr)
+                output['cora'] = canon['cora']
+        except FileNotFoundError:
+            pass
 
     # Caminho isolável por job via LEADS_INPUT_PATH (evita corrida entre crons)
     out_path = os.environ.get('LEADS_INPUT_PATH', os.path.join(TMP, 'leads_input.json'))
