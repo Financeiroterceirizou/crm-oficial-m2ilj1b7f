@@ -201,7 +201,7 @@ E.append(P(f"Gerado em {HOJE_LABEL} · Fonte: Controlle · Regime de caixa · Te
 E.append(Spacer(1, 8))
 
 # 1) Comparativo 13 meses
-E.append(P(f"Comparativo dos Últimos 13 Meses — {meses_13[0][1]} a {meses_13[-1][1]}", h2))
+_cmp_titulo = P(f"Comparativo dos Últimos 13 Meses — {meses_13[0][1]} a {meses_13[-1][1]}", h2)
 def P_int(cents, style, bold=False):
     """Valor em reais SEM R$ e sem centavos — colunas estreitas do comparativo."""
     reais = round(cents / 100)
@@ -232,10 +232,10 @@ for cat in sorted(mat13):
     rows.append([P(cat, cell)] + [P_int(v, cellr) for v in vals]
                 + [P_int(round(sum(vals) / 13), cellrb), P_int(sum(vals), cellrb)])
 t = tabela(rows, [3.4*cm] + [1.02*cm]*13 + [1.3*cm, 1.5*cm], fs=6.5, hpad=2)
-E.append(t)
+E.append(KeepTogether([_cmp_titulo, t]))
 
 # 2) Receitas e Despesas do mês anterior (DRE por subcategoria)
-E.append(P(f"Receitas e Despesas — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year} (realizado)", h2))
+_dre_titulo = P(f"Receitas e Despesas — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year} (realizado)", h2)
 valores = defaultdict(lambda: [0, 0])
 n_por = defaultdict(lambda: [0, 0])
 for t in mes_tx:
@@ -269,10 +269,9 @@ dre_rows.append([P("<b>Resultado Operacional (sem aporte do sócio)</b>", cellrb
 dre_rows.append([P("<b>Resultado Financeiro (com aporte)</b>", cellrb), P(f"<b>{len(mes_tx)}</b>", cellc), P_val(res_fin, cellrb, True)])
 t = tabela(dre_rows, [11*cm, 2.5*cm, 3*cm])
 t.setStyle(TableStyle([("BACKGROUND", (0,len(dre_rows)-4), (-1,len(dre_rows)-1), LARANJA_CLARO)]))
-E.append(t)
+E.append(KeepTogether([_dre_titulo, t]))
 
 # 3) Fluxo de Caixa do mês anterior
-E.append(P(f"Fluxo de Caixa — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year} (realizado)", h2))
 fx_rows = [[P("<b>Descrição</b>", cell), P("<b>Valor</b>", cellr)],
            [P("Saldo inicial", cell), P_val(saldo_ini_mes_ant, cellr)],
            [P("(+) Entradas", cell), P_val(comp13[MES_REF.isoformat()[:7]][0], cellr)],
@@ -280,10 +279,10 @@ fx_rows = [[P("<b>Descrição</b>", cell), P("<b>Valor</b>", cellr)],
            [P("<b>Saldo final</b>", cellrb), P_val(saldo_fim_mes_ant, cellrb, True)]]
 t = tabela(fx_rows, [8*cm, 5*cm])
 t.setStyle(TableStyle([("BACKGROUND", (0,len(fx_rows)-1), (-1,len(fx_rows)-1), LARANJA_CLARO)]))
-E.append(t)
+E.append(KeepTogether([P(f"Fluxo de Caixa — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year} (realizado)", h2), t]))
 
 # 4) Previsão de Receitas e Despesas do mês atual (pendente a partir de hoje)
-E.append(P(f"Previsão de Receitas e Despesas — {MES_PT[MES_ATUAL.month].capitalize()} de {MES_ATUAL.year} (realizado + previsto)", h2))
+_pv_titulo = P(f"Previsão de Receitas e Despesas — {MES_PT[MES_ATUAL.month].capitalize()} de {MES_ATUAL.year} (realizado + previsto)", h2)
 valores_p = defaultdict(lambda: [0, 0])
 n_por_p = defaultdict(lambda: [0, 0])
 for t in prev_completa:
@@ -309,10 +308,10 @@ prev_rows.append([P("<b>Total de Despesas (realizado + previsto)</b>", cellrb), 
 prev_rows.append([P("<b>Resultado previsto do mês</b>", cellrb), P(f"<b>{len(prev_completa)}</b>", cellc), P_val(tot_rec_p + tot_desp_p, cellrb, True)])
 t = tabela(prev_rows, [11*cm, 2.5*cm, 3*cm])
 t.setStyle(TableStyle([("BACKGROUND", (0,len(prev_rows)-3), (-1,len(prev_rows)-1), LARANJA_CLARO)]))
-E.append(t)
+E.append(KeepTogether([_pv_titulo, t]))
 
-# 5) Previsão de Fluxo de Caixa do mês atual
-E.append(P(f"Previsão de Fluxo de Caixa — {MES_PT[MES_ATUAL.month].capitalize()} de {MES_ATUAL.year}", h2))
+# 5) Previsão de Fluxo de Caixa do mês atual (título + tabela juntos)
+_fx_titulo = P(f"Previsão de Fluxo de Caixa — {MES_PT[MES_ATUAL.month].capitalize()} de {MES_ATUAL.year}", h2)
 pago_atual_e = sum(t["value_in_cent"] for t in prev_pago_atual if t["value_in_cent"] > 0)
 pago_atual_s = sum(t["value_in_cent"] for t in prev_pago_atual if t["value_in_cent"] < 0)
 fxp_rows = [[P("<b>Descrição</b>", cell), P("<b>Valor</b>", cellr)],
@@ -322,10 +321,10 @@ fxp_rows = [[P("<b>Descrição</b>", cell), P("<b>Valor</b>", cellr)],
             [P("<b>Saldo final projetado</b>", cellrb), P_val(saldo_hoje + tot_rec_p + tot_desp_p, cellrb, True)]]
 t = tabela(fxp_rows, [8*cm, 5*cm])
 t.setStyle(TableStyle([("BACKGROUND", (0,len(fxp_rows)-1), (-1,len(fxp_rows)-1), LARANJA_CLARO)]))
-E.append(t)
+E.append(KeepTogether([_fx_titulo, t]))
 
 # 6) Resultado dos últimos 12 meses
-E.append(P(f"Resultado dos Últimos 12 Meses — {meses_13[1][1]} a {meses_13[-1][1]}", h2))
+_rs_titulo = P(f"Resultado dos Últimos 12 Meses — {meses_13[1][1]} a {meses_13[-1][1]}", h2)
 rs_rows = [[P("<b>Mês</b>", cell), P("<b>Entradas</b>", cellr), P("<b>Saídas</b>", cellr), P("<b>Resultado</b>", cellr)]]
 for m, lab in meses_13[1:]:
     e_m, s_m = comp13[m]
@@ -335,7 +334,7 @@ tot12_s = sum(comp13[m][1] for m, _ in meses_13[1:])
 rs_rows.append([P("<b>Resultado 12 meses</b>", cellrb), P_val(tot12_e, cellrb, True), P_val(tot12_s, cellrb, True), P_val(tot12_e + tot12_s, cellrb, True)])
 t = tabela(rs_rows, [3*cm, 4.3*cm, 4.3*cm, 4.4*cm])
 t.setStyle(TableStyle([("BACKGROUND", (0,len(rs_rows)-1), (-1,len(rs_rows)-1), LARANJA_CLARO)]))
-E.append(t)
+E.append(KeepTogether([_rs_titulo, t]))
 
 E.append(Spacer(1, 10))
 E.append(P("Gerado automaticamente pela Terceirizou · dados do Controlle", sub))
