@@ -101,6 +101,8 @@ prev_atual = [t for t in tx_list(MES_ATUAL.isoformat(), FIM_ATUAL.isoformat())
               if t.get("situation") == 0 and not eh_99(t) and bdate(t) >= HOJE.isoformat()]
 prev_pago_atual = [t for t in tx_list(MES_ATUAL.isoformat(), HOJE.isoformat())
                    if t.get("situation") in (1, 2) and not eh_99(t)]
+# previsão completa do mês atual = realizado (sit 1,2) + pendente (sit 0)
+prev_completa = prev_pago_atual + prev_atual
 
 # comparativo 13 meses
 INI_13 = MES_REF.replace(day=1) - timedelta(days=365)
@@ -156,10 +158,11 @@ def P_val(cents, style, bold=False):
     s = ParagraphStyle("v", parent=style, textColor=(VERDE if cents > 0 else VERMELHO if cents < 0 else PRETO))
     if bold: s.fontName = "Helvetica-Bold"
     return P(brl(cents), s)
-def tabela(rows, widths, fs=7.5):
+def tabela(rows, widths, fs=7.5, hpad=6):
     t = Table(rows, colWidths=widths, repeatRows=1)
     st = [("FONTNAME", (0,0), (-1,-1), "Helvetica"), ("FONTSIZE", (0,0), (-1,-1), fs),
           ("TOPPADDING", (0,0), (-1,-1), 2.5), ("BOTTOMPADDING", (0,0), (-1,-1), 2.5),
+          ("LEFTPADDING", (0,0), (-1,-1), hpad), ("RIGHTPADDING", (0,0), (-1,-1), hpad),
           ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
           ("BACKGROUND", (0,0), (-1,0), LARANJA), ("TEXTCOLOR", (0,0), (-1,0), colors.white),
           ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
@@ -189,16 +192,36 @@ E.append(Spacer(1, 8))
 
 # 1) Comparativo 13 meses
 E.append(P(f"Comparativo dos Últimos 13 Meses — {meses_13[0][1]} a {meses_13[-1][1]}", h2))
+def P_int(cents, style, bold=False):
+    """Valor em reais SEM R$ e sem centavos — colunas estreitas do comparativo."""
+    reais = round(cents / 100)
+    st = ParagraphStyle("pi_" + style.name, parent=style, fontSize=6, leading=7,
+                        textColor=(VERDE if cents > 0 else VERMELHO if cents < 0 else PRETO))
+    if bold: st.fontName = "Helvetica-Bold"
+    return P((("-" if reais < 0 else "") + f"{abs(reais):,}".replace(",", ".")) if reais else "0", st)
+
 rows = [[P("<b>Mês</b>", cell)] + [P(f"<b>{lab}</b>", cellc) for _, lab in meses_13] + [P("<b>Média</b>", cellc), P("<b>Total</b>", cellc)],
-        [P("Entrada realizada", cell)] + [P_val_int(comp13[m][0], cellr) for m, _ in meses_13],
-        [P("Saída realizada", cell)] + [P_val_int(comp13[m][1], cellr) for m, _ in meses_13],
-        [P("Resultado do mês", cellb)] + [P_val_int(comp13[m][0] + comp13[m][1], cellrb) for m, _ in meses_13]]
+        [P("Entrada realizada", cell)] + [P_int(comp13[m][0], cellr) for m, _ in meses_13],
+        [P("Saída realizada", cell)] + [P_int(comp13[m][1], cellr) for m, _ in meses_13],
+        [P("Resultado do mês", cellb)] + [P_int(comp13[m][0] + comp13[m][1], cellrb) for m, _ in meses_13]]
 med_e = round(sum(v[0] for v in comp13.values()) / 13)
 med_s = round(sum(v[1] for v in comp13.values()) / 13)
-rows[1].append(P_val_int(med_e, cellrb, True)); rows[1].append(P_val_int(sum(v[0] for v in comp13.values()), cellrb, True))
-rows[2].append(P_val_int(med_s, cellrb, True)); rows[2].append(P_val_int(sum(v[1] for v in comp13.values()), cellrb, True))
-rows[3].append(P_val_int(med_e + med_s, cellrb, True)); rows[3].append(P_val_int(sum(v[0] + v[1] for v in comp13.values()), cellrb, True))
-t = tabela(rows, [2.0*cm] + [1.05*cm]*13 + [1.3*cm, 1.5*cm], fs=6.5)
+rows[1].append(P_int(med_e, cellrb, True)); rows[1].append(P_int(sum(v[0] for v in comp13.values()), cellrb, True))
+rows[2].append(P_int(med_s, cellrb, True)); rows[2].append(P_int(sum(v[1] for v in comp13.values()), cellrb, True))
+rows[3].append(P_int(med_e + med_s, cellrb, True)); rows[3].append(P_int(sum(v[0] + v[1] for v in comp13.values()), cellrb, True))
+# categorias com movimentação nos 13 meses (matriz categoria × mês)
+mat13 = defaultdict(lambda: defaultdict(int))
+for t in pagos_13m:
+    m = bdate(t)[:7]
+    if m in comp13:
+        mat13[cat_nome(t)][m] += t["value_in_cent"]
+for cat in sorted(mat13):
+    vals = [mat13[cat].get(m, 0) for m, _ in meses_13]
+    if not any(vals):
+        continue
+    rows.append([P(cat, cell)] + [P_int(v, cellr) for v in vals]
+                + [P_int(round(sum(vals) / 13), cellrb), P_int(sum(vals), cellrb)])
+t = tabela(rows, [3.4*cm] + [1.02*cm]*13 + [1.3*cm, 1.5*cm], fs=6.5, hpad=2)
 E.append(t)
 
 # 2) Receitas e Despesas do mês anterior (DRE por subcategoria)
@@ -228,9 +251,14 @@ for nome, v, n in linhas_dre:
     dre_rows.append([P(nome, cell), P(str(n), cellc), P_val(v, cellr)])
 dre_rows.append([P("<b>Total de Receitas</b>", cellrb), P(f"<b>{sum(n2[0] for n2 in n_por.values())}</b>", cellc), P_val(tot_rec, cellrb, True)])
 dre_rows.append([P("<b>Total de Despesas</b>", cellrb), P(f"<b>{sum(n2[1] for n2 in n_por.values())}</b>", cellc), P_val(tot_desp, cellrb, True)])
-dre_rows.append([P("<b>Resultado do mês</b>", cellrb), P(f"<b>{len(mes_tx)}</b>", cellc), P_val(tot_rec + tot_desp, cellrb, True)])
+APORTE_ID = 10186397  # 42.01 Aporte do Sócio
+aporte_mes = valores.get(APORTE_ID, [0, 0])[0]  # entradas da subcategoria 42.01
+res_op = tot_rec - aporte_mes + tot_desp  # receitas sem aporte + despesas (negativas)
+res_fin = tot_rec + tot_desp  # com tudo
+dre_rows.append([P("<b>Resultado Operacional (sem aporte do sócio)</b>", cellrb), P("", cellc), P_val(res_op, cellrb, True)])
+dre_rows.append([P("<b>Resultado Financeiro (com aporte)</b>", cellrb), P(f"<b>{len(mes_tx)}</b>", cellc), P_val(res_fin, cellrb, True)])
 t = tabela(dre_rows, [11*cm, 2.5*cm, 3*cm])
-t.setStyle(TableStyle([("BACKGROUND", (0,len(dre_rows)-3), (-1,len(dre_rows)-1), LARANJA_CLARO)]))
+t.setStyle(TableStyle([("BACKGROUND", (0,len(dre_rows)-4), (-1,len(dre_rows)-1), LARANJA_CLARO)]))
 E.append(t)
 
 # 3) Fluxo de Caixa do mês anterior
@@ -245,10 +273,10 @@ t.setStyle(TableStyle([("BACKGROUND", (0,len(fx_rows)-1), (-1,len(fx_rows)-1), L
 E.append(t)
 
 # 4) Previsão de Receitas e Despesas do mês atual (pendente a partir de hoje)
-E.append(P(f"Previsão de Receitas e Despesas — {MES_PT[MES_ATUAL.month].capitalize()} de {MES_ATUAL.year} (pendente)", h2))
+E.append(P(f"Previsão de Receitas e Despesas — {MES_PT[MES_ATUAL.month].capitalize()} de {MES_ATUAL.year} (realizado + previsto)", h2))
 valores_p = defaultdict(lambda: [0, 0])
 n_por_p = defaultdict(lambda: [0, 0])
-for t in prev_atual:
+for t in prev_completa:
     cid = cat_id(t)
     if cid is None: continue
     v = t["value_in_cent"]
@@ -266,9 +294,9 @@ for pai in sorted(pais_ordem, key=lambda p: _cod(p.get("ds_category"))):
         prev_rows.append([P(pai.get("ds_category"), cell), P(str(n_por_p[pai["id"]][0] + n_por_p[pai["id"]][1]), cellc), P_val(e + s, cellr)])
 tot_rec_p = sum(e for cid, (e, s) in valores_p.items() if e > 0)
 tot_desp_p = sum(s for cid, (e, s) in valores_p.items() if s < 0)
-prev_rows.append([P("<b>Total de Receitas previstas</b>", cellrb), P(f"<b>{sum(n2[0] for n2 in n_por_p.values())}</b>", cellc), P_val(tot_rec_p, cellrb, True)])
-prev_rows.append([P("<b>Total de Despesas previstas</b>", cellrb), P(f"<b>{sum(n2[1] for n2 in n_por_p.values())}</b>", cellc), P_val(tot_desp_p, cellrb, True)])
-prev_rows.append([P("<b>Resultado previsto</b>", cellrb), P(f"<b>{len(prev_atual)}</b>", cellc), P_val(tot_rec_p + tot_desp_p, cellrb, True)])
+prev_rows.append([P("<b>Total de Receitas (realizado + previsto)</b>", cellrb), P(f"<b>{sum(n2[0] for n2 in n_por_p.values())}</b>", cellc), P_val(tot_rec_p, cellrb, True)])
+prev_rows.append([P("<b>Total de Despesas (realizado + previsto)</b>", cellrb), P(f"<b>{sum(n2[1] for n2 in n_por_p.values())}</b>", cellc), P_val(tot_desp_p, cellrb, True)])
+prev_rows.append([P("<b>Resultado previsto do mês</b>", cellrb), P(f"<b>{len(prev_completa)}</b>", cellc), P_val(tot_rec_p + tot_desp_p, cellrb, True)])
 t = tabela(prev_rows, [11*cm, 2.5*cm, 3*cm])
 t.setStyle(TableStyle([("BACKGROUND", (0,len(prev_rows)-3), (-1,len(prev_rows)-1), LARANJA_CLARO)]))
 E.append(t)
@@ -279,11 +307,9 @@ pago_atual_e = sum(t["value_in_cent"] for t in prev_pago_atual if t["value_in_ce
 pago_atual_s = sum(t["value_in_cent"] for t in prev_pago_atual if t["value_in_cent"] < 0)
 fxp_rows = [[P("<b>Descrição</b>", cell), P("<b>Valor</b>", cellr)],
             [P("Saldo hoje", cell), P_val(saldo_hoje, cellr)],
-            [P("(+) Entradas realizadas no mês", cell), P_val(pago_atual_e, cellr)],
-            [P("(−) Saídas realizadas no mês", cell), P_val(pago_atual_s, cellr)],
-            [P("(+) Entradas previstas (restante do mês)", cell), P_val(tot_rec_p, cellr)],
-            [P("(−) Saídas previstas (restante do mês)", cell), P_val(tot_desp_p, cellr)],
-            [P("<b>Saldo final projetado</b>", cellrb), P_val(saldo_hoje + pago_atual_e + pago_atual_s + tot_rec_p + tot_desp_p, cellrb, True)]]
+            [P("(+) Entradas do mês (realizado + previsto)", cell), P_val(tot_rec_p, cellr)],
+            [P("(−) Saídas do mês (realizado + previsto)", cell), P_val(tot_desp_p, cellr)],
+            [P("<b>Saldo final projetado</b>", cellrb), P_val(saldo_hoje + tot_rec_p + tot_desp_p, cellrb, True)]]
 t = tabela(fxp_rows, [8*cm, 5*cm])
 t.setStyle(TableStyle([("BACKGROUND", (0,len(fxp_rows)-1), (-1,len(fxp_rows)-1), LARANJA_CLARO)]))
 E.append(t)
@@ -386,5 +412,49 @@ ws.column_dimensions["A"].width = 30
 from openpyxl.utils import get_column_letter as _gcl
 for j in range(2, 17):
     ws.column_dimensions[_gcl(j)].width = 12
+
+# aba: TODOS os lançamentos realizados (13 meses)
+ws_l = wb.create_sheet("Lançamentos 13m")
+ws_l.append((f"Todos os lançamentos realizados — {meses_13[0][1]} a {meses_13[-1][1]} (regime de caixa)",))
+ws_l.merge_cells(start_row=1, start_column=1, end_row=1, end_column=5)
+c_l = ws_l.cell(row=1, column=1); c_l.font = Font(bold=True, size=12, color="FF501C")
+ws_l.row_dimensions[1].height = 22
+ws_l.append(("Data", "Categoria", "Descrição", "Conta", "Valor"))
+for cc in ws_l[2]: cc.fill = FILL_H; cc.font = FH
+for t in sorted(pagos_13m, key=bdate):
+    d = bdate(t)
+    ws_l.append((f"{d[8:10]}/{d[5:7]}/{d[:4]}", cat_nome(t), (t.get("ds_transaction") or "")[:60],
+                 t.get("ds_account_main") or "", t["value_in_cent"] / 100))
+for row in ws_l.iter_rows(min_row=3):
+    cc = row[4]
+    if isinstance(cc.value, (int, float)):
+        cc.number_format = '"R$" #,##0.00'
+        cc.font = Font(color=(VERDE_XL if cc.value > 0 else VERMELHO_XL if cc.value < 0 else "1A1A1A"))
+for col, w in zip("ABCDE", (12, 40, 55, 22, 16)):
+    ws_l.column_dimensions[col].width = w
+ws_l.freeze_panes = "A3"
+
+# aba: previsão completa do mês atual (realizado + pendente)
+ws_p = wb.create_sheet(f"Previsão {MES_PT[MES_ATUAL.month][:3]}")
+ws_p.append((f"Mês atual ({MES_PT[MES_ATUAL.month].capitalize()}/{MES_ATUAL.year}) — realizado + pendente (regime de caixa)",))
+ws_p.merge_cells(start_row=1, start_column=1, end_row=1, end_column=6)
+c_p = ws_p.cell(row=1, column=1); c_p.font = Font(bold=True, size=12, color="FF501C")
+ws_p.row_dimensions[1].height = 22
+ws_p.append(("Situação", "Data", "Categoria", "Descrição", "Conta", "Valor"))
+for cc in ws_p[2]: cc.fill = FILL_H; cc.font = FH
+for t in sorted(prev_completa, key=bdate):
+    d = bdate(t)
+    sit = "Pago/Recebido" if t.get("situation") in (1, 2) else "Pendente"
+    ws_p.append((sit, f"{d[8:10]}/{d[5:7]}/{d[:4]}", cat_nome(t), (t.get("ds_transaction") or "")[:60],
+                 t.get("ds_account_main") or "", t["value_in_cent"] / 100))
+for row in ws_p.iter_rows(min_row=3):
+    cc = row[5]
+    if isinstance(cc.value, (int, float)):
+        cc.number_format = '"R$" #,##0.00'
+        cc.font = Font(color=(VERDE_XL if cc.value > 0 else VERMELHO_XL if cc.value < 0 else "1A1A1A"))
+for col, w in zip("ABCDEF", (14, 12, 40, 55, 22, 16)):
+    ws_p.column_dimensions[col].width = w
+ws_p.freeze_panes = "A3"
+
 wb.save(ARQ_XLSX)
 print(f"OK: {ARQ_XLSX}")
