@@ -334,10 +334,10 @@ _fx_titulo = P(f"Previsão de Fluxo de Caixa — {MES_PT[MES_ATUAL.month].capita
 pago_atual_e = sum(t["value_in_cent"] for t in prev_pago_atual if t["value_in_cent"] > 0)
 pago_atual_s = sum(t["value_in_cent"] for t in prev_pago_atual if t["value_in_cent"] < 0)
 fxp_rows = [[P("<b>Descrição</b>", cell), P("<b>Valor</b>", cellr)],
-            [P("Saldo hoje", cell), P_val(saldo_hoje, cellr)],
+            [P(f"Saldo inicial ({FIM_MES.strftime('%d/%m')})", cell), P_val(saldo_fim_mes_ant, cellr)],
             [P("(+) Entradas do mês (realizado + previsto)", cell), P_val(tot_rec_p, cellr)],
             [P("(−) Saídas do mês (realizado + previsto)", cell), P_val(tot_desp_p, cellr)],
-            [P("<b>Saldo final projetado</b>", cellrb), P_val(saldo_hoje + tot_rec_p + tot_desp_p, cellrb, True)]]
+            [P("<b>Saldo final projetado</b>", cellrb), P_val(saldo_fim_mes_ant + tot_rec_p + tot_desp_p, cellrb, True)]]
 t = tabela(fxp_rows, [8*cm, 5*cm])
 t.setStyle(TableStyle([("BACKGROUND", (0,len(fxp_rows)-1), (-1,len(fxp_rows)-1), LARANJA_CLARO)]))
 E.append(KeepTogether([_fx_titulo, t]))
@@ -428,12 +428,10 @@ linha_val(ws, ("Total de Despesas previstas", sum(n2[1] for n2 in n_por_p.values
 linha_val(ws, ("Resultado previsto", len(prev_atual), (tot_rec_p + tot_desp_p) / 100), bold=True, fill=True)
 # 5) previsão fluxo mês atual
 sec(ws, f"Previsão de Fluxo de Caixa — {MES_PT[MES_ATUAL.month].capitalize()} de {MES_ATUAL.year}", ("Descrição", "Valor"))
-linha_val(ws, ("Saldo hoje", saldo_hoje / 100))
-linha_val(ws, ("(+) Entradas realizadas no mês", pago_atual_e / 100))
-linha_val(ws, ("(−) Saídas realizadas no mês", pago_atual_s / 100))
-linha_val(ws, ("(+) Entradas previstas (restante do mês)", tot_rec_p / 100))
-linha_val(ws, ("(−) Saídas previstas (restante do mês)", tot_desp_p / 100))
-linha_val(ws, ("Saldo final projetado", (saldo_hoje + pago_atual_e + pago_atual_s + tot_rec_p + tot_desp_p) / 100), bold=True, fill=True)
+linha_val(ws, (f"Saldo inicial ({FIM_MES.strftime('%d/%m')})", saldo_fim_mes_ant / 100))
+linha_val(ws, ("(+) Entradas do mês (realizado + previsto)", tot_rec_p / 100))
+linha_val(ws, ("(−) Saídas do mês (realizado + previsto)", tot_desp_p / 100))
+linha_val(ws, ("Saldo final projetado", (saldo_fim_mes_ant + tot_rec_p + tot_desp_p) / 100), bold=True, fill=True)
 # 6) resultado 12m
 sec(ws, f"Resultado dos Últimos 12 Meses — {meses_13[1][1]} a {meses_13[-1][1]}", ("Mês", "Entradas", "Saídas", "Resultado"))
 for m, lab in meses_13[1:]:
