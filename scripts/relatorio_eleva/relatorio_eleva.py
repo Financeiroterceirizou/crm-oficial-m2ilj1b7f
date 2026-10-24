@@ -14,7 +14,7 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import cm
 from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image as RLImage, KeepTogether
+from reportlab.platypus import SimpleDocTemplate, BaseDocTemplate, PageTemplate, Frame, NextPageTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image as RLImage, KeepTogether
 from reportlab.lib.colors import HexColor
 from PIL import Image as PILImage
 from openpyxl import Workbook
@@ -135,7 +135,7 @@ bal_e, bal_s = balances_mes(MES_REF.replace(day=1).isoformat(), FIM_MES.isoforma
 # ---- estilos ----
 LARANJA = HexColor("#FF501C"); LARANJA_CLARO = HexColor("#fdf0e8")
 VERDE = HexColor("#1a7f37"); VERMELHO = HexColor("#c0271d"); PRETO = HexColor("#1a1a1a")
-CINZA = HexColor("#6b6b6b"); FUNDO_HDR = HexColor("#2b2b2b")
+CINZA = HexColor("#6b6b6b"); FUNDO_HDR = HexColor("#e8e8e8")
 def st(nome, **kw):
     base = dict(fontName="Helvetica", fontSize=8, leading=10, textColor=PRETO)
     base.update(kw); return ParagraphStyle(nome, **base)
@@ -143,9 +143,7 @@ h1 = st("h1", fontSize=15, leading=19, fontName="Helvetica-Bold", textColor=PRET
 h2 = st("h2", fontSize=10.5, leading=14, fontName="Helvetica-Bold", textColor=LARANJA)
 cell = st("c"); cellc = st("cc", alignment=1); cellr = st("cr", alignment=2)
 cellb = st("cb", fontName="Helvetica-Bold"); cellrb = st("crb", alignment=2, fontName="Helvetica-Bold")
-cellw = st("cw", textColor=colors.white, fontName="Helvetica-Bold", fontSize=7.5, leading=9)
-cellwc = st("cwc", textColor=colors.white, fontName="Helvetica-Bold", fontSize=7.5, leading=9, alignment=1)
-cellwr = st("cwr", textColor=colors.white, fontName="Helvetica-Bold", fontSize=7.5, leading=9, alignment=2)
+
 def P(txt, style=cell): return Paragraph(str(txt), style)
 def P_val(cents, style=cellr, bold=False):
     v = cents / 100
@@ -169,18 +167,23 @@ def tabela(rows, widths, fs=None, hpad=4):
               ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, HexColor("#f7f7f7")])]
     t.setStyle(TableStyle(estilo))
     return t
-def rodape(canvas, doc):
+
+ARQ_PDF = f"artifacts/{HOJE.strftime('%y%m%d')}_Relatorio_Eleva_{MES_REF.strftime('%Y%m')}.pdf"
+def _rodape(canvas, doc_):
+    pg = canvas.getPageNumber()
     canvas.saveState()
     canvas.setFillColor(LARANJA)
     canvas.rect(1.2 * cm, 0.8 * cm, 0.5 * cm, 0.5 * cm, stroke=0, fill=1)
     canvas.setFont("Helvetica", 7); canvas.setFillColor(CINZA)
-    canvas.drawRightString(A4[0] - 1.2 * cm, 0.9 * cm, f"Página {doc.page}")
+    canvas.drawRightString((A4 if doc_.pagesize == A4 else landscape(A4))[0] - 1.2 * cm, 0.9 * cm, f"Página {pg}")
     canvas.restoreState()
 
-ARQ_PDF = f"artifacts/{HOJE.strftime('%y%m%d')}_Relatorio_Eleva_{MES_REF.strftime('%Y%m')}.pdf"
-doc = SimpleDocTemplate(ARQ_PDF, pagesize=A4, leftMargin=1.4 * cm, rightMargin=1.4 * cm,
-                        topMargin=1.4 * cm, bottomMargin=1.6 * cm,
-                        title=f"Relatório Gerencial — Eleva — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year}")
+doc = BaseDocTemplate(ARQ_PDF, pagesize=A4,
+                      title=f"Relatório Gerencial — Eleva — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year}")
+fr_r = Frame(1.4 * cm, 1.6 * cm, A4[0] - 2.8 * cm, A4[1] - 3.0 * cm, id="fr_r")
+fr_l = Frame(1.4 * cm, 1.6 * cm, landscape(A4)[0] - 2.8 * cm, landscape(A4)[1] - 3.0 * cm, id="fr_l")
+doc.addPageTemplates([PageTemplate(id="retrato", frames=[fr_r], onPage=_rodape, pagesize=A4),
+                      PageTemplate(id="paisagem", frames=[fr_l], onPage=_rodape, pagesize=landscape(A4))])
 E = []
 
 # ---- capa ----
@@ -203,7 +206,7 @@ E.append(P("<b>ELEVA — Relatório Gerencial</b>", ParagraphStyle("h1c", parent
 E.append(Spacer(1, 0.2 * cm))
 E.append(P(f"{MES_PT[MES_REF.month].capitalize()} de {MES_REF.year}", ParagraphStyle("sub", parent=st("s2"), alignment=1, fontSize=11, textColor=CINZA)))
 E.append(Spacer(1, 0.5 * cm))
-E.append(P("Regimes: competência e caixa (pagamento) · Centros de custo e tags por cliente", ParagraphStyle("sub2", parent=st("s3"), alignment=1, fontSize=8.5, textColor=CINZA)))
+E.append(P("Centros de custo e tags por cliente", ParagraphStyle("sub2", parent=st("s3"), alignment=1, fontSize=8.5, textColor=CINZA)))
 E.append(PageBreak())
 
 # ---- 1) comparativo 13m competência ----
@@ -220,16 +223,30 @@ def bloco_comparativo(titulo, comp):
     rows[3].append(P_int(med_e + med_s, cellrb, True)); rows[3].append(P_int(sum(v[0] + v[1] for v in comp.values()), cellrb, True))
     return rows, n
 
-_cmp1_t = P(f"Comparativo dos Últimos 13 Meses — Regime de Competência (sem CC {CC_EXCLUIDO})", h2)
-rows1, n13 = bloco_comparativo(None, comp13)
-E.append(KeepTogether([_cmp1_t, tabela(rows1, [2.6*cm] + [1.15*cm]*13 + [1.4*cm, 1.6*cm], fs=6.5, hpad=2)]))
+# ---- 1) comparativo 13m (caixa, com categorias) — PÁGINA PAISAGEM ----
+E.append(NextPageTemplate("paisagem")); E.append(PageBreak())
+_cmp1_t = P(f"Comparativo dos Últimos 13 Meses (sem CC {CC_EXCLUIDO})", h2)
+rows1, n13 = bloco_comparativo(None, comp13c)
+LARG = landscape(A4)[0] - 2 * 1.4 * cm
+E.append(KeepTogether([_cmp1_t, tabela(rows1, [3.0*cm] + [1.55*cm]*13 + [1.7*cm, 2.0*cm], fs=6.5, hpad=2)]))
 E.append(Spacer(1, 0.5 * cm))
-
-# ---- 2) comparativo 13m caixa ----
-_cmp2_t = P(f"Comparativo dos Últimos 13 Meses — Regime Caixa/Pagamento (sem CC {CC_EXCLUIDO})", h2)
-rows2, _ = bloco_comparativo(None, comp13c)
-E.append(KeepTogether([_cmp2_t, tabela(rows2, [2.6*cm] + [1.15*cm]*13 + [1.4*cm, 1.6*cm], fs=6.5, hpad=2)]))
-E.append(PageBreak())
+# matriz categoria × mês (só categorias com movimento)
+mat13 = defaultdict(lambda: defaultdict(int))
+for t in pagos_13m:
+    if tem_cc(t, CC_EXCLUIDO): continue
+    m = bdate(t)[:7]
+    if m in comp13c:
+        mat13[cat_nome(t)][m] += valor_efetivo(t)
+cats_com = [c for c in sorted(mat13) if any(mat13[c].get(m) for m, _ in meses_13)]
+if cats_com:
+    _cmpm_t = P("Comparativo por Categoria", h2)
+    mrows = [[P("<b>Categoria</b>", cell)] + [P(f"<b>{lab}</b>", cellc) for _, lab in meses_13] + [P("<b>Média</b>", cellc), P("<b>Total</b>", cellc)]]
+    for cat in cats_com:
+        vals = [mat13[cat].get(m, 0) for m, _ in meses_13]
+        mrows.append([P(cat, cell)] + [P_int(v, cellr) for v in vals]
+                     + [P_int(round(sum(vals) / n13), cellrb), P_int(sum(vals), cellrb)])
+    E.append(KeepTogether([_cmpm_t, tabela(mrows, [4.6*cm] + [1.55*cm]*13 + [1.7*cm, 2.0*cm], fs=6.5, hpad=2)]))
+E.append(NextPageTemplate("retrato")); E.append(PageBreak())
 
 # ---- DRE por categoria (usada nas seções 3, 4, 9, 10) ----
 pais_ordem = []
@@ -280,33 +297,27 @@ def dre_rows(tx, titulo_total="Total", regime="caixa"):
 
 # ---- 3) DRE mês anterior competência ----
 sem_hnsc = lambda tx: [t for t in tx if not tem_cc(t, CC_EXCLUIDO)]
-_dre1_t = P(f"Receitas e Despesas — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year} — Regime de Competência (sem CC {CC_EXCLUIDO})", h2)
-E.append(KeepTogether([_dre1_t, tabela(dre_rows(sem_hnsc(mes_tx), regime="comp"), [7.2*cm, 2.2*cm, 2.6*cm, 2.6*cm, 2.8*cm])]))
+_dre1_t = P(f"Receitas e Despesas — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year} (sem CC {CC_EXCLUIDO})", h2)
+E.append(KeepTogether([_dre1_t, tabela(dre_rows(sem_hnsc(mes_tx)), [7.2*cm, 2.2*cm, 2.6*cm, 2.6*cm, 2.8*cm])]))
 E.append(Spacer(1, 0.5 * cm))
 
-# ---- 4) DRE mês anterior caixa ----
-_dre2_t = P(f"Receitas e Despesas — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year} — Regime Caixa/Pagamento (sem CC {CC_EXCLUIDO})", h2)
-E.append(KeepTogether([_dre2_t, tabela(dre_rows(sem_hnsc(mes_tx)), [7.2*cm, 2.2*cm, 2.6*cm, 2.6*cm, 2.8*cm])]))
 E.append(PageBreak())
 
 # ---- 5) fluxo de caixa realizado (caixa, COM HNSC) ----
-_fx_t = P(f"Fluxo de Caixa — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year} (regime caixa)", h2)
+_fx_t = P(f"Fluxo de Caixa — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year}", h2)
 fx_rows = [[P("<b>Descrição</b>", cell), P("<b>Valor</b>", cellr)],
            [P("Saldo inicial", cell), P_val(saldo_ini_mes_ant, cellr)],
-           [P("(+) Entradas (baixas do mês)", cell), P_val(bal_e, cellr)],
-           [P("(−) Saídas (baixas do mês)", cell), P_val(bal_s, cellr)],
+           [P("(+) Entradas", cell), P_val(bal_e, cellr)],
+           [P("(−) Saídas", cell), P_val(bal_s, cellr)],
            [P("<b>Saldo final</b>", cellrb), P_val(saldo_fim_mes_ant, cellrb, True)]]
 E.append(KeepTogether([_fx_t, tabela(fx_rows, [8*cm, 5*cm])]))
 E.append(Spacer(1, 0.5 * cm))
 
 # ---- 6) previsão DRE competência (pagos + não pagos, sem HNSC) ----
-_pv1_t = P(f"Previsão de Receitas e Despesas — {MES_PT[MES_ATUAL.month].capitalize()} de {MES_ATUAL.year} — Regime de Competência (pagos + não pagos, sem CC {CC_EXCLUIDO})", h2)
-E.append(KeepTogether([_pv1_t, tabela(dre_rows(sem_hnsc(prev_completa), regime="comp"), [7.2*cm, 2.2*cm, 2.6*cm, 2.6*cm, 2.8*cm])]))
+_pv1_t = P(f"Previsão de Receitas e Despesas — {MES_PT[MES_ATUAL.month].capitalize()} de {MES_ATUAL.year} (pagos + não pagos, sem CC {CC_EXCLUIDO})", h2)
+E.append(KeepTogether([_pv1_t, tabela(dre_rows(sem_hnsc(prev_completa)), [7.2*cm, 2.2*cm, 2.6*cm, 2.6*cm, 2.8*cm])]))
 E.append(Spacer(1, 0.5 * cm))
 
-# ---- 7) previsão DRE caixa (pagos + não pagos, sem HNSC) ----
-_pv2_t = P(f"Previsão de Receitas e Despesas — {MES_PT[MES_ATUAL.month].capitalize()} de {MES_ATUAL.year} — Regime Caixa/Pagamento (pagos + não pagos, sem CC {CC_EXCLUIDO})", h2)
-E.append(KeepTogether([_pv2_t, tabela(dre_rows(sem_hnsc(prev_completa)), [7.2*cm, 2.2*cm, 2.6*cm, 2.6*cm, 2.8*cm])]))
 E.append(PageBreak())
 
 # ---- 8) previsão fluxo de caixa ----
@@ -322,19 +333,19 @@ E.append(KeepTogether([_fxp_t, tabela(fxp_rows, [8*cm, 5*cm])]))
 E.append(Spacer(1, 0.5 * cm))
 
 # ---- 9) DRE por CC (LARISSA, MICHELLE) — competência ----
-_cc_t = P(f"Receitas e Despesas por Centro de Custo — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year} — Regime de Competência", h2)
+_cc_t = P(f"Receitas e Despesas por Centro de Custo — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year}", h2)
 for cc_nome in ["LARISSA", "MICHELLE"]:
     tx_cc = [t for t in mes_tx if tem_cc(t, cc_nome)]
     E.append(P(f"<b>Centro de Custo: {cc_nome}</b>", st("ccn", fontName="Helvetica-Bold", fontSize=9.5, textColor=PRETO)))
     if tx_cc:
-        E.append(tabela(dre_rows(tx_cc, f"Total {cc_nome}", regime="comp"), [7.2*cm, 2.2*cm, 2.6*cm, 2.6*cm, 2.8*cm]))
+        E.append(tabela(dre_rows(tx_cc, f"Total {cc_nome}"), [7.2*cm, 2.2*cm, 2.6*cm, 2.6*cm, 2.8*cm]))
     else:
         E.append(P("Sem lançamentos no mês.", cell))
     E.append(Spacer(1, 0.4 * cm))
 E.append(PageBreak())
 
 # ---- 10) DRE por TAG (clientes) — competência ----
-_tag_t = P(f"Receitas e Despesas por Tag — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year} — Regime de Competência", h2)
+_tag_t = P(f"Receitas e Despesas por Tag — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year}", h2)
 E.append(_tag_t)
 tem_tag_alguma = False
 for tag in TAGS_CLIENTE:
@@ -342,7 +353,7 @@ for tag in TAGS_CLIENTE:
     if not tx_tag: continue
     tem_tag_alguma = True
     E.append(P(f"<b>Tag: {tag}</b>", st("tgn", fontName="Helvetica-Bold", fontSize=9.5, textColor=PRETO)))
-    E.append(tabela(dre_rows(tx_tag, f"Total {tag}", regime="comp"), [7.2*cm, 2.2*cm, 2.6*cm, 2.6*cm, 2.8*cm]))
+    E.append(tabela(dre_rows(tx_tag, f"Total {tag}"), [7.2*cm, 2.2*cm, 2.6*cm, 2.6*cm, 2.8*cm]))
     E.append(Spacer(1, 0.4 * cm))
 if not tem_tag_alguma:
     E.append(P("Sem lançamentos por tag no mês.", cell))
@@ -356,14 +367,14 @@ for c in contas:
 sald_rows.append([P("<b>Total</b>", cellrb), P_val(saldo_fim_mes_ant, cellrb, True)])
 E.append(KeepTogether([_saldo_t, tabela(sald_rows, [10*cm, 4*cm])]))
 
-doc.build(E, onFirstPage=rodape, onLaterPages=rodape)
+doc.build(E)
 print(f"OK: {ARQ_PDF}")
 
 # ---- Excel ----
 from openpyxl.utils import get_column_letter
 ARQ_XLSX = f"artifacts/{HOJE.strftime('%y%m%d')}_Relatorio_Eleva_{MES_REF.strftime('%Y%m')}.xlsx"
 wb = Workbook(); ws = wb.active; ws.title = "Relatório"
-ws.append((f"ELEVA — Relatório Gerencial — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year} (regimes competência e caixa)",))
+ws.append((f"ELEVA — Relatório Gerencial — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year} (regime de caixa)",))
 ws["A1"].font = Font(bold=True, size=13)
 def sec(nome):
     ws.append(("",)); ws.append((nome,)); ws.cell(row=ws.max_row, column=1).font = Font(bold=True, size=11, color="FF501C")
@@ -412,29 +423,27 @@ def dre_excel(titulo, tx, regime="caixa"):
         if tem: tot_e += valores[pai["id"]][0]; tot_s += valores[pai["id"]][1]
     linha("Total", sum(x[0] + x[1] for x in n_por.values()), tot_e / 100, tot_s / 100, (tot_e + tot_s) / 100, bold=True, fill=True)
 
-dre_excel(f"3. Receitas e Despesas — Competência (sem CC {CC_EXCLUIDO})", sem_hnsc(mes_tx), regime="comp")
-dre_excel(f"4. Receitas e Despesas — Caixa/Pagamento (sem CC {CC_EXCLUIDO})", sem_hnsc(mes_tx))
-sec("5. Fluxo de Caixa — mês anterior (caixa)")
+dre_excel(f"3. Receitas e Despesas — Competência (sem CC {CC_EXCLUIDO})", sem_hnsc(mes_tx))
+sec("4. Fluxo de Caixa — mês anterior")
 linha("Descrição", "Valor", bold=True, fill=True)
 linha("Saldo inicial", saldo_ini_mes_ant / 100)
-linha("(+) Entradas (baixas do mês)", bal_e / 100)
-linha("(−) Saídas (baixas do mês)", bal_s / 100)
+linha("(+) Entradas", bal_e / 100)
+linha("(−) Saídas", bal_s / 100)
 linha("Saldo final", saldo_fim_mes_ant / 100, bold=True, fill=True)
-dre_excel(f"6. Previsão — Competência (pagos + não pagos, sem CC {CC_EXCLUIDO})", sem_hnsc(prev_completa), regime="comp")
-dre_excel(f"7. Previsão — Caixa/Pagamento (pagos + não pagos, sem CC {CC_EXCLUIDO})", sem_hnsc(prev_completa))
-sec("8. Previsão de Fluxo de Caixa — mês atual")
+dre_excel(f"5. Previsão (pagos + não pagos, sem CC {CC_EXCLUIDO})", sem_hnsc(prev_completa))
+sec("6. Previsão de Fluxo de Caixa — mês atual")
 linha("Descrição", "Valor", bold=True, fill=True)
 linha(f"Saldo inicial ({FIM_MES.strftime('%d/%m')})", saldo_fim_mes_ant / 100)
 linha("(+) Entradas do mês (realizado + previsto)", tot_rec_p / 100)
 linha("(−) Saídas do mês (realizado + previsto)", tot_desp_p / 100)
 linha("Saldo final projetado", (saldo_fim_mes_ant + tot_rec_p + tot_desp_p) / 100, bold=True, fill=True)
 for cc_nome in ["LARISSA", "MICHELLE"]:
-    dre_excel(f"9. Receitas e Despesas — CC {cc_nome} — Competência", [t for t in mes_tx if tem_cc(t, cc_nome)], regime="comp")
+    dre_excel(f"7. Receitas e Despesas — CC {cc_nome}", [t for t in mes_tx if tem_cc(t, cc_nome)])
 for tag in TAGS_CLIENTE:
     tx_tag = [t for t in mes_tx if tag in tag_names(t)]
     if tx_tag:
-        dre_excel(f"10. Receitas e Despesas — Tag {tag} — Competência", tx_tag, regime="comp")
-sec(f"11. Saldo nas Contas — {FIM_MES.strftime('%d/%m/%Y')}")
+        dre_excel(f"8. Receitas e Despesas — Tag {tag}", tx_tag)
+sec(f"9. Saldo nas Contas — {FIM_MES.strftime('%d/%m/%Y')}")
 linha("Conta", "Saldo", bold=True, fill=True)
 for c in contas:
     b = req(f"{BASE}/transaction/v1/transactions/balances?start_date=2017-01-01&end_date={FIM_MES.isoformat()}&id_account_main={c['id']}")["results"]
