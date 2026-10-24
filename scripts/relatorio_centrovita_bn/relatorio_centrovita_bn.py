@@ -200,12 +200,21 @@ g_sem_boleto = agrupa_por_categoria(sem_boleto)
 total_sem_boleto = sum(v for v, _ in g_sem_boleto.values())
 
 # projeção próximos 12 meses (mês corrente → +11)
+# v1.1 (21/10): balancePreview da API NÃO é acumulativo — cada mês recalcula do saldo REAL
+# atual (prevDay), ignorando a projeção do mês anterior. Regra correta (Vinícius):
+# saldo projetado(m) = saldo projetado(m-1) + entradas previstas(m) - saídas previstas(m),
+# partindo do saldo real (previousDayBalance do 1º mês).
 proj = []
+acum = None
 for i in range(0, 12):
     ini_m = add_months(MES_REF, i)
     fim_m = add_months(ini_m, 1) - timedelta(days=1)
     b = req(f"{BASE}/transaction/v1/transactions/balances?start_date={ini_m.isoformat()}&end_date={fim_m.isoformat()}")["results"]
-    proj.append((label_curto(ini_m), b["revenuesPreview"], b["expensesPreview"], b["balancePreview"]))
+    if acum is None:
+        acum = b["previousDayBalance"] + b["revenuesPreview"] + b["expensesPreview"]
+    else:
+        acum += b["revenuesPreview"] + b["expensesPreview"]
+    proj.append((label_curto(ini_m), b["revenuesPreview"], b["expensesPreview"], acum))
 
 # ===== PDF =====
 styles = getSampleStyleSheet()

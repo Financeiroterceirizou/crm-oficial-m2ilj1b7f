@@ -64,6 +64,15 @@ def estrutural(r, name):
         return True  # linha vazia
     if str(first).startswith('Atenção:'):
         return True  # aviso da Cora
+    # Cora quarentena (2026-10-23): planilha live esvaziada pela Cora —
+    # linhas residuais sem dados de lead (colunas A-L vazias, só status em M/N
+    # ou placeholder #N/A) nunca devem casar com o estado canônico.
+    if name == 'cora':
+        # sem nenhum campo identificador de lead = resíduo da planilha esvaziada
+        ident = [(r.get('nome') or '').strip(), (r.get('email') or '').strip(),
+                 (r.get('telefone') or '').strip(), (r.get('cnpj_ou_cpf') or '').strip()]
+        if not any(ident):
+            return True
     return False
 
 for name, rows in [('cora', rows_cora), ('meta_ads_jun', rows_jun), ('meta_ads_cadastro', rows_cad)]:

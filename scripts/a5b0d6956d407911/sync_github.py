@@ -13,7 +13,9 @@ HDRS.update({'Content-Type': 'application/json', 'Accept': 'application/json, te
 OWNER, REPO, BRANCH = 'Financeiroterceirizou', 'crm-oficial-m2ilj1b7f', 'main'
 BASE = '/home/ethos/.assistant/workspace/scripts/a5b0d6956d407911'
 PREFIX = 'scripts/a5b0d6956d407911'
-FILES = ['leads_input.json', 'estado.json', 'fetch_mcp_live.py', 'sync_github.py']
+FILES = ['leads_input.json', 'estado.json', 'fetch_mcp_live.py', 'sync_github.py',
+         'run.sh', 'save_live_cora.py', 'extract_live_jun_cad.py',
+         'cache/cora.json', 'cache/meta_ads_jun.json', 'cache/meta_ads_cadastro.json']
 
 _id = [0]
 
@@ -66,7 +68,7 @@ def main():
         return
     for f, _, motivo in changed:
         print(f'divergente ({motivo}): {f}')
-    msg = 'Polling a5b0: fetch_mcp_live.py (leitura JSON-RPC GOOGLESHEETS_VALUES_GET) + leads_input/estado (2026-10-16 00:15)'
+    msg = 'Polling a5b0: quarentena Cora no run.sh + estado restaurado (2026-10-23 20:05)'
     r = rpc('push_files', {'owner': OWNER, 'repo': REPO, 'branch': BRANCH, 'message': msg,
                            'files': [{'path': f'{PREFIX}/{f}', 'content': c}
                                      for f, c, _ in changed]})

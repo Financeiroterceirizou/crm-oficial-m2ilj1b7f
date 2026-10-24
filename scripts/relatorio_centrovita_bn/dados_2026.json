@@ -1,0 +1,154 @@
+{
+ "nota": "Indicadores manuais Centrovita Braço do Norte 2026 — fonte: planilha anexa uploads/36dbf9fd (fev-ago) + informado pelo Vinícius (set: 24 hóspedes, ticket 4.906,86); inad/desp_ab de set em diante vêm do Controlle",
+ "ctrl": {
+  "1": {
+   "rec_op": 0.0,
+   "desp_op": -3317.9,
+   "aportes": 35679.98,
+   "juros": 104.55,
+   "ent_emp": 0.0,
+   "invest": -37431.74,
+   "sai_emp": 0.0,
+   "desp_fin": 0.0,
+   "distrib": 0.0
+  },
+  "2": {
+   "rec_op": 4200.0,
+   "desp_op": -2642.65,
+   "aportes": 13728.53,
+   "juros": 4.12,
+   "ent_emp": 0.0,
+   "invest": -19279.44,
+   "sai_emp": 0.0,
+   "desp_fin": 0.0,
+   "distrib": 0.0
+  },
+  "3": {
+   "rec_op": 19200.0,
+   "desp_op": -20063.56,
+   "aportes": 51521.92,
+   "juros": 0.0,
+   "ent_emp": 0.0,
+   "invest": -42015.75,
+   "sai_emp": 0.0,
+   "desp_fin": 0.0,
+   "distrib": 0.0
+  },
+  "4": {
+   "rec_op": 68900.0,
+   "desp_op": -66907.01,
+   "aportes": 23250.0,
+   "juros": 0.0,
+   "ent_emp": 4500.0,
+   "invest": -25949.82,
+   "sai_emp": -7000.0,
+   "desp_fin": 0.0,
+   "distrib": 0.0
+  },
+  "5": {
+   "rec_op": 74237.42,
+   "desp_op": -75484.13,
+   "aportes": 10000.0,
+   "juros": 0.0,
+   "ent_emp": 3292.6,
+   "invest": -17143.04,
+   "sai_emp": -541.63,
+   "desp_fin": 0.0,
+   "distrib": 0.0
+  },
+  "6": {
+   "rec_op": 100022.4,
+   "desp_op": -91163.7,
+   "aportes": 4500.0,
+   "juros": 0.0,
+   "ent_emp": 5571.59,
+   "invest": -10917.34,
+   "sai_emp": -4453.03,
+   "desp_fin": 0.0,
+   "distrib": 0.0
+  },
+  "7": {
+   "rec_op": 123499.1,
+   "desp_op": -92842.53,
+   "aportes": 0.0,
+   "juros": 0.0,
+   "ent_emp": 3655.35,
+   "invest": -7437.34,
+   "sai_emp": -11391.32,
+   "desp_fin": 0.0,
+   "distrib": 0.0
+  },
+  "8": {
+   "rec_op": 95987.73,
+   "desp_op": -87377.6,
+   "aportes": 0.0,
+   "juros": 1.77,
+   "ent_emp": 0.0,
+   "invest": -6437.34,
+   "sai_emp": 0.0,
+   "desp_fin": 0.0,
+   "distrib": 0.0
+  },
+  "9": {
+   "rec_op": 116718.84,
+   "desp_op": -85922.55,
+   "aportes": 0.0,
+   "juros": 0.0,
+   "ent_emp": 0.0,
+   "invest": -2000.0,
+   "sai_emp": -15172.06,
+   "desp_fin": 0.0,
+   "distrib": 0.0
+  }
+ },
+ "plan": {
+  "2": {
+   "hosp": 1,
+   "ticket": 4200.0,
+   "inad": 0.0,
+   "desp_ab": 0.0
+  },
+  "3": {
+   "hosp": 3,
+   "ticket": 5066.67,
+   "inad": 0.0,
+   "desp_ab": 2500.0
+  },
+  "4": {
+   "hosp": 10,
+   "ticket": 5105.0,
+   "inad": 0.0,
+   "desp_ab": 5000.0
+  },
+  "5": {
+   "hosp": 17,
+   "ticket": 4799.95,
+   "inad": 0.0,
+   "desp_ab": 7500.0
+  },
+  "6": {
+   "hosp": 23,
+   "ticket": 4696.0,
+   "inad": 0.0,
+   "desp_ab": 10000.0
+  },
+  "7": {
+   "hosp": 21,
+   "ticket": 4619.0,
+   "inad": 8722.23,
+   "desp_ab": 12000.0
+  },
+  "8": {
+   "hosp": 25,
+   "ticket": 4717.35,
+   "inad": 29270.23,
+   "desp_ab": 12000.0
+  },
+  "9": {
+   "hosp": 24,
+   "ticket": 4906.86,
+   "inad": 18866.46,
+   "desp_ab": 3000.0
+  }
+ }
+}

@@ -23,6 +23,8 @@ import urllib.parse
 import datetime
 import hashlib
 import re
+import time
+import base64
 
 # ---------- Config ----------
 BASE = os.environ.get("CRM_BASE_URL", "https://crm-oficial-65bb8.shrd00.internal.goskip.dev")
@@ -54,6 +56,28 @@ def renovar_token():
         print('  [token] renovado e salvo', file=sys.stderr)
     except Exception as e:
         print(f'  [token] falha ao renovar: {e}', file=sys.stderr)
+
+
+def garantir_token_valido():
+    """FIX 2026-10-05: GET /leads é PÚBLICO (RLS), mas PATCH/POST exigem auth
+    (updateRule). Token expirado -> PATCH devolve 404 (não 401!) -> o handler
+    de 401/403 NÃO dispara -> linha cai em 'ignorados', hash não é gravado e a
+    mesma linha volta como 'alterada' a cada rodada (loop silencioso de PATCH 404,
+    caso Alessandra 05/10). Prevenção: renovar preventivamente se o JWT expira
+    em menos de 24h ou já expirou."""
+    global TOKEN
+    try:
+        parts = TOKEN.split('.')
+        if len(parts) != 3:
+            renovar_token()
+            return
+        payload = parts[1] + '=' * (-len(parts[1]) % 4)
+        exp = json.loads(base64.urlsafe_b64decode(payload)).get('exp', 0)
+        if exp < time.time() + 24 * 3600:
+            print('  [token] expirado/expirando — renovando preventivamente', file=sys.stderr)
+            renovar_token()
+    except Exception as e:
+        print(f'  [token] falha ao validar exp: {e}', file=sys.stderr)
 # Estado e log podem ser isolados por job via env var (evita briga entre o
 # polling 91e08561a5b65e5d e o job antigo a5b0d6956d407911, que compartilhavam
 # o mesmo arquivo e se invalidavam mutuamente a cada ciclo).
@@ -133,10 +157,16 @@ def api(method, path, data=None):
                  'Authorization': 'Bearer ' + TOKEN},
         method=method,
     )
-    try:
+    for tentativa in range(1, 5):
+      try:
         with urllib.request.urlopen(req, timeout=40) as resp:
             return resp.status, json.loads(resp.read().decode('utf-8'))
-    except urllib.error.HTTPError as e:
+      except urllib.error.HTTPError as e:
+        # 502/503/504 = outage do backend interno (recorrente, ~20 min):
+        # retry com backoff 5/10/15s antes de desistir — estado/CRM não são tocados
+        if e.code in (502, 503, 504) and tentativa < 4:
+            time.sleep([0, 5, 10, 15][tentativa])
+            continue
         # Token expirado/inválido: renova uma vez e tenta de novo
         if e.code in (401, 403):
             renovar_token()
@@ -281,6 +311,13 @@ def mapear_respostas(linha, fonte):
             val = linha.get(campo_src, '')
             if val and str(val).strip() and str(val).strip() != '-':
                 respostas[campo_dst] = str(val).strip()
+        # CNPJ/CPF fornecido voluntariamente na captação (parte 1 do plano CNPJ,
+        # autorizado pelo champion em 16/10/2026). Grava em cnpj_cpf — chave que os
+        # leads cora antigos já usam. Nunca sobrescreve valor existente (merge no
+        # update preserva; aqui só seta se o lead ainda não tem o dado).
+        doc = limpar_cnpj(linha.get('cnpj_ou_cpf') or '')
+        if doc and 'cnpj_cpf' not in respostas:
+            respostas['cnpj_cpf'] = doc
     return respostas if respostas else None
 
 
@@ -462,6 +499,7 @@ def main():
     # formato: {"cora": [ {coluna: valor}, ... ], "meta_ads_jun": [...], "meta_ads_cadastro": [...]}
     dados_entrada = json.load(sys.stdin)
     estado = carregar_estado()
+    garantir_token_valido()  # FIX 2026-10-05: evita loop silencioso de PATCH 404 com token expirado
     resumo = {'criados': [], 'atualizados': [], 'ignorados': 0}
     for fonte in SPREADSHEETS:
         linhas = dados_entrada.get(fonte['nome'], [])

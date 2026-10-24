@@ -109,4 +109,10 @@ for art, out in [('jun_live.json', 'meta_ads_jun.json'),
     with open(os.path.join(TMP, out), 'w', encoding='utf-8') as f:
         json.dump({'values': vals}, f, ensure_ascii=False)
     print('%s: %d linhas (header + dados)' % (out, len(vals)))
-print('fetch concluido')
+# Marcador .mcp-fresh: NÃO é criado aqui. A correção de 23/10 (trap das
+# 18:20) tira a marcação do fetch: o marker só é criado pelo script da rodada
+# DEPOIS de conferir cache×live e validar_tmp passarem — se a Cora divergir
+# (ex.: esvaziada), os crus ficam em tmp/polling SEM marker e o run.sh
+# preserva o canônico. Sem isso, o fetch marcava antes da conferência e uma
+# rodada seguinte processava a Cora vazia (estado cora 71→0 às 18:20).
+print('fetch concluido (marker .mcp-fresh fica a cargo da rodada)')

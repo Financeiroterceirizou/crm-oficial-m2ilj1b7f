@@ -28,6 +28,17 @@ assert 'Principal' in vr.get('range', ''), f"range inesperado: {vr.get('range')}
 vals = vr.get('values', [])
 vals = [[nfc(c) for c in row] for row in vals]
 
+# QUARENTENA CORA (2026-10-23): live esvaziada pela Cora (só aviso + header + #N/A).
+# NÃO sobrescrever tmp cora.json com a live vazia — manter o cache canônico no tmp
+# para o run.sh abortar na quarentena (canônico 72 linhas) sem divergir.
+dados_live = [r for r in vals if r and any(str(c).strip() for c in r[:12])]
+if len(dados_live) < 50:
+    import shutil
+    shutil.copy(os.path.join(BASE, 'scripts/a5b0d6956d407911/cache/cora.json'),
+                os.path.join(OUT, 'cora.json'))
+    print(f'QUARENTENA CORA: live com {len(dados_live)} linhas de dados (<50; canônico 72) — tmp cora.json = cache canônico, rodada será abortada pelo guard.')
+    sys.exit(1)
+
 json.dump({'values': vals}, open(os.path.join(OUT, 'cora.json'), 'w', encoding='utf-8'), ensure_ascii=False)
 
 # live como dicts: acha a linha do header 'data_envio' (linha 3 da planilha)
