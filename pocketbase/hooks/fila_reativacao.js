@@ -81,10 +81,14 @@ routerAdd(
         resp = raw
       }
       if (!resp || typeof resp !== 'object') return false
-      const valor = String(resp.prestador ?? resp.prestador_de_servico ?? resp.tipo_prestador || '')
+      const valor = String(
+        (resp.prestador ?? resp.prestador_de_servico ?? resp.tipo_prestador) || '',
+      )
         .trim()
         .toLowerCase()
-      return valor === 'sim' || valor === 's' || valor === 'true' || valor === '1' || valor === 'yes'
+      return (
+        valor === 'sim' || valor === 's' || valor === 'true' || valor === '1' || valor === 'yes'
+      )
     }
 
     const temObjecao = (rec) => {
@@ -195,9 +199,11 @@ routerAdd(
       total_excluidos: excluidos.length,
       total_nao_elegiveis: semDado.length,
       criterio: {
-        b4_201: 'prestador_de_servico + captado_90d + sem_interacao_60d (CNPJ complementar — revisto 23/10/2026)',
+        b4_201:
+          'prestador_de_servico + captado_90d + sem_interacao_60d (CNPJ complementar — revisto 23/10/2026)',
         b4_202: 'base_legal_legitimo_interesse_v1.1',
-        fonte: 'SPEC-4-002 realinhada 16/10/2026, B4-201 revisto 23/10/2026 + 06_notas/registro-base-legal-b4-202.md v1.1',
+        fonte:
+          'SPEC-4-002 realinhada 16/10/2026, B4-201 revisto 23/10/2026 + 06_notas/registro-base-legal-b4-202.md v1.1',
       },
       elegiveis,
       excluidos,

@@ -102,10 +102,14 @@ routerAdd(
         resp = raw
       }
       if (!resp || typeof resp !== 'object') return false
-      const valor = String(resp.prestador ?? resp.prestador_de_servico ?? resp.tipo_prestador || '')
+      const valor = String(
+        (resp.prestador ?? resp.prestador_de_servico ?? resp.tipo_prestador) || '',
+      )
         .trim()
         .toLowerCase()
-      return valor === 'sim' || valor === 's' || valor === 'true' || valor === '1' || valor === 'yes'
+      return (
+        valor === 'sim' || valor === 's' || valor === 'true' || valor === '1' || valor === 'yes'
+      )
     }
 
     const elegiveis = []
@@ -212,7 +216,8 @@ routerAdd(
     lote.set(
       'criterio_aplicado',
       JSON.stringify({
-        b4_201: 'prestador_de_servico + captado_90d + sem_interacao_60d (CNPJ complementar — revisto 23/10/2026)',
+        b4_201:
+          'prestador_de_servico + captado_90d + sem_interacao_60d (CNPJ complementar — revisto 23/10/2026)',
         b4_202: 'base_legal_legitimo_interesse_v1.1',
       }),
     )
