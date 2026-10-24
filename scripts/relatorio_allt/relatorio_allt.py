@@ -278,11 +278,15 @@ t = tabela(dre_rows, [11*cm, 2.5*cm, 3*cm])
 t.setStyle(TableStyle([("BACKGROUND", (0,len(dre_rows)-_n_res+1), (-1,len(dre_rows)-1), LARANJA_CLARO)]))
 E.append(KeepTogether([_dre_titulo, t]))
 
-# 3) Fluxo de Caixa do mês anterior
+# 3) Fluxo de Caixa do mês anterior — entradas/saídas pelo BALANCES do mês (data de baixa),
+# que fecha com os saldos real (o dt_billing pode divergir da baixa — pedido Vinícius 24/10)
+_b_mes = req(f"{BASE}/transaction/v1/transactions/balances?start_date={MES_REF.replace(day=1).isoformat()}&end_date={FIM_MES.isoformat()}")["results"]
+fx_e = _b_mes["revenuesDone"]
+fx_s = _b_mes["expensesDone"]
 fx_rows = [[P("<b>Descrição</b>", cell), P("<b>Valor</b>", cellr)],
            [P("Saldo inicial", cell), P_val(saldo_ini_mes_ant, cellr)],
-           [P("(+) Entradas", cell), P_val(comp13[MES_REF.isoformat()[:7]][0], cellr)],
-           [P("(−) Saídas", cell), P_val(comp13[MES_REF.isoformat()[:7]][1], cellr)],
+           [P("(+) Entradas", cell), P_val(fx_e, cellr)],
+           [P("(−) Saídas", cell), P_val(fx_s, cellr)],
            [P("<b>Saldo final</b>", cellrb), P_val(saldo_fim_mes_ant, cellrb, True)]]
 t = tabela(fx_rows, [8*cm, 5*cm])
 t.setStyle(TableStyle([("BACKGROUND", (0,len(fx_rows)-1), (-1,len(fx_rows)-1), LARANJA_CLARO)]))
