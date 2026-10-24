@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-16T17:28:58.351Z",
+  "generatedAt": "2026-10-24T19:54:51.928Z",
   "collections": [
     {
       "name": "users",
@@ -588,6 +588,100 @@
       "indexes": [
         "CREATE UNIQUE INDEX idx_lote_id_reativacao ON reativacao_lote (lote_id)",
         "CREATE INDEX idx_estado_reativacao_lote ON reativacao_lote (estado)"
+      ]
+    },
+    {
+      "name": "deals",
+      "type": "base",
+      "apiRules": {
+        "list": "",
+        "view": "",
+        "create": "",
+        "update": "",
+        "delete": ""
+      },
+      "fields": [
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "cliente",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valor",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "etapa",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "Novos leads",
+            "Contato feito",
+            "Proposta enviada",
+            "Negociação",
+            "Fechado (ganho)"
+          ]
+        },
+        {
+          "name": "canal",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "probabilidade",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "responsavel",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "tags",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_fechamento",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_deals_etapa ON deals (etapa)",
+        "CREATE INDEX idx_deals_canal ON deals (canal)",
+        "CREATE INDEX idx_deals_responsavel ON deals (responsavel)",
+        "CREATE INDEX idx_deals_created ON deals (created DESC)"
       ]
     }
   ]
