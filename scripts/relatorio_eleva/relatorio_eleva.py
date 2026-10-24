@@ -169,11 +169,16 @@ def tabela(rows, widths, fs=None, hpad=4):
     return t
 
 ARQ_PDF = f"artifacts/{HOJE.strftime('%y%m%d')}_Relatorio_Eleva_{MES_REF.strftime('%Y%m')}.pdf"
+SIMBOLO_TZ = os.path.join(_dir, "simbolo-terceirizou.png")
 def _rodape(canvas, doc_):
     pg = canvas.getPageNumber()
     canvas.saveState()
-    canvas.setFillColor(LARANJA)
-    canvas.rect(1.2 * cm, 0.8 * cm, 0.5 * cm, 0.5 * cm, stroke=0, fill=1)
+    if os.path.exists(SIMBOLO_TZ):
+        try:
+            w0, h0 = PILImage.open(SIMBOLO_TZ).size
+            canvas.drawImage(SIMBOLO_TZ, 1.2 * cm, 0.75 * cm, width=0.55 * cm, height=0.55 * cm * h0 / w0, mask="auto")
+        except Exception:
+            pass
     canvas.setFont("Helvetica", 7); canvas.setFillColor(CINZA)
     canvas.drawRightString((A4 if doc_.pagesize == A4 else landscape(A4))[0] - 1.2 * cm, 0.9 * cm, f"Página {pg}")
     canvas.restoreState()
@@ -207,7 +212,29 @@ E.append(Spacer(1, 0.2 * cm))
 E.append(P(f"{MES_PT[MES_REF.month].capitalize()} de {MES_REF.year}", ParagraphStyle("sub", parent=st("s2"), alignment=1, fontSize=11, textColor=CINZA)))
 E.append(Spacer(1, 0.5 * cm))
 E.append(P("Centros de custo e tags por cliente", ParagraphStyle("sub2", parent=st("s3"), alignment=1, fontSize=8.5, textColor=CINZA)))
-E.append(PageBreak())
+E.append(Spacer(1, 0.7 * cm))
+# ---- fluxo de caixa realizado (COM HNSC) ----
+_fx_t = P(f"Fluxo de Caixa — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year}", h2)
+fx_rows = [[P("<b>Descrição</b>", cell), P("<b>Valor</b>", cellr)],
+           [P("Saldo inicial", cell), P_val(saldo_ini_mes_ant, cellr)],
+           [P("(+) Entradas", cell), P_val(bal_e, cellr)],
+           [P("(−) Saídas", cell), P_val(bal_s, cellr)],
+           [P("<b>Saldo final</b>", cellrb), P_val(saldo_fim_mes_ant, cellrb, True)]]
+E.append(KeepTogether([_fx_t, tabela(fx_rows, [8*cm, 5*cm])]))
+E.append(Spacer(1, 0.5 * cm))
+
+# ---- previsão fluxo de caixa ----
+_fxp_t = P(f"Previsão de Fluxo de Caixa — {MES_PT[MES_ATUAL.month].capitalize()} de {MES_ATUAL.year}", h2)
+tot_rec_p = sum(valor_efetivo(t) for t in prev_completa if valor_efetivo(t) > 0)
+tot_desp_p = sum(valor_efetivo(t) for t in prev_completa if valor_efetivo(t) < 0)
+fxp_rows = [[P("<b>Descrição</b>", cell), P("<b>Valor</b>", cellr)],
+            [P(f"Saldo inicial ({FIM_MES.strftime('%d/%m')})", cell), P_val(saldo_fim_mes_ant, cellr)],
+            [P("(+) Entradas do mês (realizado + previsto)", cell), P_val(tot_rec_p, cellr)],
+            [P("(−) Saídas do mês (realizado + previsto)", cell), P_val(tot_desp_p, cellr)],
+            [P("<b>Saldo final projetado</b>", cellrb), P_val(saldo_fim_mes_ant + tot_rec_p + tot_desp_p, cellrb, True)]]
+E.append(KeepTogether([_fxp_t, tabela(fxp_rows, [8*cm, 5*cm])]))
+E.append(Spacer(1, 0.5 * cm))
+
 
 # ---- 1) comparativo 13m competência ----
 def bloco_comparativo(titulo, comp):
@@ -303,34 +330,12 @@ E.append(Spacer(1, 0.5 * cm))
 
 E.append(PageBreak())
 
-# ---- 5) fluxo de caixa realizado (caixa, COM HNSC) ----
-_fx_t = P(f"Fluxo de Caixa — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year}", h2)
-fx_rows = [[P("<b>Descrição</b>", cell), P("<b>Valor</b>", cellr)],
-           [P("Saldo inicial", cell), P_val(saldo_ini_mes_ant, cellr)],
-           [P("(+) Entradas", cell), P_val(bal_e, cellr)],
-           [P("(−) Saídas", cell), P_val(bal_s, cellr)],
-           [P("<b>Saldo final</b>", cellrb), P_val(saldo_fim_mes_ant, cellrb, True)]]
-E.append(KeepTogether([_fx_t, tabela(fx_rows, [8*cm, 5*cm])]))
-E.append(Spacer(1, 0.5 * cm))
-
 # ---- 6) previsão DRE competência (pagos + não pagos, sem HNSC) ----
 _pv1_t = P(f"Previsão de Receitas e Despesas — {MES_PT[MES_ATUAL.month].capitalize()} de {MES_ATUAL.year} (pagos + não pagos, sem CC {CC_EXCLUIDO})", h2)
 E.append(KeepTogether([_pv1_t, tabela(dre_rows(sem_hnsc(prev_completa)), [7.2*cm, 2.2*cm, 2.6*cm, 2.6*cm, 2.8*cm])]))
 E.append(Spacer(1, 0.5 * cm))
 
 E.append(PageBreak())
-
-# ---- 8) previsão fluxo de caixa ----
-_fxp_t = P(f"Previsão de Fluxo de Caixa — {MES_PT[MES_ATUAL.month].capitalize()} de {MES_ATUAL.year}", h2)
-tot_rec_p = sum(valor_efetivo(t) for t in prev_completa if valor_efetivo(t) > 0)
-tot_desp_p = sum(valor_efetivo(t) for t in prev_completa if valor_efetivo(t) < 0)
-fxp_rows = [[P("<b>Descrição</b>", cell), P("<b>Valor</b>", cellr)],
-            [P(f"Saldo inicial ({FIM_MES.strftime('%d/%m')})", cell), P_val(saldo_fim_mes_ant, cellr)],
-            [P("(+) Entradas do mês (realizado + previsto)", cell), P_val(tot_rec_p, cellr)],
-            [P("(−) Saídas do mês (realizado + previsto)", cell), P_val(tot_desp_p, cellr)],
-            [P("<b>Saldo final projetado</b>", cellrb), P_val(saldo_fim_mes_ant + tot_rec_p + tot_desp_p, cellrb, True)]]
-E.append(KeepTogether([_fxp_t, tabela(fxp_rows, [8*cm, 5*cm])]))
-E.append(Spacer(1, 0.5 * cm))
 
 # ---- 9) DRE por CC (LARISSA, MICHELLE) — competência ----
 _cc_t = P(f"Receitas e Despesas por Centro de Custo — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year}", h2)
