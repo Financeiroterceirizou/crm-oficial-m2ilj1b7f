@@ -2,16 +2,23 @@ import React, { useState } from 'react'
 import { PIPELINE_STAGES, PipelineDeal, PipelineStageId } from '@/lib/pipeline-data'
 import { PipelineColumn } from './PipelineColumn'
 import { DealModal, NewDealDialog } from './DealModal'
+import { DealsService } from '@/services/deals'
 import { toast } from '@/hooks/use-toast'
 
 interface PipelineKanbanBoardProps {
   deals: PipelineDeal[]
   onUpdateDeals: (deals: PipelineDeal[]) => void
+  onDealCreated?: (deal: PipelineDeal) => void
+  onDealUpdated?: (deal: PipelineDeal) => void
+  onDealDeleted?: (dealId: string) => void
 }
 
 export const PipelineKanbanBoard: React.FC<PipelineKanbanBoardProps> = ({
   deals,
   onUpdateDeals,
+  onDealCreated,
+  onDealUpdated,
+  onDealDeleted,
 }) => {
   const [draggingDealId, setDraggingDealId] = useState<string | null>(null)
   const [selectedDeal, setSelectedDeal] = useState<PipelineDeal | null>(null)
@@ -29,7 +36,7 @@ export const PipelineKanbanBoard: React.FC<PipelineKanbanBoardProps> = ({
     setDraggingDealId(null)
   }
 
-  const handleDropDeal = (dealId: string, targetStageId: string) => {
+  const handleDropDeal = async (dealId: string, targetStageId: string) => {
     setDraggingDealId(null)
     const validStage = PIPELINE_STAGES.find((s) => s.id === targetStageId)
     if (!validStage) return
@@ -41,25 +48,53 @@ export const PipelineKanbanBoard: React.FC<PipelineKanbanBoardProps> = ({
       return // Já está nessa etapa
     }
 
-    const previousStageName = PIPELINE_STAGES.find((s) => s.id === targetDeal.stageId)?.title
+    const previousStageId = targetDeal.stageId
+    const previousProbability = targetDeal.probability
 
-    const updatedDeals = deals.map((d) => {
+    // 1. Atualização otimista imediata na UI
+    const optimisticDeals = deals.map((d) => {
       if (d.id === dealId) {
         return {
           ...d,
           stageId: targetStageId as PipelineStageId,
-          probability: targetStageId === 'won' ? 100 : d.probability,
+          probability:
+            targetStageId === 'won' ? 100 : targetStageId === 'negotiation' ? 80 : d.probability,
         }
       }
       return d
     })
+    onUpdateDeals(optimisticDeals)
 
-    onUpdateDeals(updatedDeals)
+    // 2. Persistência real no PocketBase com rollback se falhar
+    try {
+      const persistedDeal = await DealsService.updateStage(dealId, targetStageId as PipelineStageId)
+      // Confirma e atualiza o deal com dados finais retornados pelo banco
+      onUpdateDeals(deals.map((d) => (d.id === dealId ? persistedDeal : d)))
+      toast({
+        title: 'Etapa atualizada!',
+        description: `"${targetDeal.title}" movido para "${validStage.title}".`,
+      })
+    } catch (err) {
+      console.error('Falha ao atualizar etapa no banco, realizando rollback:', err)
+      // Rollback otimista
+      const rollbackDeals = deals.map((d) => {
+        if (d.id === dealId) {
+          return {
+            ...d,
+            stageId: previousStageId,
+            probability: previousProbability,
+          }
+        }
+        return d
+      })
+      onUpdateDeals(rollbackDeals)
 
-    toast({
-      title: 'Etapa atualizada!',
-      description: `"${targetDeal.title}" movido para "${validStage.title}".`,
-    })
+      toast({
+        title: 'Erro ao mover negócio',
+        description: `Não foi possível transferir para "${validStage.title}". Alteração revertida.`,
+        variant: 'destructive',
+      })
+    }
   }
 
   const handleCardClick = (deal: PipelineDeal) => {
@@ -72,21 +107,19 @@ export const PipelineKanbanBoard: React.FC<PipelineKanbanBoardProps> = ({
     setNewDealOpen(true)
   }
 
-  const handleAddNewDeal = (newDeal: PipelineDeal) => {
-    onUpdateDeals([newDeal, ...deals])
-    toast({
-      title: 'Oportunidade adicionada!',
-      description: `"${newDeal.title}" cadastrado com sucesso no pipeline.`,
-    })
+  const handleCreated = (newDeal: PipelineDeal) => {
+    onDealCreated?.(newDeal)
   }
 
-  const handleDeleteDeal = (dealId: string) => {
-    const remaining = deals.filter((d) => d.id !== dealId)
-    onUpdateDeals(remaining)
-    toast({
-      title: 'Oportunidade removida',
-      description: 'O negócio foi excluído do pipeline.',
-    })
+  const handleUpdated = (updatedDeal: PipelineDeal) => {
+    onDealUpdated?.(updatedDeal)
+    setSelectedDeal(updatedDeal)
+  }
+
+  const handleDeleted = (dealId: string) => {
+    onDealDeleted?.(dealId)
+    setIsModalOpen(false)
+    setSelectedDeal(null)
   }
 
   return (
@@ -113,7 +146,7 @@ export const PipelineKanbanBoard: React.FC<PipelineKanbanBoardProps> = ({
         </div>
       </div>
 
-      {/* Details Modal */}
+      {/* Details & Edit Modal */}
       <DealModal
         deal={selectedDeal}
         isOpen={isModalOpen}
@@ -121,7 +154,8 @@ export const PipelineKanbanBoard: React.FC<PipelineKanbanBoardProps> = ({
           setIsModalOpen(false)
           setSelectedDeal(null)
         }}
-        onDeleteDeal={handleDeleteDeal}
+        onDealUpdated={handleUpdated}
+        onDealDeleted={handleDeleted}
       />
 
       {/* New Deal Dialog */}
@@ -129,7 +163,7 @@ export const PipelineKanbanBoard: React.FC<PipelineKanbanBoardProps> = ({
         isOpen={newDealOpen}
         onClose={() => setNewDealOpen(false)}
         initialStageId={targetStageForNew}
-        onAddDeal={handleAddNewDeal}
+        onDealCreated={handleCreated}
       />
     </div>
   )
