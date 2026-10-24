@@ -211,7 +211,6 @@ E.append(P("<b>ELEVA — Relatório Gerencial</b>", ParagraphStyle("h1c", parent
 E.append(Spacer(1, 0.2 * cm))
 E.append(P(f"{MES_PT[MES_REF.month].capitalize()} de {MES_REF.year}", ParagraphStyle("sub", parent=st("s2"), alignment=1, fontSize=11, textColor=CINZA)))
 E.append(Spacer(1, 0.5 * cm))
-E.append(P("Centros de custo e tags por cliente", ParagraphStyle("sub2", parent=st("s3"), alignment=1, fontSize=8.5, textColor=CINZA)))
 E.append(Spacer(1, 0.7 * cm))
 # ---- fluxo de caixa realizado (COM HNSC) ----
 _fx_t = P(f"Fluxo de Caixa — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year}", h2)
