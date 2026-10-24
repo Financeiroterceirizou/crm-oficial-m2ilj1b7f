@@ -41,6 +41,7 @@ routerAdd(
     const sessenta = 60 * 24 * 60 * 60 * 1000
 
     const temCnpj = (rec) => {
+      // Dado COMPLEMENTAR (decisão champion 23/10/2026) — nunca critério de elegibilidade.
       // Padrão provado em qualificar_lead_create.js: campo JSON pode chegar como
       // string, objeto OU array de bytes (Uint8Array) no runtime goja do PocketBase.
       let raw = rec.get('respostas')
@@ -74,6 +75,37 @@ routerAdd(
         }
       }
       return false
+    }
+
+    const temPrestador = (rec) => {
+      // Prestador de serviço é o critério (decisão champion 23/10/2026) — CNPJ não entra.
+      let raw = rec.get('respostas')
+      if (
+        raw !== null &&
+        raw !== undefined &&
+        typeof raw === 'object' &&
+        typeof raw.length === 'number' &&
+        typeof raw[0] === 'number'
+      ) {
+        let s = ''
+        for (let i = 0; i < raw.length; i++) s += String.fromCharCode(raw[i])
+        raw = s
+      }
+      let resp = null
+      if (typeof raw === 'string') {
+        try {
+          resp = JSON.parse(raw)
+        } catch (_) {
+          resp = null
+        }
+      } else if (raw && typeof raw === 'object') {
+        resp = raw
+      }
+      if (!resp || typeof resp !== 'object') return false
+      const valor = String(resp.prestador ?? resp.prestador_de_servico ?? resp.tipo_prestador || '')
+        .trim()
+        .toLowerCase()
+      return valor === 'sim' || valor === 's' || valor === 'true' || valor === '1' || valor === 'yes'
     }
 
     const elegiveis = []
@@ -117,8 +149,9 @@ routerAdd(
         excluidos.push({ lead_id: rec.get('lead_id'), motivo: 'objecao_do_titular' })
         continue
       }
+      // B4-201 revisto 23/10/2026: prestador de serviço BASTA (com ou sem CNPJ).
       if (
-        !temCnpj(rec) ||
+        !temPrestador(rec) ||
         String(rec.get('estado_qualificacao') || '') !== 'qualificado' ||
         !captadoHa90 ||
         !semInteracao60
@@ -179,7 +212,7 @@ routerAdd(
     lote.set(
       'criterio_aplicado',
       JSON.stringify({
-        b4_201: 'prestador_com_cnpj + captado_90d + sem_interacao_60d',
+        b4_201: 'prestador_de_servico + captado_90d + sem_interacao_60d (CNPJ complementar — revisto 23/10/2026)',
         b4_202: 'base_legal_legitimo_interesse_v1.1',
       }),
     )

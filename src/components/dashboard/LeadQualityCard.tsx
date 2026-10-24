@@ -92,8 +92,9 @@ function getQualityResult(lead: QualityLead): QualityResult {
 
   return {
     hasPrestador: hasValue(prestadorValue),
-    hasCnpj: hasCnpj(cnpjValue),
-    qualified: hasPrestador && cnpj,
+    hasCnpj: cnpj,
+    // B4-203 revisto em 23/10/2026: qualificado = prestador de serviço (com ou sem CNPJ).
+    qualified: hasPrestador,
   }
 }
 
@@ -197,7 +198,8 @@ export const LeadQualityCard: React.FC = () => {
       const quality = getQualityResult(lead)
 
       current.recebidos += 1
-      if (quality.hasPrestador && quality.hasCnpj) current.dadosCompletos += 1
+      // "dados completos" = prestador informado (CNPJ é complementar — decisão 23/10/2026)
+      if (quality.hasPrestador) current.dadosCompletos += 1
       if (quality.qualified) current.qualificados += 1
       if (isScheduled(lead)) current.agendados += 1
       grouped.set(key, current)
@@ -264,11 +266,14 @@ export const LeadQualityCard: React.FC = () => {
               {formatDate(windowStart)} a {formatDate(windowEnd)}.
               <br />
               <strong className="text-slate-800">Fonte:</strong> collection CRM <code>leads</code>,
-              campo <code>created</code>, respostas de prestador/CNPJ e campos de agendamento;
-              campanha Meta quando o espelho estiver disponível.
+              campo <code>created</code>, respostas de prestador (CNPJ é dado complementar) e campos
+              de agendamento; campanha Meta quando o espelho estiver disponível.
               <br />
-              <strong className="text-slate-800">Critério aprovado B4-203:</strong> qualificado =
-              prestador de serviço + CNPJ; qualidade = qualificados ÷ recebidos × 100.
+              <strong className="text-slate-800">
+                Critério B4-203 (revisto em 23/10/2026):
+              </strong>{' '}
+              qualificado = prestador de serviço (com ou sem CNPJ); qualidade = qualificados ÷
+              recebidos × 100.
               <br />
               <span className="text-slate-500">Conversão não é calculada nesta task.</span>
             </div>
@@ -293,7 +298,7 @@ export const LeadQualityCard: React.FC = () => {
             </strong>
             {totals.dadosCompletos < totals.recebidos && totals.recebidos > 0 && (
               <span className="block mt-1 text-[10px] text-amber-700">
-                {totals.dadosCompletos} de {totals.recebidos} com dados completos
+                {totals.dadosCompletos} de {totals.recebidos} com prestador informado
               </span>
             )}
           </div>
@@ -384,7 +389,7 @@ export const LeadQualityCard: React.FC = () => {
                           <strong>{bucket.qualificados}</strong>
                           {incomplete > 0 && (
                             <span className="block text-[10px] text-amber-700">
-                              {bucket.dadosCompletos}/{bucket.recebidos} avaliados
+                              {bucket.dadosCompletos}/{bucket.recebidos} com prestador informado
                             </span>
                           )}
                         </>
@@ -413,9 +418,7 @@ export const LeadQualityCard: React.FC = () => {
                         </div>
                       )}
                       {incomplete > 0 && (
-                        <div className="text-amber-700">
-                          {incomplete} sem prestador e/ou CNPJ completo.
-                        </div>
+                        <div className="text-amber-700">{incomplete} sem prestador informado.</div>
                       )}
                     </td>
                   </tr>

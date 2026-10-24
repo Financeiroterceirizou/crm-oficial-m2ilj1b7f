@@ -1,7 +1,8 @@
 // pocketbase/hooks/fila_reativacao.js
 // F4 5ef4b7cd: fila de reativação assistida (SPEC-4-002 realinhada 16/10/2026).
 // GET /backend/v1/fila-reativacao
-// Condições (registro base legal v1.1 + B4-201): prestador com CNPJ; captado >= 90d;
+// Condições (registro base legal v1.1 + B4-201 revisto 23/10/2026): prestador de serviço
+// (CNPJ é dado complementar, não critério); captado >= 90d;
 // sem interação >= 60d; sem descadastro/nao_contatar/bounce (permanente); sem objeção
 // (incl. "não tenho interesse agora"); registro de base gerado na montagem.
 // RLS: exige autenticação (401) — RN-4-205. Vazio ≠ zero — RN-4-204.
@@ -19,6 +20,7 @@ routerAdd(
     const sessenta = 60 * 24 * 60 * 60 * 1000
 
     const temCnpj = (rec) => {
+      // Dado COMPLEMENTAR (decisão champion 23/10/2026) — nunca critério de elegibilidade.
       // Padrão provado em qualificar_lead_create.js: campo JSON pode chegar como
       // string, objeto OU array de bytes (Uint8Array) no runtime goja do PocketBase.
       let raw = rec.get('respostas')
@@ -54,6 +56,37 @@ routerAdd(
       return false
     }
 
+    const temPrestador = (rec) => {
+      // Prestador de serviço é o critério (decisão champion 23/10/2026) — CNPJ não entra.
+      let raw = rec.get('respostas')
+      if (
+        raw !== null &&
+        raw !== undefined &&
+        typeof raw === 'object' &&
+        typeof raw.length === 'number' &&
+        typeof raw[0] === 'number'
+      ) {
+        let s = ''
+        for (let i = 0; i < raw.length; i++) s += String.fromCharCode(raw[i])
+        raw = s
+      }
+      let resp = null
+      if (typeof raw === 'string') {
+        try {
+          resp = JSON.parse(raw)
+        } catch (_) {
+          resp = null
+        }
+      } else if (raw && typeof raw === 'object') {
+        resp = raw
+      }
+      if (!resp || typeof resp !== 'object') return false
+      const valor = String(resp.prestador ?? resp.prestador_de_servico ?? resp.tipo_prestador || '')
+        .trim()
+        .toLowerCase()
+      return valor === 'sim' || valor === 's' || valor === 'true' || valor === '1' || valor === 'yes'
+    }
+
     const temObjecao = (rec) => {
       const parada = String(rec.get('followup_parada') || '')
       if (parada === 'descadastro' || parada === 'nao_contatar' || parada === 'bounce') return true
@@ -85,6 +118,7 @@ routerAdd(
       const semInteracao60 = interacaoMs > 0 && agora - interacaoMs >= sessenta
 
       const cnpj = temCnpj(rec)
+      const prestador = temPrestador(rec)
       const qualificado = String(rec.get('estado_qualificacao') || '') === 'qualificado'
       const parada = String(rec.get('followup_parada') || '')
       const estadoFila = String(rec.get('estado_fila') || '')
@@ -125,13 +159,15 @@ routerAdd(
         })
         continue
       }
-      if (!cnpj || !qualificado || !captadoHa90 || !semInteracao60) {
+      // B4-201 revisto 23/10/2026: prestador de serviço BASTA (com ou sem CNPJ).
+      if (!prestador || !qualificado || !captadoHa90 || !semInteracao60) {
         semDado.push({
           id: rec.get('id'),
           lead_id: rec.get('lead_id'),
           nome: rec.get('nome'),
           origem: rec.get('origem'),
           estado_qualificacao: rec.get('estado_qualificacao') || 'sem_dado',
+          prestador: prestador ? 'sim' : 'nao',
           cnpj_presente: cnpj ? 'sim' : 'nao',
           captado_ha_90d: captadoHa90 ? 'sim' : 'nao',
           sem_interacao_60d: semInteracao60 ? 'sim' : 'nao',
@@ -159,9 +195,9 @@ routerAdd(
       total_excluidos: excluidos.length,
       total_nao_elegiveis: semDado.length,
       criterio: {
-        b4_201: 'prestador_com_cnpj + captado_90d + sem_interacao_60d',
+        b4_201: 'prestador_de_servico + captado_90d + sem_interacao_60d (CNPJ complementar — revisto 23/10/2026)',
         b4_202: 'base_legal_legitimo_interesse_v1.1',
-        fonte: 'SPEC-4-002 realinhada 16/10/2026 + 06_notas/registro-base-legal-b4-202.md v1.1',
+        fonte: 'SPEC-4-002 realinhada 16/10/2026, B4-201 revisto 23/10/2026 + 06_notas/registro-base-legal-b4-202.md v1.1',
       },
       elegiveis,
       excluidos,
