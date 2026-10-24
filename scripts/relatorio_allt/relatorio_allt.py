@@ -179,11 +179,21 @@ doc = SimpleDocTemplate(ARQ_PDF, pagesize=A4, leftMargin=1.2*cm, rightMargin=1.2
                         topMargin=1.3*cm, bottomMargin=1.6*cm,
                         title=f"Relatório Gerencial — Allt Arquitetura — {MES_PT[MES_REF.month].capitalize()} de {MES_REF.year}")
 E = []
+from PIL import Image as PILImage
 if os.path.exists(LOGO):
-    from PIL import Image as PILImage
     w0, h0 = PILImage.open(LOGO).size
     img = RLImage(LOGO, width=3.2*cm, height=3.2*cm*h0/w0)
-    img.hAlign = "CENTER"
+    img.hAlign = "LEFT"
+LOGO_TZ = os.path.join(_dir, "logo-terceirizou-completa.png")
+if os.path.exists(LOGO_TZ):
+    wt, ht = PILImage.open(LOGO_TZ).size
+    img_tz = RLImage(LOGO_TZ, width=4.6*cm, height=4.6*cm*ht/wt)
+    img_tz.hAlign = "RIGHT"
+    t_cab = Table([[img, img_tz]], colWidths=[9.5*cm, 8.5*cm])
+    t_cab.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+                               ("ALIGN", (1,0), (1,0), "RIGHT")]))
+    E.append(t_cab)
+elif os.path.exists(LOGO):
     E.append(img)
 E.append(Spacer(1, 6))
 E.append(P("<b>ALLT ARQUITETURA — Relatório Gerencial</b>", ParagraphStyle("h1c", parent=h1, alignment=1)))
