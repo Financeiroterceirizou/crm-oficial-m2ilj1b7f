@@ -48,7 +48,7 @@ export const DealModal: React.FC<DealModalProps> = ({
   const [channel, setChannel] = useState('Meta Ads')
   const [stageId, setStageId] = useState<PipelineStageId>('new_leads')
   const [probability, setProbability] = useState('20')
-  const [ownerName, setOwnerName] = useState('Lucas Silveira')
+  const [ownerName, setOwnerName] = useState('Henrique Tavano Sammartino')
   const [tagsInput, setTagsInput] = useState('')
 
   useEffect(() => {
@@ -272,9 +272,8 @@ export const DealModal: React.FC<DealModalProps> = ({
                     onChange={(e) => setOwnerName(e.target.value)}
                     className="w-full px-3 py-2 rounded-md border border-slate-300 text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   >
-                    <option value="Lucas Silveira">Lucas Silveira</option>
-                    <option value="Mariana Costa">Mariana Costa</option>
-                    <option value="Rafael Prado">Rafael Prado</option>
+                    <option value="Henrique Tavano Sammartino">Henrique Tavano Sammartino</option>
+                    <option value="Vinícius Oliveira da Costa">Vinícius Oliveira da Costa</option>
                   </select>
                 </div>
               </div>
@@ -450,7 +449,7 @@ export const NewDealDialog: React.FC<NewDealDialogProps> = ({
   const [value, setValue] = useState('4500')
   const [channel, setChannel] = useState('Meta Ads')
   const [stageId, setStageId] = useState<PipelineStageId>(initialStageId)
-  const [ownerName, setOwnerName] = useState('Lucas Silveira')
+  const [ownerName, setOwnerName] = useState('Henrique Tavano Sammartino')
   const [tagsInput, setTagsInput] = useState('Novo Lead')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -461,7 +460,7 @@ export const NewDealDialog: React.FC<NewDealDialogProps> = ({
       setContactName('')
       setValue('4500')
       setChannel('Meta Ads')
-      setOwnerName('Lucas Silveira')
+      setOwnerName('Henrique Tavano Sammartino')
       setTagsInput('Novo Lead')
     }
   }, [isOpen, initialStageId])
@@ -617,9 +616,8 @@ export const NewDealDialog: React.FC<NewDealDialogProps> = ({
                 onChange={(e) => setOwnerName(e.target.value)}
                 className="w-full px-3 py-2 rounded-md border border-slate-300 text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
               >
-                <option value="Lucas Silveira">Lucas Silveira</option>
-                <option value="Mariana Costa">Mariana Costa</option>
-                <option value="Rafael Prado">Rafael Prado</option>
+                <option value="Henrique Tavano Sammartino">Henrique Tavano Sammartino</option>
+                <option value="Vinícius Oliveira da Costa">Vinícius Oliveira da Costa</option>
               </select>
             </div>
             <div>

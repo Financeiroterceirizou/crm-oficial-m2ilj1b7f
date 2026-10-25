@@ -74,13 +74,12 @@ export function etapaToStageId(etapa: string): PipelineStageId {
 
 // Helpers para avatar e cores por responsável
 const OWNER_PALETTE: Record<string, { initials: string; avatarBg: string }> = {
-  'Lucas Silveira': { initials: 'LS', avatarBg: 'bg-blue-600' },
-  'Mariana Costa': { initials: 'MC', avatarBg: 'bg-emerald-600' },
-  'Rafael Prado': { initials: 'RP', avatarBg: 'bg-amber-600' },
+  'Henrique Tavano Sammartino': { initials: 'HT', avatarBg: 'bg-blue-600' },
+  'Vinícius Oliveira da Costa': { initials: 'VO', avatarBg: 'bg-emerald-600' },
 }
 
 export function getOwnerDetails(name?: string) {
-  const safeName = name?.trim() || 'Comercial'
+  const safeName = name?.trim() || 'Henrique Tavano Sammartino'
   if (OWNER_PALETTE[safeName]) {
     return { name: safeName, ...OWNER_PALETTE[safeName] }
   }
@@ -178,7 +177,7 @@ export const DealsService = {
       etapa: input.etapa,
       canal: input.canal?.trim() || 'Meta Ads',
       probabilidade: input.probabilidade ?? (input.etapa === 'Fechado (ganho)' ? 100 : 20),
-      responsavel: input.responsavel?.trim() || 'Lucas Silveira',
+      responsavel: input.responsavel?.trim() || 'Henrique Tavano Sammartino',
       tags: input.tags ?? ['Novo Lead'],
       data_fechamento: input.data_fechamento || null,
     }
