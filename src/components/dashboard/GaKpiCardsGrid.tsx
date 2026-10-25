@@ -8,6 +8,7 @@ interface GaKpiCardsGridProps {
   selectedMetric: 'vendas' | 'clientes' | 'conversao' | 'ticketMedio'
   onSelectMetric: (metric: 'vendas' | 'clientes' | 'conversao' | 'ticketMedio') => void
   compareEnabled: boolean
+  isLoading?: boolean
 }
 
 export const GaKpiCardsGrid: React.FC<GaKpiCardsGridProps> = ({
@@ -15,7 +16,31 @@ export const GaKpiCardsGrid: React.FC<GaKpiCardsGridProps> = ({
   selectedMetric,
   onSelectMetric,
   compareEnabled,
+  isLoading = false,
 }) => {
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[1, 2, 3, 4].map((i) => (
+          <div
+            key={i}
+            className="bg-white rounded-xl p-4 sm:p-5 border border-slate-200/90 shadow-sm animate-pulse space-y-3"
+          >
+            <div className="flex justify-between items-center">
+              <div className="h-4 bg-slate-200 rounded w-24"></div>
+              <div className="h-2 w-2 rounded-full bg-slate-200"></div>
+            </div>
+            <div className="h-8 bg-slate-200 rounded w-36 my-2"></div>
+            <div className="pt-2 border-t border-slate-100 flex justify-between items-center">
+              <div className="h-4 bg-slate-200 rounded w-16"></div>
+              <div className="h-9 w-24 bg-slate-100 rounded"></div>
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {cards.map((card) => {

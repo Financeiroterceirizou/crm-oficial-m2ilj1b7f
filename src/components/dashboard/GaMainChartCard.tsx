@@ -15,13 +15,31 @@ interface GaMainChartCardProps {
   data: TimeSeriesPoint[]
   selectedMetric: 'vendas' | 'clientes' | 'conversao' | 'ticketMedio'
   compareEnabled: boolean
+  isLoading?: boolean
 }
 
 export const GaMainChartCard: React.FC<GaMainChartCardProps> = ({
   data,
   selectedMetric,
   compareEnabled,
+  isLoading = false,
 }) => {
+  if (isLoading) {
+    return (
+      <div className="bg-white rounded-xl border border-slate-200/90 shadow-sm p-4 sm:p-6 animate-pulse">
+        <div className="flex justify-between items-center pb-4 border-b border-slate-100 mb-4">
+          <div className="space-y-1.5">
+            <div className="h-5 bg-slate-200 rounded w-64"></div>
+            <div className="h-3.5 bg-slate-100 rounded w-48"></div>
+          </div>
+          <div className="h-4 bg-slate-200 rounded w-32"></div>
+        </div>
+        <div className="w-full h-72 sm:h-80 md:h-96 bg-slate-50 rounded-lg flex items-center justify-center">
+          <span className="text-xs text-slate-400 font-medium">Carregando série temporal...</span>
+        </div>
+      </div>
+    )
+  }
   const metricConfig = {
     vendas: {
       title: 'Vendas ao longo do tempo (Receita total)',

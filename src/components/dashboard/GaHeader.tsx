@@ -170,7 +170,7 @@ export const GaHeader: React.FC<GaHeaderProps> = ({
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
           </span>
           <span className="text-[11px] font-medium text-slate-600">
-            Dados sincronizados em tempo real (Simulado)
+            Dados reais do CRM (Skip Cloud)
           </span>
         </div>
       </div>

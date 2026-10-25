@@ -5,12 +5,17 @@ import { ChannelDimensionRow } from '@/lib/dashboard-data'
 interface GaDataTableCardProps {
   channelData: ChannelDimensionRow[]
   productData: ChannelDimensionRow[]
+  isLoading?: boolean
 }
 
 type TabType = 'channels' | 'products'
 type SortField = 'vendas' | 'clientes' | 'conversao' | 'percentShare'
 
-export const GaDataTableCard: React.FC<GaDataTableCardProps> = ({ channelData, productData }) => {
+export const GaDataTableCard: React.FC<GaDataTableCardProps> = ({
+  channelData,
+  productData,
+  isLoading = false,
+}) => {
   const [activeTab, setActiveTab] = useState<TabType>('channels')
   const [searchTerm, setSearchTerm] = useState('')
   const [sortField, setSortField] = useState<SortField>('vendas')
@@ -232,6 +237,12 @@ export const GaDataTableCard: React.FC<GaDataTableCardProps> = ({ channelData, p
             </tr>
           </tfoot>
         </table>
+        {isLoading && (
+          <div className="py-6 text-center text-xs text-slate-400 bg-white/70 backdrop-blur-xs flex items-center justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping"></span>
+            <span>Atualizando métricas de canais e produtos com dados do CRM...</span>
+          </div>
+        )}
       </div>
     </div>
   )

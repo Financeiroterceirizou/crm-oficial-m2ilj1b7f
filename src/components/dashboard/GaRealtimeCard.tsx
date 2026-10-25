@@ -17,10 +17,10 @@ export const GaRealtimeCard: React.FC<GaRealtimeCardProps> = ({ realtime }) => {
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
           </span>
           <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
-            Tempo Real
+            Tempo Real do CRM
           </span>
         </div>
-        <span className="text-[11px] text-slate-400">Últimos 30 minutos</span>
+        <span className="text-[11px] text-slate-400">Atividade recente</span>
       </div>
 
       {/* Big Counter */}
@@ -29,10 +29,12 @@ export const GaRealtimeCard: React.FC<GaRealtimeCardProps> = ({ realtime }) => {
           {realtime.usersLast30Min}
         </span>
         <div className="flex flex-col">
-          <span className="text-xs font-semibold text-slate-200">Leads ativos navegando</span>
+          <span className="text-xs font-semibold text-slate-200">Contatos monitorados no CRM</span>
           <span className="text-[11px] text-emerald-400 flex items-center gap-1">
             <TrendingUp className="w-3 h-3" />
-            +14% vs. mesma hora ontem
+            {realtime.vendasLast30Min > 0
+              ? `${realtime.vendasLast30Min} negócios fechados (ganhos)`
+              : 'Base de leads ativa no Skip Cloud'}
           </span>
         </div>
       </div>

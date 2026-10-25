@@ -1,15 +1,20 @@
 /* CRM Oficial — Página Inicial: Dashboard no estilo visual do Google Analytics 4
-   Dados fictícios / mockados com foco prioritário em Vendas e Clientes
+   Conectado aos DADOS REAIS do CRM (deals de vendas e leads/clientes do Skip Cloud PocketBase)
 */
-import React, { useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import {
   DatePeriod,
+  KpiCardData,
+  TimeSeriesPoint,
+  ChannelDimensionRow,
+  RealtimeData,
   getKpisForPeriod,
   getTimeSeriesForPeriod,
   getChannelsForPeriod,
   getProductDimensionForPeriod,
   MOCK_REALTIME,
 } from '@/lib/dashboard-data'
+import { CrmDashboardData, DashboardCrmService } from '@/services/dashboard-crm'
 import { GaSidebar, NavTab } from '@/components/dashboard/GaSidebar'
 import { GaHeader } from '@/components/dashboard/GaHeader'
 import { GaKpiCardsGrid } from '@/components/dashboard/GaKpiCardsGrid'
@@ -19,7 +24,18 @@ import { GaRealtimeCard } from '@/components/dashboard/GaRealtimeCard'
 import { MetaLeadsRealCard } from '@/components/dashboard/MetaLeadsRealCard'
 import { LeadScheduleCard } from '@/components/dashboard/LeadScheduleCard'
 import { LeadQualityCard } from '@/components/dashboard/LeadQualityCard'
-import { ChevronRight, Clock, ShieldCheck, Sparkles, Target, TrendingUp } from 'lucide-react'
+import {
+  AlertCircle,
+  CheckCircle2,
+  ChevronRight,
+  Clock,
+  Database,
+  RefreshCw,
+  ShieldCheck,
+  Sparkles,
+  Target,
+  TrendingUp,
+} from 'lucide-react'
 
 const Index: React.FC = () => {
   const [activeTab, setActiveTab] = useState<NavTab>('overview')
@@ -30,16 +46,56 @@ const Index: React.FC = () => {
   >('vendas')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
-  const kpiCards = getKpisForPeriod(period)
-  const timeSeries = getTimeSeriesForPeriod(period)
-  const channelData = getChannelsForPeriod(period)
-  const productData = getProductDimensionForPeriod(period)
+  // Estado dos dados reais vindos do CRM
+  const [dashboardData, setDashboardData] = useState<CrmDashboardData | null>(null)
+
+  // Busca os dados reais do CRM
+  const loadCrmData = useCallback(
+    async (showRefreshing = false) => {
+      try {
+        if (showRefreshing) {
+          setIsRefreshing(true)
+        } else {
+          setIsLoading(true)
+        }
+        setLoadError(null)
+
+        const result = await DashboardCrmService.getDashboardData(period)
+        setDashboardData(result)
+      } catch (err: unknown) {
+        console.error('Falha ao consultar dados reais do CRM no PocketBase:', err)
+        const msg =
+          err instanceof Error
+            ? err.message
+            : 'Não foi possível carregar os dados reais de Vendas e Clientes.'
+        setLoadError(msg)
+      } finally {
+        setIsLoading(false)
+        setIsRefreshing(false)
+      }
+    },
+    [period],
+  )
+
+  useEffect(() => {
+    void loadCrmData()
+  }, [loadCrmData])
 
   const handleRefresh = () => {
-    setIsRefreshing(true)
-    setTimeout(() => setIsRefreshing(false), 600)
+    void loadCrmData(true)
   }
+
+  // Fallback suave para dados mock caso o backend falhe completamente
+  const kpiCards: KpiCardData[] = dashboardData?.kpis || getKpisForPeriod(period)
+  const timeSeries: TimeSeriesPoint[] = dashboardData?.timeSeries || getTimeSeriesForPeriod(period)
+  const channelData: ChannelDimensionRow[] =
+    dashboardData?.channelData || getChannelsForPeriod(period)
+  const productData: ChannelDimensionRow[] =
+    dashboardData?.productData || getProductDimensionForPeriod(period)
+  const realtimeData: RealtimeData = dashboardData?.realtime || MOCK_REALTIME
 
   return (
     <div className="min-h-screen bg-[#f8fafc] flex flex-col lg:flex-row font-sans text-slate-800 antialiased selection:bg-blue-100 selection:text-blue-900">
@@ -62,6 +118,7 @@ const Index: React.FC = () => {
         />
 
         <main className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
+          {/* Banner de status dos Dados Reais */}
           <div className="bg-white rounded-xl border border-blue-200/80 p-3.5 sm:p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-blue-50/50 via-white to-white">
             <div className="flex items-start sm:items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm">
@@ -72,20 +129,47 @@ const Index: React.FC = () => {
                   <span className="text-xs font-bold text-blue-900">
                     Painel Executivo — Estilo Google Analytics 4
                   </span>
-                  <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-semibold uppercase">
-                    Modo Simulação
+                  <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-semibold uppercase flex items-center gap-1 border border-emerald-200">
+                    <Database className="w-3 h-3 text-emerald-700" />
+                    Dados Reais do CRM Conectados
                   </span>
                 </div>
                 <p className="text-xs text-slate-600 mt-0.5">
-                  Métricas em destaque: <strong>Vendas e Clientes</strong> (conforme recomendação).
-                  Todos os seletores e gráficos reagem dinamicamente à navegação.
+                  Métricas em destaque: <strong>Vendas Totais</strong> (oportunidades e faturamento
+                  da collection <code>deals</code>) e <strong>Novos Clientes</strong> (collection{' '}
+                  <code>leads</code>).
                 </p>
               </div>
             </div>
-            <span className="text-xs text-slate-500 font-mono hidden sm:inline">
-              Fuso: America/Sao_Paulo (GMT-3)
-            </span>
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              {dashboardData?.metaInfo && (
+                <span className="text-[11px] text-slate-500 font-mono bg-slate-50 px-2.5 py-1 rounded border border-slate-200">
+                  {dashboardData.metaInfo.totalDeals} deals • {dashboardData.metaInfo.totalLeads}{' '}
+                  contatos
+                </span>
+              )}
+            </div>
           </div>
+
+          {/* Banner de Erro caso ocorra falha de rede */}
+          {loadError && (
+            <div className="rounded-xl border border-rose-200 bg-rose-50/90 p-4 text-xs text-rose-800 flex items-center justify-between gap-3 shadow-sm">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>
+                  <strong>Aviso de sincronização:</strong> {loadError}. Exibindo dados de
+                  contingência.
+                </span>
+              </div>
+              <button
+                onClick={() => void loadCrmData()}
+                className="inline-flex items-center gap-1 font-semibold text-rose-700 hover:text-rose-900 underline shrink-0"
+              >
+                <RefreshCw className="w-3 h-3" />
+                Tentar novamente
+              </button>
+            </div>
+          )}
 
           <section aria-label="Cartões de Métricas Principais">
             <div className="flex items-center justify-between mb-2">
@@ -104,6 +188,7 @@ const Index: React.FC = () => {
               selectedMetric={selectedMetric}
               onSelectMetric={setSelectedMetric}
               compareEnabled={compareEnabled}
+              isLoading={isLoading}
             />
           </section>
 
@@ -113,10 +198,11 @@ const Index: React.FC = () => {
                 data={timeSeries}
                 selectedMetric={selectedMetric}
                 compareEnabled={compareEnabled}
+                isLoading={isLoading}
               />
             </div>
             <div className="lg:col-span-1">
-              <GaRealtimeCard realtime={MOCK_REALTIME} />
+              <GaRealtimeCard realtime={realtimeData} />
             </div>
           </section>
 
@@ -126,7 +212,11 @@ const Index: React.FC = () => {
           <LeadScheduleCard />
 
           <section aria-label="Relatório de Dimensões e Conversões">
-            <GaDataTableCard channelData={channelData} productData={productData} />
+            <GaDataTableCard
+              channelData={channelData}
+              productData={productData}
+              isLoading={isLoading}
+            />
           </section>
 
           <section className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
