@@ -14,7 +14,7 @@ import {
   X,
 } from 'lucide-react'
 
-export type NavTab = 'overview' | 'realtime' | 'acquisition' | 'retention' | 'explore'
+export type NavTab = 'overview' | 'sales' | 'realtime' | 'acquisition' | 'retention' | 'explore'
 
 interface GaSidebarProps {
   activeTab?: NavTab
@@ -34,19 +34,29 @@ export const GaSidebar: React.FC<GaSidebarProps> = ({
 
   // Determina aba ativa pela rota se estiver na rota de aquisição ou fila, senão pela prop activeTab
   const currentTab: NavTab =
-    location.pathname === '/aquisicao'
-      ? 'acquisition'
-      : location.pathname === '/'
-        ? activeTab || 'overview'
-        : activeTab || 'overview'
+    location.pathname === '/vendas'
+      ? 'sales'
+      : location.pathname === '/aquisicao'
+        ? 'acquisition'
+        : location.pathname === '/'
+          ? activeTab || 'overview'
+          : activeTab || 'overview'
 
   const mainNavItems = [
     {
       id: 'overview' as NavTab,
-      label: 'Relatórios',
-      sublabel: 'Visão geral',
+      label: 'Visão Geral',
+      sublabel: 'Dashboard principal',
       icon: BarChart3,
       path: '/',
+    },
+    {
+      id: 'sales' as NavTab,
+      label: 'Vendas',
+      sublabel: 'Receita & Fechamentos',
+      icon: Layers,
+      badge: 'Receita',
+      path: '/vendas',
     },
     {
       id: 'acquisition' as NavTab,
@@ -169,9 +179,11 @@ export const GaSidebar: React.FC<GaSidebarProps> = ({
               {item.badge && (
                 <span
                   className={`px-1.5 py-0.5 text-[10px] rounded-full font-semibold ${
-                    item.id === 'acquisition'
-                      ? 'bg-amber-500/25 text-amber-300 border border-amber-500/40'
-                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse'
+                    item.id === 'sales'
+                      ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/40'
+                      : item.id === 'acquisition'
+                        ? 'bg-amber-500/25 text-amber-300 border border-amber-500/40'
+                        : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse'
                   }`}
                 >
                   {item.badge}

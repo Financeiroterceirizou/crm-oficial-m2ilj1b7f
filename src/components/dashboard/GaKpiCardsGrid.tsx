@@ -1,5 +1,13 @@
 import React from 'react'
-import { ArrowDownRight, ArrowUpRight, CheckCircle2, Info } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  CheckCircle2,
+  ChevronRight,
+  ExternalLink,
+  Info,
+} from 'lucide-react'
 import { LineChart, Line, ResponsiveContainer } from 'recharts'
 import { KpiCardData } from '@/lib/dashboard-data'
 
@@ -9,6 +17,7 @@ interface GaKpiCardsGridProps {
   onSelectMetric: (metric: 'vendas' | 'clientes' | 'conversao' | 'ticketMedio') => void
   compareEnabled: boolean
   isLoading?: boolean
+  onNavigateToVendas?: () => void
 }
 
 export const GaKpiCardsGrid: React.FC<GaKpiCardsGridProps> = ({
@@ -17,7 +26,9 @@ export const GaKpiCardsGrid: React.FC<GaKpiCardsGridProps> = ({
   onSelectMetric,
   compareEnabled,
   isLoading = false,
+  onNavigateToVendas,
 }) => {
+  const navigate = useNavigate()
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -45,17 +56,39 @@ export const GaKpiCardsGrid: React.FC<GaKpiCardsGridProps> = ({
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {cards.map((card) => {
         const isSelected = selectedMetric === card.metricKey
-        const isVendasOrClientes = card.metricKey === 'vendas' || card.metricKey === 'clientes'
+        const isVendas = card.metricKey === 'vendas'
+        const isClientes = card.metricKey === 'clientes'
+        const isVendasOrClientes = isVendas || isClientes
+
+        const handleClick = (e: React.MouseEvent) => {
+          onSelectMetric(card.metricKey)
+        }
+
+        const handleDoubleClickOrAction = (e: React.MouseEvent) => {
+          if (isVendas) {
+            e.stopPropagation()
+            if (onNavigateToVendas) {
+              onNavigateToVendas()
+            } else {
+              navigate('/vendas')
+            }
+          } else if (isClientes) {
+            e.stopPropagation()
+            navigate('/aquisicao')
+          }
+        }
 
         return (
           <div
             key={card.id}
-            onClick={() => onSelectMetric(card.metricKey)}
+            onClick={handleClick}
             className={`group relative bg-white rounded-xl p-4 sm:p-5 cursor-pointer transition-all duration-200 border text-left ${
               isSelected
                 ? 'border-blue-500 shadow-md ring-2 ring-blue-500/20'
                 : 'border-slate-200/90 shadow-sm hover:border-slate-300 hover:shadow'
-            } ${card.recommended ? 'bg-gradient-to-b from-white to-slate-50/50' : ''}`}
+            } ${card.recommended ? 'bg-gradient-to-b from-white to-slate-50/50' : ''} ${
+              isVendas ? 'hover:border-blue-400 hover:ring-1 hover:ring-blue-400/30' : ''
+            }`}
           >
             {/* Top row: Title + Recommended tag */}
             <div className="flex items-start justify-between gap-2 mb-2">
@@ -75,17 +108,37 @@ export const GaKpiCardsGrid: React.FC<GaKpiCardsGridProps> = ({
                 {card.recommended && (
                   <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded w-fit mt-1 border border-blue-200/70">
                     <CheckCircle2 className="w-2.5 h-2.5" />
-                    Métrica em destaque
+                    {isVendas ? 'Ver relatório completo' : 'Métrica em destaque'}
                   </span>
                 )}
               </div>
 
-              {/* Status active indicator dot */}
-              <div
-                className={`w-2 h-2 rounded-full transition-colors ${
-                  isSelected ? 'bg-blue-600' : 'bg-transparent'
-                }`}
-              />
+              {/* Status active indicator dot & shortcut link */}
+              <div className="flex items-center gap-1.5">
+                {isVendas && (
+                  <button
+                    onClick={handleDoubleClickOrAction}
+                    title="Abrir tela de Vendas"
+                    className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                {isClientes && (
+                  <button
+                    onClick={handleDoubleClickOrAction}
+                    title="Abrir funil de Aquisição"
+                    className="p-1 rounded text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <div
+                  className={`w-2 h-2 rounded-full transition-colors ${
+                    isSelected ? 'bg-blue-600' : 'bg-transparent'
+                  }`}
+                />
+              </div>
             </div>
 
             {/* Middle row: Big Value */}
@@ -98,6 +151,17 @@ export const GaKpiCardsGrid: React.FC<GaKpiCardsGridProps> = ({
                 {card.currentValueFormatted}
               </div>
             </div>
+
+            {/* Action hint for Vendas */}
+            {isVendas && (
+              <div
+                onClick={handleDoubleClickOrAction}
+                className="mt-1 mb-2 inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-800 transition-colors"
+              >
+                <span>Acessar tela de Vendas</span>
+                <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+              </div>
+            )}
 
             {/* Bottom row: Delta & Sparkline side by side */}
             <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">

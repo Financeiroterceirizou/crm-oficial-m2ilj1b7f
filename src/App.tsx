@@ -8,6 +8,7 @@ import NotFound from './pages/NotFound'
 import FilaRecuperacao from './pages/FilaRecuperacao'
 import Aquisicao from './pages/Aquisicao'
 import Reativacao from './pages/Reativacao'
+import Vendas from './pages/Vendas'
 import Layout from './components/Layout'
 
 // ONLY IMPORT AND RENDER WORKING PAGES, NEVER ADD PLACEHOLDER COMPONENTS OR PAGES IN THIS FILE
@@ -21,6 +22,7 @@ const App = () => (
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<Index />} />
+          <Route path="/vendas" element={<Vendas />} />
           <Route path="/aquisicao" element={<Aquisicao />} />
           <Route path="/fila" element={<FilaRecuperacao />} />
           <Route path="/reativacao" element={<Reativacao />} />

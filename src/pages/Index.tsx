@@ -2,6 +2,7 @@
    Conectado aos DADOS REAIS do CRM (deals de vendas e leads/clientes do Skip Cloud PocketBase)
 */
 import React, { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   DatePeriod,
   KpiCardData,
@@ -38,6 +39,7 @@ import {
 } from 'lucide-react'
 
 const Index: React.FC = () => {
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<NavTab>('overview')
   const [period, setPeriod] = useState<DatePeriod>('28d')
   const [compareEnabled, setCompareEnabled] = useState(true)
@@ -189,6 +191,7 @@ const Index: React.FC = () => {
               onSelectMetric={setSelectedMetric}
               compareEnabled={compareEnabled}
               isLoading={isLoading}
+              onNavigateToVendas={() => navigate('/vendas')}
             />
           </section>
 
