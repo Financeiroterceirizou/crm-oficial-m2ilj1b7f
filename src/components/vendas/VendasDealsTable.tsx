@@ -229,8 +229,22 @@ export const VendasDealsTable: React.FC<VendasDealsTableProps> = ({
           <tbody className="divide-y divide-slate-100 bg-white">
             {paginatedDeals.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center py-10 text-slate-400">
-                  Nenhum negócio encontrado com os filtros selecionados.
+                <td colSpan={8} className="text-center py-12 text-slate-400">
+                  <div className="flex flex-col items-center justify-center max-w-sm mx-auto space-y-2">
+                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                      <CheckCircle2 className="w-5 h-5" />
+                    </div>
+                    <p className="text-xs font-semibold text-slate-700">
+                      {stageView === 'won_only'
+                        ? 'Nenhuma venda fechada registrada até o momento'
+                        : 'Nenhum negócio encontrado com os filtros selecionados'}
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      {stageView === 'won_only'
+                        ? 'Assim que uma oportunidade for movida para a etapa "Fechado (ganho)", ela será listada aqui com valor e responsável.'
+                        : 'Verifique se há filtros ativos ou cadastre novos negócios no pipeline.'}
+                    </p>
+                  </div>
                 </td>
               </tr>
             ) : (

@@ -82,21 +82,28 @@ export const VendasKpiCardsGrid: React.FC<VendasKpiCardsGridProps> = ({
             <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
               {/* Delta badge */}
               <div className="flex flex-col">
-                <div
-                  className={`inline-flex items-center gap-0.5 text-xs font-semibold ${
-                    card.isPositive ? 'text-emerald-700' : 'text-rose-700'
-                  }`}
-                >
-                  {card.isPositive ? (
-                    <ArrowUpRight className="w-4 h-4 stroke-[2.5]" />
-                  ) : (
-                    <ArrowDownRight className="w-4 h-4 stroke-[2.5]" />
-                  )}
-                  <span>
-                    {card.isPositive ? '+' : ''}
-                    {card.deltaPercent.toFixed(1)}%
-                  </span>
-                </div>
+                {card.currentValueRaw === 0 && card.deltaPercent === 0 ? (
+                  <div className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500">
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                    <span>0,0%</span>
+                  </div>
+                ) : (
+                  <div
+                    className={`inline-flex items-center gap-0.5 text-xs font-semibold ${
+                      card.isPositive ? 'text-emerald-700' : 'text-rose-700'
+                    }`}
+                  >
+                    {card.isPositive ? (
+                      <ArrowUpRight className="w-4 h-4 stroke-[2.5]" />
+                    ) : (
+                      <ArrowDownRight className="w-4 h-4 stroke-[2.5]" />
+                    )}
+                    <span>
+                      {card.isPositive ? '+' : ''}
+                      {card.deltaPercent.toFixed(1)}%
+                    </span>
+                  </div>
+                )}
                 {compareEnabled && (
                   <span className="text-[10px] text-slate-400 mt-0.5 leading-none">
                     vs. ant: {card.previousValueFormatted}
@@ -106,18 +113,24 @@ export const VendasKpiCardsGrid: React.FC<VendasKpiCardsGridProps> = ({
 
               {/* Mini Sparkline in pure GA4 style */}
               <div className="w-24 h-9 sm:w-28 sm:h-10">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={card.sparkline}>
-                    <Line
-                      type="monotone"
-                      dataKey="val"
-                      stroke={card.isPositive ? '#059669' : '#e11d48'}
-                      strokeWidth={1.8}
-                      dot={false}
-                      isAnimationActive={false}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+                {card.sparkline && card.sparkline.some((s) => s.val > 0) ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={card.sparkline}>
+                      <Line
+                        type="monotone"
+                        dataKey="val"
+                        stroke={card.isPositive ? '#059669' : '#e11d48'}
+                        strokeWidth={1.8}
+                        dot={false}
+                        isAnimationActive={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <div className="w-full h-[1.5px] bg-slate-200 rounded-full" />
+                  </div>
+                )}
               </div>
             </div>
           </div>

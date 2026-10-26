@@ -21,7 +21,7 @@ export const PipelineSummary: React.FC<PipelineSummaryProps> = ({ deals, period 
   const countWon = wonDeals.length
   const countOpen = openDeals.length
 
-  const conversionRate = countTotal > 0 ? (countWon / countTotal) * 100 : 0
+  const conversionRate = countTotal > 0 && countWon > 0 ? (countWon / countTotal) * 100 : 0
   const avgTicket = countTotal > 0 ? totalAllValue / countTotal : 0
 
   const compLabel = COMPARISON_LABELS[period]
@@ -41,12 +41,13 @@ export const PipelineSummary: React.FC<PipelineSummaryProps> = ({ deals, period 
     {
       id: 'won-deals',
       title: 'Negócios fechados (ganhos)',
-      subtitle: `${formatCurrencyBRL(totalWonValue)} faturados`,
+      subtitle:
+        countWon > 0 ? `${formatCurrencyBRL(totalWonValue)} faturados` : 'Nenhuma venda fechada',
       value: `${countWon} contratos`,
       icon: CheckCircle2,
-      deltaPercent: '+25,0%',
-      isPositive: true,
-      compDesc: `${compLabel}: ${Math.max(1, countWon - 1)} fechamentos`,
+      deltaPercent: countWon > 0 ? '+25,0%' : '0,0%',
+      isPositive: countWon > 0,
+      compDesc: `${compLabel}: ${countWon} fechamentos`,
       accentColor: 'text-emerald-600 bg-emerald-50',
     },
     {
@@ -66,11 +67,9 @@ export const PipelineSummary: React.FC<PipelineSummaryProps> = ({ deals, period 
       subtitle: 'Eficiência de passagem pelo funil',
       value: `${conversionRate.toFixed(1).replace('.', ',')}%`,
       icon: Percent,
-      deltaPercent: '+2,3 p.p.',
-      isPositive: true,
-      compDesc: `${compLabel}: ${Math.max(1, conversionRate - 2.3)
-        .toFixed(1)
-        .replace('.', ',')}%`,
+      deltaPercent: conversionRate > 0 ? '+2,3 p.p.' : '0,0%',
+      isPositive: conversionRate > 0,
+      compDesc: `${compLabel}: ${conversionRate.toFixed(1).replace('.', ',')}%`,
       accentColor: 'text-amber-600 bg-amber-50',
     },
   ]

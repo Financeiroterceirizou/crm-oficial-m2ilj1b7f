@@ -236,47 +236,6 @@ export const INITIAL_PIPELINE_DEALS: PipelineDeal[] = [
     createdAt: '4 dias atrás',
     tags: ['Desconto Pontualidade'],
   },
-
-  // Fechado (ganho)
-  {
-    id: 'deal-13',
-    title: 'Atlas Transportes & Cargas',
-    contactName: 'Carlos Eduardo Lima',
-    value: 12800,
-    channel: 'Indicação',
-    stageId: 'won',
-    owner: { name: 'Vinícius Oliveira da Costa', initials: 'VO', avatarBg: 'bg-emerald-600' },
-    daysInStage: 8,
-    probability: 100,
-    createdAt: 'Contrato Assinado',
-    tags: ['Contrato 12m', 'Onboarding Iniciado'],
-  },
-  {
-    id: 'deal-14',
-    title: 'Mundo Pet Veterinária 24h',
-    contactName: 'Dra. Gabriela Sales',
-    value: 6900,
-    channel: 'Meta Ads',
-    stageId: 'won',
-    owner: { name: 'Vinícius Oliveira da Costa', initials: 'VO', avatarBg: 'bg-emerald-600' },
-    daysInStage: 5,
-    probability: 100,
-    createdAt: 'Contrato Assinado',
-    tags: ['Contrato 12m', 'BPO Completo'],
-  },
-  {
-    id: 'deal-15',
-    title: 'Inovare Arquitetura de Interiores',
-    contactName: 'Helena Duarte',
-    value: 5400,
-    channel: 'Google Orgânico',
-    stageId: 'won',
-    owner: { name: 'Henrique Tavano Sammartino', initials: 'HT', avatarBg: 'bg-blue-600' },
-    daysInStage: 7,
-    probability: 100,
-    createdAt: 'Contrato Assinado',
-    tags: ['Primeira Parcela Paga'],
-  },
 ]
 
 export function formatCurrencyBRL(value: number): string {

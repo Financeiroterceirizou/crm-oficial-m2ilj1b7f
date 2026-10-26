@@ -164,9 +164,60 @@ export const VendasDimensionTable: React.FC<VendasDimensionTableProps> = ({
             {filteredData.length === 0 ? (
               <tr>
                 <td colSpan={6} className="text-center py-8 text-slate-400">
-                  Nenhum registro encontrado para "{searchTerm}".
+                  Nenhum registro encontrado {searchTerm ? `para "${searchTerm}"` : ''}.
                 </td>
               </tr>
+            ) : totalValor === 0 && totalCount === 0 ? (
+              filteredData.map((row, idx) => (
+                <tr key={row.id} className="hover:bg-blue-50/40 transition-colors group">
+                  <td className="py-3 px-4 text-slate-400 font-mono text-[11px]">{idx + 1}</td>
+                  <td className="py-3 px-4 font-medium text-slate-900">
+                    <div className="flex items-center gap-2.5">
+                      {activeTab === 'responsavel' && (
+                        <div
+                          className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0 ${
+                            row.avatarBg || 'bg-blue-600'
+                          }`}
+                        >
+                          {row.initials || 'CO'}
+                        </div>
+                      )}
+                      <div>
+                        <div className="leading-tight">{row.dimension}</div>
+                        {row.subdimension && (
+                          <div className="text-[10px] text-slate-400 leading-tight mt-0.5">
+                            {row.subdimension}
+                          </div>
+                        )}
+                      </div>
+                      {row.badgeColor && (
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-normal border ${row.badgeColor}`}
+                        >
+                          Ativo
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="py-3 px-4 text-right font-semibold text-slate-400 font-mono">
+                    R$ 0,00
+                  </td>
+                  <td className="py-3 px-4 text-right text-slate-400 font-mono">0</td>
+                  <td className="py-3 px-4 text-right font-semibold text-slate-400 font-mono">
+                    R$ 0,00
+                  </td>
+                  <td className="py-3 px-4">
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/50">
+                        <div className="bg-slate-300 h-full rounded-full" style={{ width: '0%' }} />
+                      </div>
+                      <span className="w-12 text-right font-mono text-[11px] font-medium text-slate-400">
+                        0,0%
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              ))
             ) : (
               filteredData.map((row, idx) => (
                 <tr key={row.id} className="hover:bg-blue-50/40 transition-colors group">

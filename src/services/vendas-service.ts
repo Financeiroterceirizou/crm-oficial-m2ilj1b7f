@@ -169,44 +169,49 @@ export const VendasService = {
     const prevVendasCount = prevWonDeals.length
     const vendasCountDelta = calcDelta(curVendasCount, prevVendasCount)
 
-    // 3. Ticket médio
-    const curTicketMedio =
-      curVendasCount > 0 ? Math.round(curReceita / curVendasCount) : curReceita || 0
-    const prevTicketMedio =
-      prevVendasCount > 0
-        ? Math.round(prevReceita / prevVendasCount)
-        : Math.round(curTicketMedio * 0.95)
+    // 3. Ticket médio (se 0 vendas, ticket é rigorosamente 0)
+    const curTicketMedio = curVendasCount > 0 ? Math.round(curReceita / curVendasCount) : 0
+    const prevTicketMedio = prevVendasCount > 0 ? Math.round(prevReceita / prevVendasCount) : 0
     const ticketDelta = calcDelta(curTicketMedio, prevTicketMedio)
 
-    // 4. Taxa de conversão (deals ganhos / total de deals no escopo)
+    // 4. Taxa de conversão (deals ganhos / total de deals no escopo; se 0 ganhos, 0%)
     const curTotalOps = Math.max(workingCurrentDeals.length, 1)
-    const curConversao = Number(((curVendasCount / curTotalOps) * 100).toFixed(1))
+    const curConversao =
+      curVendasCount > 0 ? Number(((curVendasCount / curTotalOps) * 100).toFixed(1)) : 0
 
     const prevTotalOps = Math.max(workingPrevDeals.length, 1)
     const prevConversao =
-      workingPrevDeals.length > 0
-        ? Number(((prevVendasCount / prevTotalOps) * 100).toFixed(1))
-        : Number((curConversao * 0.88).toFixed(1))
+      prevVendasCount > 0 ? Number(((prevVendasCount / prevTotalOps) * 100).toFixed(1)) : 0
     const conversaoDelta = calcDelta(curConversao, prevConversao)
 
-    // Geração da série temporal para o gráfico de linhas
+    // Geração da série temporal para o gráfico de linhas (se receita for 0, pontos com valor 0)
     const timeSeries = VendasService.generateTimeSeries(
       period,
       ranges,
       currentWonDeals,
       prevWonDeals,
       curReceita,
+      prevReceita,
     )
 
     const compLabel = COMPARISON_LABELS[period]
 
     // Sparklines para os cartões KPI
-    const sparkReceita = timeSeries.map((p) => ({ val: p.vendas }))
-    const sparkVendas = timeSeries.map((p) => ({ val: p.clientes }))
-    const sparkTicket = timeSeries.map((p) => ({
-      val: p.clientes > 0 ? Math.round(p.vendas / p.clientes) : curTicketMedio,
-    }))
-    const sparkConversao = timeSeries.map((p) => ({ val: p.conversao }))
+    const isZeroState = curVendasCount === 0 && curReceita === 0
+    const sparkReceita = isZeroState
+      ? timeSeries.map(() => ({ val: 0 }))
+      : timeSeries.map((p) => ({ val: p.vendas }))
+    const sparkVendas = isZeroState
+      ? timeSeries.map(() => ({ val: 0 }))
+      : timeSeries.map((p) => ({ val: p.clientes }))
+    const sparkTicket = isZeroState
+      ? timeSeries.map(() => ({ val: 0 }))
+      : timeSeries.map((p) => ({
+          val: p.clientes > 0 ? Math.round(p.vendas / p.clientes) : curTicketMedio,
+        }))
+    const sparkConversao = isZeroState
+      ? timeSeries.map(() => ({ val: 0 }))
+      : timeSeries.map((p) => ({ val: p.conversao }))
 
     const kpis = {
       receitaTotal: {
@@ -304,21 +309,35 @@ export const VendasService = {
     currentWonDeals: DealRecord[],
     prevWonDeals: DealRecord[],
     totalReceita: number,
+    prevReceita = 0,
   ): TimeSeriesPoint[] {
-    const totalWon = totalReceita > 0 ? totalReceita : 10000
+    const isZeroState = totalReceita === 0 && currentWonDeals.length === 0
+    const totalWon = totalReceita
+    const totalPrev = prevReceita
 
     if (period === 'today') {
       const hours = ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00']
-      const step = Math.round(totalWon / hours.length)
+      const step = totalWon > 0 ? Math.round(totalWon / hours.length) : 0
+      const prevStep = totalPrev > 0 ? Math.round(totalPrev / hours.length) : 0
       return hours.map((hour, idx) => {
+        if (isZeroState) {
+          return {
+            date: hour,
+            vendas: 0,
+            clientes: 0,
+            vendasAnterior: 0,
+            clientesAnterior: 0,
+            conversao: 0,
+          }
+        }
         const curV = Math.round(step * (0.6 + (idx % 3) * 0.35))
-        const prevV = Math.round(curV * 0.85)
+        const prevV = prevStep > 0 ? Math.round(prevStep * 0.85) : 0
         return {
           date: hour,
           vendas: curV,
           clientes: Math.max(1, Math.round(curV / 3500)),
           vendasAnterior: prevV,
-          clientesAnterior: Math.max(1, Math.round(prevV / 3500)),
+          clientesAnterior: prevV > 0 ? Math.max(1, Math.round(prevV / 3500)) : 0,
           conversao: Number((18 + (idx % 3) * 2).toFixed(1)),
         }
       })
@@ -326,16 +345,27 @@ export const VendasService = {
 
     if (period === '7d') {
       const days = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
-      const step = Math.round(totalWon / 7)
+      const step = totalWon > 0 ? Math.round(totalWon / 7) : 0
+      const prevStep = totalPrev > 0 ? Math.round(totalPrev / 7) : 0
       return days.map((day, idx) => {
+        if (isZeroState) {
+          return {
+            date: day,
+            vendas: 0,
+            clientes: 0,
+            vendasAnterior: 0,
+            clientesAnterior: 0,
+            conversao: 0,
+          }
+        }
         const curV = Math.round(step * (0.7 + (idx % 4) * 0.25))
-        const prevV = Math.round(curV * 0.86)
+        const prevV = prevStep > 0 ? Math.round(prevStep * 0.86) : 0
         return {
           date: day,
           vendas: curV,
           clientes: Math.max(1, Math.round(curV / 4000)),
           vendasAnterior: prevV,
-          clientesAnterior: Math.max(1, Math.round(prevV / 4000)),
+          clientesAnterior: prevV > 0 ? Math.max(1, Math.round(prevV / 4000)) : 0,
           conversao: Number((20 + (idx % 3) * 3).toFixed(1)),
         }
       })
@@ -344,23 +374,36 @@ export const VendasService = {
     if (period === '28d') {
       const points: TimeSeriesPoint[] = []
       const baseDate = new Date(ranges.currentStart)
-      const step = Math.round(totalWon / 28)
+      const step = totalWon > 0 ? Math.round(totalWon / 28) : 0
+      const prevStep = totalPrev > 0 ? Math.round(totalPrev / 28) : 0
 
       for (let i = 0; i < 28; i++) {
         const d = new Date(baseDate)
         d.setDate(baseDate.getDate() + i)
         const dayStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
 
+        if (isZeroState) {
+          points.push({
+            date: dayStr,
+            vendas: 0,
+            clientes: 0,
+            vendasAnterior: 0,
+            clientesAnterior: 0,
+            conversao: 0,
+          })
+          continue
+        }
+
         const wave = Math.sin(i / 3) * (step * 0.25)
-        const curV = Math.max(200, Math.round(step + wave + (i % 3) * 80))
-        const prevV = Math.max(150, Math.round(curV * 0.84))
+        const curV = Math.max(0, Math.round(step + wave + (i % 3) * 80))
+        const prevV = prevStep > 0 ? Math.max(0, Math.round(prevStep * 0.84)) : 0
 
         points.push({
           date: dayStr,
           vendas: curV,
           clientes: Math.max(1, Math.round(curV / 4500)),
           vendasAnterior: prevV,
-          clientesAnterior: Math.max(1, Math.round(prevV / 4500)),
+          clientesAnterior: prevV > 0 ? Math.max(1, Math.round(prevV / 4500)) : 0,
           conversao: Number((22 + (i % 4) * 1.5).toFixed(1)),
         })
       }
@@ -369,17 +412,28 @@ export const VendasService = {
 
     if (period === '90d') {
       const weeks = Array.from({ length: 12 }, (_, i) => `Sem ${i + 1}`)
-      const step = Math.round(totalWon / 12)
+      const step = totalWon > 0 ? Math.round(totalWon / 12) : 0
+      const prevStep = totalPrev > 0 ? Math.round(totalPrev / 12) : 0
 
       return weeks.map((w, idx) => {
+        if (isZeroState) {
+          return {
+            date: w,
+            vendas: 0,
+            clientes: 0,
+            vendasAnterior: 0,
+            clientesAnterior: 0,
+            conversao: 0,
+          }
+        }
         const curV = Math.round(step * (0.8 + idx * 0.04))
-        const prevV = Math.round(curV * 0.85)
+        const prevV = prevStep > 0 ? Math.round(prevStep * 0.85) : 0
         return {
           date: w,
           vendas: curV,
           clientes: Math.max(1, Math.round(curV / 5000)),
           vendasAnterior: prevV,
-          clientesAnterior: Math.max(1, Math.round(prevV / 5000)),
+          clientesAnterior: prevV > 0 ? Math.max(1, Math.round(prevV / 5000)) : 0,
           conversao: Number((21 + (idx % 3) * 2).toFixed(1)),
         }
       })
@@ -400,17 +454,28 @@ export const VendasService = {
       'Nov',
       'Dez',
     ]
-    const step = Math.round(totalWon / 12)
+    const step = totalWon > 0 ? Math.round(totalWon / 12) : 0
+    const prevStep = totalPrev > 0 ? Math.round(totalPrev / 12) : 0
 
     return months.map((m, idx) => {
+      if (isZeroState) {
+        return {
+          date: m,
+          vendas: 0,
+          clientes: 0,
+          vendasAnterior: 0,
+          clientesAnterior: 0,
+          conversao: 0,
+        }
+      }
       const curV = Math.round(step * (0.75 + idx * 0.05))
-      const prevV = Math.round(curV * 0.83)
+      const prevV = prevStep > 0 ? Math.round(prevStep * 0.83) : 0
       return {
         date: m,
         vendas: curV,
         clientes: Math.max(1, Math.round(curV / 5000)),
         vendasAnterior: prevV,
-        clientesAnterior: Math.max(1, Math.round(prevV / 5000)),
+        clientesAnterior: prevV > 0 ? Math.max(1, Math.round(prevV / 5000)) : 0,
         conversao: Number((23 + (idx % 4) * 1.5).toFixed(1)),
       }
     })

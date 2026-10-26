@@ -269,14 +269,10 @@ export const DashboardCrmService = {
 
     // Ticket médio
     const curAvgTicket =
-      currentWonDeals.length > 0
-        ? Math.round(curVendasTotal / currentWonDeals.length)
-        : Math.round(curVendasTotal || 250)
+      currentWonDeals.length > 0 ? Math.round(curVendasTotal / currentWonDeals.length) : 0
 
     const prevAvgTicket =
-      prevWonDeals.length > 0
-        ? Math.round(prevVendasTotal / prevWonDeals.length)
-        : Math.round(curAvgTicket * 0.96)
+      prevWonDeals.length > 0 ? Math.round(prevVendasTotal / prevWonDeals.length) : 0
 
     // Deltas
     const vendasDelta = calcDelta(curVendasTotal, prevVendasTotal)
@@ -404,12 +400,12 @@ export const DashboardCrmService = {
 
     if (period === 'today') {
       const hours = ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00']
-      const stepVendas = Math.round(totalWon / hours.length)
+      const stepVendas = totalWon > 0 ? Math.round(totalWon / hours.length) : 0
       const stepLeads = Math.max(1, Math.round(totalLeads / 10))
 
       return hours.map((hour, idx) => {
-        const curV = Math.round(stepVendas * (0.6 + (idx % 3) * 0.4))
-        const prevV = Math.round(curV * 0.85)
+        const curV = totalWon > 0 ? Math.round(stepVendas * (0.6 + (idx % 3) * 0.4)) : 0
+        const prevV = 0
         const curC = Math.max(1, Math.round(stepLeads * (0.8 + (idx % 2) * 0.3)))
         const prevC = Math.max(1, Math.round(curC * 0.8))
         return {
@@ -418,19 +414,19 @@ export const DashboardCrmService = {
           clientes: curC,
           vendasAnterior: prevV,
           clientesAnterior: prevC,
-          conversao: Number((3.5 + (idx % 3) * 0.4).toFixed(2)),
+          conversao: curV > 0 ? Number((3.5 + (idx % 3) * 0.4).toFixed(2)) : 0,
         }
       })
     }
 
     if (period === '7d') {
       const days = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
-      const stepV = Math.round(totalWon / 7)
+      const stepV = totalWon > 0 ? Math.round(totalWon / 7) : 0
       const stepC = Math.max(1, Math.round(totalLeads / 7))
 
       return days.map((day, idx) => {
-        const curV = Math.round(stepV * (0.7 + (idx % 4) * 0.2))
-        const prevV = Math.round(curV * 0.88)
+        const curV = totalWon > 0 ? Math.round(stepV * (0.7 + (idx % 4) * 0.2)) : 0
+        const prevV = 0
         const curC = Math.max(1, Math.round(stepC * (0.8 + (idx % 3) * 0.2)))
         const prevC = Math.max(1, Math.round(curC * 0.82))
         return {
@@ -439,7 +435,7 @@ export const DashboardCrmService = {
           clientes: curC,
           vendasAnterior: prevV,
           clientesAnterior: prevC,
-          conversao: Number((3.8 + (idx % 3) * 0.3).toFixed(2)),
+          conversao: curV > 0 ? Number((3.8 + (idx % 3) * 0.3).toFixed(2)) : 0,
         }
       })
     }
@@ -447,7 +443,7 @@ export const DashboardCrmService = {
     if (period === '28d') {
       const points: TimeSeriesPoint[] = []
       const baseDate = new Date(ranges.currentStart)
-      const stepV = Math.round(totalWon / 28)
+      const stepV = totalWon > 0 ? Math.round(totalWon / 28) : 0
       const stepC = Math.max(1, Math.round(totalLeads / 28))
 
       for (let i = 0; i < 28; i++) {
@@ -456,8 +452,8 @@ export const DashboardCrmService = {
         const dayStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
 
         const wave = Math.sin(i / 3) * (stepV * 0.2)
-        const curV = Math.max(200, Math.round(stepV + wave + (i % 4) * 100))
-        const prevV = Math.max(150, Math.round(curV * 0.82))
+        const curV = totalWon > 0 ? Math.max(0, Math.round(stepV + wave + (i % 4) * 100)) : 0
+        const prevV = 0
         const curC = Math.max(1, Math.round(stepC + Math.cos(i / 2) * 2))
         const prevC = Math.max(1, Math.round(curC * 0.8))
 
@@ -467,7 +463,7 @@ export const DashboardCrmService = {
           clientes: curC,
           vendasAnterior: prevV,
           clientesAnterior: prevC,
-          conversao: Number((3.9 + (i % 5) * 0.15).toFixed(2)),
+          conversao: curV > 0 ? Number((3.9 + (i % 5) * 0.15).toFixed(2)) : 0,
         })
       }
       return points
@@ -475,12 +471,12 @@ export const DashboardCrmService = {
 
     if (period === '90d') {
       const weeks = Array.from({ length: 12 }, (_, i) => `Sem ${i + 1}`)
-      const stepV = Math.round(totalWon / 12)
+      const stepV = totalWon > 0 ? Math.round(totalWon / 12) : 0
       const stepC = Math.max(2, Math.round(totalLeads / 12))
 
       return weeks.map((w, idx) => {
-        const curV = Math.round(stepV * (0.8 + idx * 0.05))
-        const prevV = Math.round(curV * 0.85)
+        const curV = totalWon > 0 ? Math.round(stepV * (0.8 + idx * 0.05)) : 0
+        const prevV = 0
         const curC = Math.round(stepC * (0.8 + idx * 0.04))
         const prevC = Math.round(curC * 0.82)
         return {
@@ -489,7 +485,7 @@ export const DashboardCrmService = {
           clientes: curC,
           vendasAnterior: prevV,
           clientesAnterior: prevC,
-          conversao: Number((4.1 + (idx % 3) * 0.2).toFixed(2)),
+          conversao: curV > 0 ? Number((4.1 + (idx % 3) * 0.2).toFixed(2)) : 0,
         }
       })
     }
@@ -509,12 +505,12 @@ export const DashboardCrmService = {
       'Nov',
       'Dez',
     ]
-    const stepV = Math.round(totalWon / 12)
+    const stepV = totalWon > 0 ? Math.round(totalWon / 12) : 0
     const stepC = Math.max(5, Math.round(totalLeads / 12))
 
     return months.map((m, idx) => {
-      const curV = Math.round(stepV * (0.7 + idx * 0.06))
-      const prevV = Math.round(curV * 0.84)
+      const curV = totalWon > 0 ? Math.round(stepV * (0.7 + idx * 0.06)) : 0
+      const prevV = 0
       const curC = Math.round(stepC * (0.7 + idx * 0.05))
       const prevC = Math.round(curC * 0.8)
       return {
@@ -523,7 +519,7 @@ export const DashboardCrmService = {
         clientes: curC,
         vendasAnterior: prevV,
         clientesAnterior: prevC,
-        conversao: Number((4.2 + (idx % 4) * 0.2).toFixed(2)),
+        conversao: curV > 0 ? Number((4.2 + (idx % 4) * 0.2).toFixed(2)) : 0,
       }
     })
   },
