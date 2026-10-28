@@ -9,6 +9,7 @@ import FilaRecuperacao from './pages/FilaRecuperacao'
 import Aquisicao from './pages/Aquisicao'
 import Reativacao from './pages/Reativacao'
 import AprovacaoSegmentos from './pages/AprovacaoSegmentos'
+import RelatorioLeads from './pages/RelatorioLeads'
 import Vendas from './pages/Vendas'
 import Layout from './components/Layout'
 
@@ -28,6 +29,7 @@ const App = () => (
           <Route path="/fila" element={<FilaRecuperacao />} />
           <Route path="/reativacao" element={<Reativacao />} />
           <Route path="/segmentos" element={<AprovacaoSegmentos />} />
+          <Route path="/relatorio" element={<RelatorioLeads />} />
           {/* ADD ALL CUSTOM ROUTES MUST BE ADDED HERE */}
         </Route>
         <Route path="*" element={<NotFound />} />
