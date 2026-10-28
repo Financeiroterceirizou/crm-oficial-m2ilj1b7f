@@ -88,10 +88,40 @@ onRecordCreate((e) => {
     typeof raw.length === 'number' &&
     typeof raw[0] === 'number'
   ) {
-    // bytes -> string (sem passar por JSON.stringify para nao corromper o conteudo)
+    // bytes -> string com decodificacao UTF-8 CORRETA (corrigido 28/10/2026).
+    // Antes era String.fromCharCode(byte) um a um, o que decodifica como Latin-1:
+    // "escritórios" (UTF-8 C3 B3) virava "escritÃ³rios" e NENHUM segmento com
+    // acento casava com a carteira, nem "não" era reconhecido como prestador
+    // negativo. Bug silencioso que afetava toda a classificacao.
+    const bytes = []
+    for (let i = 0; i < raw.length; i++) bytes.push(raw[i] & 0xff)
     let s = ''
-    for (let i = 0; i < raw.length; i++) {
-      s += String.fromCharCode(raw[i])
+    let bi = 0
+    while (bi < bytes.length) {
+      const b0 = bytes[bi]
+      if (b0 < 0x80) {
+        s += String.fromCharCode(b0)
+        bi += 1
+      } else if (b0 >= 0xc0 && b0 < 0xe0 && bi + 1 < bytes.length) {
+        s += String.fromCharCode(((b0 & 0x1f) << 6) | (bytes[bi + 1] & 0x3f))
+        bi += 2
+      } else if (b0 >= 0xe0 && b0 < 0xf0 && bi + 2 < bytes.length) {
+        s += String.fromCharCode(
+          ((b0 & 0x0f) << 12) | ((bytes[bi + 1] & 0x3f) << 6) | (bytes[bi + 2] & 0x3f),
+        )
+        bi += 3
+      } else if (b0 >= 0xf0 && bi + 3 < bytes.length) {
+        const cp =
+          ((b0 & 0x07) << 18) |
+          ((bytes[bi + 1] & 0x3f) << 12) |
+          ((bytes[bi + 2] & 0x3f) << 6) |
+          (bytes[bi + 3] & 0x3f)
+        const par = cp - 0x10000
+        s += String.fromCharCode(0xd800 + (par >> 10), 0xdc00 + (par & 0x3ff))
+        bi += 4
+      } else {
+        bi += 1
+      }
     }
     raw = s
   }
