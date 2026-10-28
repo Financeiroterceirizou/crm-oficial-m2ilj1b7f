@@ -9,27 +9,47 @@
 onRecordCreate((e) => {
   const record = e.record
 
-  // --- parametros da regra v1 (copiados de config/regra_qualificacao_v1.json) ---
+  // --- parametros da regra v1.1 (28/10/2026) ---
+  // A carteira agora usa os valores REAIS do formulário, já normalizados por norm().
+  // Antes a lista estava numa grafia que não existia no formulário ("agencias marketing")
+  // enquanto o formulário manda "agências de marketing" — só 2 das 9 casavam.
   const carteira = [
     'casas de repouso ilpi',
-    'associacoes protecao veicular',
+    'associacoes de protecao veicular',
     'vistorias veicular',
-    'escritorios arquitetura',
-    'agencias marketing',
+    'escritorios de arquitetura',
+    'agencias de marketing',
     'consultorias ambientais',
-    'consultorias negocio',
-    'clinicas estetica',
-    'outros segmentos prestacao servico',
+    'consultorias de negocio',
+    'clinicas de estetica',
+    'outros segmentos de prestacao de servico',
+    // Nichos novos definidos pelo champion (ICP 16/10/2026), incluídos em 28/10/2026.
+    'escritorios de advocacia',
+    'assessoria de imprensa',
   ]
-  const excluidos = ['comercio', 'industria']
+  // Excluídos: casa por PALAVRA (comércio/indústria em qualquer grafia do formulário).
+  const excluidosPalavras = ['comercio', 'industria']
   const decisores = ['socio', 'proprietario', 'diretor', 'gerente', 'ceo', 'administrador', 'dono']
   const limiarQualificado = 4
-  const versaoRegra = '1.0'
+  const versaoRegra = '1.1'
 
-  // --- normalizacao identica ao validador Python aprovado na F2-T01 ---
+  // --- normalizacao (corrigida 28/10/2026) ---
+  // Antes só trocava "_" por espaço, mas o formulário do Meta manda "clínicas de
+  // estética" (com acento) e "comércio_/_loja_/_varejo" (com barra) — só 2 das 9
+  // categorias casavam. Agora remove acento e troca "/" e "-" por espaço, então
+  // o valor humano do formulário casa com a carteira.
   const norm = (v) => {
     if (v === null || v === undefined) return ''
-    return String(v).trim().toLowerCase().replace(/_/g, ' ')
+    return String(v)
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/_/g, ' ')
+      .replace(/\//g, ' ')
+      .replace(/-/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
   }
 
   // --- leitura das respostas (campo json pode vir string, objeto OU Uint8Array/array de bytes no runtime goja) ---
@@ -66,7 +86,9 @@ onRecordCreate((e) => {
   const prestNeg =
     prest === 'nao' || prest === 'não' || prest === 'false' || prest === '0' || prest === 'n'
   const prestSim = prest === 'sim' || prest === 's'
-  const segExcluido = excluidos.indexOf(seg) !== -1
+  // excluído: qualquer palavra da lista presente no segmento (pega "comércio / loja / varejo")
+  const segPalavras = seg.split(' ')
+  const segExcluido = excluidosPalavras.some((p) => segPalavras.indexOf(p) !== -1)
   const segCarteira = carteira.indexOf(seg) !== -1
 
   // --- aplicacao da regra na ordem exata da v1 ---
