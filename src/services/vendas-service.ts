@@ -499,7 +499,10 @@ export const VendasService = {
     map.set('Vinícius Oliveira da Costa', { vendasValor: 0, vendasCount: 0, totalDealsCount: 0 })
 
     deals.forEach((d) => {
-      const resp = d.responsavel?.trim() || 'Henrique Tavano Sammartino'
+      let resp = d.responsavel?.trim() || 'Não atribuído'
+      if (resp === 'Nao atribuido' || resp === 'Não Atribuído') {
+        resp = 'Não atribuído'
+      }
       const cur = map.get(resp) || { vendasValor: 0, vendasCount: 0, totalDealsCount: 0 }
       cur.totalDealsCount += 1
       if (d.etapa === 'Fechado (ganho)') {

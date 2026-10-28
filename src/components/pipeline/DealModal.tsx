@@ -44,17 +44,19 @@ export const DealModal: React.FC<DealModalProps> = ({
   // Campos de edição
   const [title, setTitle] = useState('')
   const [contactName, setContactName] = useState('')
+  const [contactInfo, setContactInfo] = useState('')
   const [value, setValue] = useState('')
   const [channel, setChannel] = useState('Meta Ads')
   const [stageId, setStageId] = useState<PipelineStageId>('new_leads')
   const [probability, setProbability] = useState('20')
-  const [ownerName, setOwnerName] = useState('Henrique Tavano Sammartino')
+  const [ownerName, setOwnerName] = useState('Nao atribuido')
   const [tagsInput, setTagsInput] = useState('')
 
   useEffect(() => {
     if (deal) {
       setTitle(deal.title)
       setContactName(deal.contactName)
+      setContactInfo(deal.contactInfo || '')
       setValue(deal.value.toString())
       setChannel(deal.channel)
       setStageId(deal.stageId)
@@ -93,11 +95,12 @@ export const DealModal: React.FC<DealModalProps> = ({
       const updateInput: UpdateDealInput = {
         nome: title.trim(),
         cliente: contactName.trim(),
+        contato: contactInfo.trim(),
         valor: numValue,
         etapa: stageIdToEtapa(stageId),
         canal: channel,
         probabilidade: numProb,
-        responsavel: ownerName,
+        responsavel: ownerName === 'Não atribuído' ? 'Nao atribuido' : ownerName,
         tags,
       }
 
@@ -170,7 +173,10 @@ export const DealModal: React.FC<DealModalProps> = ({
               </span>
             </div>
             <h3 className="text-lg font-bold text-slate-900 mt-2">{deal.title}</h3>
-            <p className="text-xs text-slate-500 mt-0.5">Contato: {deal.contactName}</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Contato: <strong className="text-slate-700">{deal.contactName}</strong>
+              {deal.contactInfo && <span className="text-slate-400"> • {deal.contactInfo}</span>}
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -200,7 +206,7 @@ export const DealModal: React.FC<DealModalProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Contato</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Nome do Cliente</label>
                   <input
                     type="text"
                     value={contactName}
@@ -209,11 +215,39 @@ export const DealModal: React.FC<DealModalProps> = ({
                   />
                 </div>
                 <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Telefone / Email
+                  </label>
+                  <input
+                    type="text"
+                    value={contactInfo}
+                    onChange={(e) => setContactInfo(e.target.value)}
+                    placeholder="(00) 00000-0000 • email@exemplo.com"
+                    className="w-full px-3 py-2 rounded-md border border-slate-300 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
                   <label className="block font-semibold text-slate-700 mb-1">Valor (R$)</label>
                   <input
                     type="number"
                     value={value}
                     onChange={(e) => setValue(e.target.value)}
+                    className="w-full px-3 py-2 rounded-md border border-slate-300 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Probabilidade (%)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={probability}
+                    onChange={(e) => setProbability(e.target.value)}
                     className="w-full px-3 py-2 rounded-md border border-slate-300 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   />
                 </div>
@@ -235,22 +269,6 @@ export const DealModal: React.FC<DealModalProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Probabilidade (%)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={probability}
-                    onChange={(e) => setProbability(e.target.value)}
-                    className="w-full px-3 py-2 rounded-md border border-slate-300 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
                   <label className="block font-semibold text-slate-700 mb-1">Canal de Origem</label>
                   <select
                     value={channel}
@@ -265,17 +283,21 @@ export const DealModal: React.FC<DealModalProps> = ({
                     <option value="Tráfego Direto">Tráfego Direto</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Responsável</label>
-                  <select
-                    value={ownerName}
-                    onChange={(e) => setOwnerName(e.target.value)}
-                    className="w-full px-3 py-2 rounded-md border border-slate-300 text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  >
-                    <option value="Henrique Tavano Sammartino">Henrique Tavano Sammartino</option>
-                    <option value="Vinícius Oliveira da Costa">Vinícius Oliveira da Costa</option>
-                  </select>
-                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Responsável Comercial
+                </label>
+                <select
+                  value={ownerName === 'Nao atribuido' ? 'Não atribuído' : ownerName}
+                  onChange={(e) => setOwnerName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-md border border-slate-300 text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                >
+                  <option value="Não atribuído">Não atribuído</option>
+                  <option value="Henrique Tavano Sammartino">Henrique Tavano Sammartino</option>
+                  <option value="Vinícius Oliveira da Costa">Vinícius Oliveira da Costa</option>
+                </select>
               </div>
 
               <div>
@@ -446,10 +468,11 @@ export const NewDealDialog: React.FC<NewDealDialogProps> = ({
 }) => {
   const [title, setTitle] = useState('')
   const [contactName, setContactName] = useState('')
-  const [value, setValue] = useState('4500')
+  const [contactInfo, setContactInfo] = useState('')
+  const [value, setValue] = useState('0')
   const [channel, setChannel] = useState('Meta Ads')
   const [stageId, setStageId] = useState<PipelineStageId>(initialStageId)
-  const [ownerName, setOwnerName] = useState('Henrique Tavano Sammartino')
+  const [ownerName, setOwnerName] = useState('Não atribuído')
   const [tagsInput, setTagsInput] = useState('Novo Lead')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -458,9 +481,10 @@ export const NewDealDialog: React.FC<NewDealDialogProps> = ({
       setStageId(initialStageId)
       setTitle('')
       setContactName('')
-      setValue('4500')
+      setContactInfo('')
+      setValue('0')
       setChannel('Meta Ads')
-      setOwnerName('Henrique Tavano Sammartino')
+      setOwnerName('Não atribuído')
       setTagsInput('Novo Lead')
     }
   }, [isOpen, initialStageId])
@@ -480,7 +504,7 @@ export const NewDealDialog: React.FC<NewDealDialogProps> = ({
 
     try {
       setIsSubmitting(true)
-      const numValue = Number(value.replace(/[^0-9.]/g, '')) || 3000
+      const numValue = Number(value.replace(/[^0-9.]/g, '')) || 0
       const tags = tagsInput
         .split(',')
         .map((t) => t.trim())
@@ -488,12 +512,13 @@ export const NewDealDialog: React.FC<NewDealDialogProps> = ({
 
       const createInput: CreateDealInput = {
         nome: title.trim(),
-        cliente: contactName.trim() || 'Contato Principal',
+        cliente: contactName.trim() || title.trim(),
+        contato: contactInfo.trim(),
         valor: numValue,
         etapa: stageIdToEtapa(stageId),
         canal: channel,
-        probabilidade: stageId === 'won' ? 100 : stageId === 'negotiation' ? 80 : 25,
-        responsavel: ownerName,
+        probabilidade: stageId === 'won' ? 100 : stageId === 'negotiation' ? 80 : 20,
+        responsavel: ownerName === 'Não atribuído' ? 'Nao atribuido' : ownerName,
         tags: tags.length > 0 ? tags : ['Novo Lead'],
       }
 
@@ -562,21 +587,28 @@ export const NewDealDialog: React.FC<NewDealDialogProps> = ({
               />
             </div>
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">
-                Valor Previsto (R$) *
-              </label>
+              <label className="block font-semibold text-slate-700 mb-1">Telefone / Email</label>
               <input
-                type="number"
-                required
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                placeholder="4500"
+                type="text"
+                value={contactInfo}
+                onChange={(e) => setContactInfo(e.target.value)}
+                placeholder="Ex: (11) 99999-9999"
                 className="w-full px-3 py-2 rounded-md border border-slate-300 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Valor Previsto (R$)</label>
+              <input
+                type="number"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                placeholder="0"
+                className="w-full px-3 py-2 rounded-md border border-slate-300 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+            </div>
             <div>
               <label className="block font-semibold text-slate-700 mb-1">Canal de Origem</label>
               <select
@@ -592,6 +624,9 @@ export const NewDealDialog: React.FC<NewDealDialogProps> = ({
                 <option value="Tráfego Direto">Tráfego Direto</option>
               </select>
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">Etapa Inicial</label>
               <select
@@ -606,9 +641,6 @@ export const NewDealDialog: React.FC<NewDealDialogProps> = ({
                 ))}
               </select>
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">Responsável</label>
               <select
@@ -616,20 +648,22 @@ export const NewDealDialog: React.FC<NewDealDialogProps> = ({
                 onChange={(e) => setOwnerName(e.target.value)}
                 className="w-full px-3 py-2 rounded-md border border-slate-300 text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
               >
+                <option value="Não atribuído">Não atribuído</option>
                 <option value="Henrique Tavano Sammartino">Henrique Tavano Sammartino</option>
                 <option value="Vinícius Oliveira da Costa">Vinícius Oliveira da Costa</option>
               </select>
             </div>
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">Tags</label>
-              <input
-                type="text"
-                value={tagsInput}
-                onChange={(e) => setTagsInput(e.target.value)}
-                placeholder="Ex: BPO, Prioridade"
-                className="w-full px-3 py-2 rounded-md border border-slate-300 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              />
-            </div>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">Tags</label>
+            <input
+              type="text"
+              value={tagsInput}
+              onChange={(e) => setTagsInput(e.target.value)}
+              placeholder="Ex: BPO, Prioridade"
+              className="w-full px-3 py-2 rounded-md border border-slate-300 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            />
           </div>
 
           <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">

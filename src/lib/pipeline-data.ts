@@ -15,6 +15,8 @@ export interface PipelineDeal {
   id: string
   title: string // Nome do cliente ou prospect / empresa
   contactName: string
+  contactInfo?: string // Telefone / email se disponível
+  leadId?: string
   value: number // Valor em R$
   channel: string // Meta Ads, Google Orgânico, Google Ads, Indicação, Email Marketing, Tráfego Direto
   stageId: PipelineStageId

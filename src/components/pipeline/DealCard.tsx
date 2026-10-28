@@ -43,9 +43,14 @@ export const DealCard: React.FC<DealCardProps> = ({
           <h4 className="font-semibold text-slate-900 text-sm leading-snug group-hover:text-blue-600 transition-colors truncate">
             {deal.title}
           </h4>
-          <p className="text-xs text-slate-500 truncate flex items-center gap-1 mt-0.5">
+          <p
+            className="text-xs text-slate-500 truncate flex items-center gap-1 mt-0.5"
+            title={
+              deal.contactInfo ? `${deal.contactName} (${deal.contactInfo})` : deal.contactName
+            }
+          >
             <User className="w-3 h-3 text-slate-400 shrink-0" />
-            <span>{deal.contactName}</span>
+            <span className="truncate">{deal.contactName}</span>
           </p>
         </div>
         <div className="text-slate-300 group-hover:text-slate-400 transition-colors shrink-0">

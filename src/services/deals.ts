@@ -12,6 +12,8 @@ export interface DealRecord {
   id: string
   nome: string
   cliente?: string
+  contato?: string
+  lead?: string
   valor?: number
   etapa: DealEtapaPocketBase
   canal?: string
@@ -26,6 +28,8 @@ export interface DealRecord {
 export interface CreateDealInput {
   nome: string
   cliente?: string
+  contato?: string
+  lead?: string
   valor?: number
   etapa: DealEtapaPocketBase
   canal?: string
@@ -38,6 +42,8 @@ export interface CreateDealInput {
 export interface UpdateDealInput {
   nome?: string
   cliente?: string
+  contato?: string
+  lead?: string
   valor?: number
   etapa?: DealEtapaPocketBase
   canal?: string
@@ -76,23 +82,39 @@ export function etapaToStageId(etapa: string): PipelineStageId {
 const OWNER_PALETTE: Record<string, { initials: string; avatarBg: string }> = {
   'Henrique Tavano Sammartino': { initials: 'HT', avatarBg: 'bg-blue-600' },
   'Vinícius Oliveira da Costa': { initials: 'VO', avatarBg: 'bg-emerald-600' },
+  'Nao atribuido': { initials: 'NA', avatarBg: 'bg-slate-400' },
+  'Não atribuído': { initials: 'NA', avatarBg: 'bg-slate-400' },
+  'Não Atribuído': { initials: 'NA', avatarBg: 'bg-slate-400' },
 }
 
 export function getOwnerDetails(name?: string) {
-  const safeName = name?.trim() || 'Henrique Tavano Sammartino'
-  if (OWNER_PALETTE[safeName]) {
-    return { name: safeName, ...OWNER_PALETTE[safeName] }
+  const trimmed = name?.trim()
+  if (
+    !trimmed ||
+    trimmed === 'Nao atribuido' ||
+    trimmed === 'Não atribuído' ||
+    trimmed === 'Não Atribuído'
+  ) {
+    return {
+      name: 'Não atribuído',
+      initials: 'NA',
+      avatarBg: 'bg-slate-400',
+    }
+  }
+
+  if (OWNER_PALETTE[trimmed]) {
+    return { name: trimmed, ...OWNER_PALETTE[trimmed] }
   }
 
   // Gera iniciais a partir do nome
-  const parts = safeName.split(/\s+/).filter(Boolean)
+  const parts = trimmed.split(/\s+/).filter(Boolean)
   const initials =
     parts.length >= 2
       ? `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
-      : safeName.slice(0, 2).toUpperCase() || 'CO'
+      : trimmed.slice(0, 2).toUpperCase() || 'CO'
 
   return {
-    name: safeName,
+    name: trimmed,
     initials,
     avatarBg: 'bg-indigo-600',
   }
@@ -131,6 +153,8 @@ export function recordToPipelineDeal(record: DealRecord): PipelineDeal {
     id: record.id,
     title: record.nome || 'Sem título',
     contactName: record.cliente || 'Contato não informado',
+    contactInfo: record.contato || '',
+    leadId: record.lead || '',
     value: typeof record.valor === 'number' ? record.valor : 0,
     channel: record.canal || 'Meta Ads',
     stageId: etapaToStageId(record.etapa),
@@ -173,11 +197,13 @@ export const DealsService = {
     const payload = {
       nome: input.nome.trim(),
       cliente: input.cliente?.trim() || '',
+      contato: input.contato?.trim() || '',
+      lead: input.lead?.trim() || null,
       valor: input.valor ?? 0,
       etapa: input.etapa,
       canal: input.canal?.trim() || 'Meta Ads',
       probabilidade: input.probabilidade ?? (input.etapa === 'Fechado (ganho)' ? 100 : 20),
-      responsavel: input.responsavel?.trim() || 'Henrique Tavano Sammartino',
+      responsavel: input.responsavel?.trim() || 'Nao atribuido',
       tags: input.tags ?? ['Novo Lead'],
       data_fechamento: input.data_fechamento || null,
     }
@@ -210,6 +236,8 @@ export const DealsService = {
 
     if (input.nome !== undefined) updatePayload.nome = input.nome.trim()
     if (input.cliente !== undefined) updatePayload.cliente = input.cliente.trim()
+    if (input.contato !== undefined) updatePayload.contato = input.contato.trim()
+    if (input.lead !== undefined) updatePayload.lead = input.lead
     if (input.valor !== undefined) updatePayload.valor = input.valor
     if (input.etapa !== undefined) updatePayload.etapa = input.etapa
     if (input.canal !== undefined) updatePayload.canal = input.canal
