@@ -8,6 +8,7 @@ import NotFound from './pages/NotFound'
 import FilaRecuperacao from './pages/FilaRecuperacao'
 import Aquisicao from './pages/Aquisicao'
 import Reativacao from './pages/Reativacao'
+import AprovacaoSegmentos from './pages/AprovacaoSegmentos'
 import Vendas from './pages/Vendas'
 import Layout from './components/Layout'
 
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/aquisicao" element={<Aquisicao />} />
           <Route path="/fila" element={<FilaRecuperacao />} />
           <Route path="/reativacao" element={<Reativacao />} />
+          <Route path="/segmentos" element={<AprovacaoSegmentos />} />
           {/* ADD ALL CUSTOM ROUTES MUST BE ADDED HERE */}
         </Route>
         <Route path="*" element={<NotFound />} />
