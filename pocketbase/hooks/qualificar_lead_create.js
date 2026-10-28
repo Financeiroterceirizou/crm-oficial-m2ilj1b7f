@@ -1,7 +1,9 @@
 // pocketbase/hooks/qualificar_lead_create.js
 // F2-T03 - Classificacao deterministica na criacao do lead (SPEC-2-001, CA-2-001/002).
-// Aplica a regra v1 aprovada na F2-T01 (config/regra_qualificacao_v1.json):
-// estados, pesos, limiares, ordem de decisao, motivo e proxima acao.
+// REGRA v1.2 (28/10/2026) - decisao do champion: o SEGMENTO decide a validade.
+//  8 segmentos oficiais -> qualificado | outro/desconhecido -> aprovacao
+//  comercio/industria -> nao qualifica | sem segmento -> pedir complemento
+// Score deixou de ser porteiro (era >=4 e o maximo atingivel era 3).
 // Pre-commit (onRecordCreate): seta os campos no proprio record, SEM $app.save()
 // dentro do callback - nao gera loop.
 // Toda a logica e inline (regra de escopo do runtime do Skip: top-level nao e visivel no callback).
@@ -9,38 +11,51 @@
 onRecordCreate((e) => {
   const record = e.record
 
-  // --- parametros da regra v1.1 (28/10/2026) ---
-  // A carteira agora usa os valores REAIS do formulário, já normalizados por norm().
-  // Antes a lista estava numa grafia que não existia no formulário ("agencias marketing")
-  // enquanto o formulário manda "agências de marketing" — só 2 das 9 casavam.
-  const carteira = [
-    'casas de repouso ilpi',
-    'associacoes de protecao veicular',
-    'vistorias veicular',
-    'escritorios de arquitetura',
-    'agencias de marketing',
-    'consultorias ambientais',
-    'consultorias de negocio',
-    'clinicas de estetica',
-    'outros segmentos de prestacao de servico',
-    // Nichos novos definidos pelo champion (ICP 16/10/2026), incluídos em 28/10/2026.
-    'escritorios de advocacia',
-    'assessoria de imprensa',
+  // ===================== REGRA v1.2 (28/10/2026) =====================
+  // Decisão do champion: o SEGMENTO decide a validade do lead.
+  //   8 segmentos oficiais -> qualificado
+  //   "Outro Segmento de Prestação de Serviço" -> fila de aprovação (não valida sozinho)
+  //   fora da lista / não reconhecido -> fila de aprovação
+  //   comércio e indústria -> não qualifica (regra inegociável)
+  //   sem segmento -> pedir complemento
+  const oficiais = [
+    'escritorio de arquitetura',
+    'escritorio de advocacia',
+    'clinica de saude e estetica',
+    'agencia de marketing',
+    'casa de repouso ilpi',
+    'associacao de protecao veicular',
+    'vistoria veicular',
+    'consultoria em geral',
   ]
-  // Excluídos: casa por PALAVRA (comércio/indústria em qualquer grafia do formulário).
+  const SEG_OUTRO = 'outro segmento de prestacao de servico'
+  // Grafias antigas do formulário -> segmento oficial. Sem este mapa a base antiga
+  // nunca casa: o formulário mandava "consultoria_/_assessoria", "saúde_/_estética_/_clínicas".
+  // Inclui o erro de digitação "outros_segmentos_of_de_prestação_de_serviço" visto na origem.
+  const legado = {
+    'consultoria assessoria': 'consultoria em geral',
+    'consultorias ambientais': 'consultoria em geral',
+    'consultorias de negocio': 'consultoria em geral',
+    'saude estetica clinicas': 'clinica de saude e estetica',
+    'clinicas de estetica': 'clinica de saude e estetica',
+    'agencias de marketing': 'agencia de marketing',
+    'casas de repouso ilpi': 'casa de repouso ilpi',
+    'associacoes de protecao veicular': 'associacao de protecao veicular',
+    'vistorias veicular': 'vistoria veicular',
+    'escritorios de arquitetura': 'escritorio de arquitetura',
+    'escritorios de advocacia': 'escritorio de advocacia',
+    'outros segmentos de prestacao de servico': 'outro segmento de prestacao de servico',
+    'outros segmentos of de prestacao de servico': 'outro segmento de prestacao de servico',
+    'locacao manutencao operacao de servicos': 'outro segmento de prestacao de servico',
+    'educacao cursos treinamentos': 'outro segmento de prestacao de servico',
+    'construcao civil piso industrial': 'outro segmento de prestacao de servico',
+    'assessoria de imprensa': 'outro segmento de prestacao de servico',
+  }
   const excluidosPalavras = ['comercio', 'industria']
   const decisores = ['socio', 'proprietario', 'diretor', 'gerente', 'ceo', 'administrador', 'dono']
-  const limiarQualificado = 4
-  const versaoRegra = '1.1'
+  const versaoRegra = '1.2'
 
-  // --- normalizacao (corrigida 28/10/2026) ---
-  // Antes só trocava "_" por espaço, mas o formulário do Meta manda "clínicas de
-  // estética" (com acento) e "comércio_/_loja_/_varejo" (com barra) — só 2 das 9
-  // categorias casavam. Agora remove acento e troca "/" e "-" por espaço, então
-  // o valor humano do formulário casa com a carteira.
-  // ATENÇÃO: String.prototype.normalize('NFD') NÃO funciona no goja (runtime do
-  // PocketBase) — testado em 28/10: os segmentos com acento continuavam sem casar.
-  // Por isso o mapa explícito abaixo.
+  // String.prototype.normalize('NFD') NÃO funciona no goja (runtime do PocketBase).
   const SEM_ACENTO = {
     á: 'a',
     à: 'a',
@@ -75,10 +90,17 @@ onRecordCreate((e) => {
       const ch = s.charAt(i)
       out += SEM_ACENTO[ch] !== undefined ? SEM_ACENTO[ch] : ch
     }
-    return out.replace(/_/g, ' ').replace(/\//g, ' ').replace(/-/g, ' ').replace(/\s+/g, ' ').trim()
+    return out
+      .replace(/_/g, ' ')
+      .replace(/\//g, ' ')
+      .replace(/-/g, ' ')
+      .replace(/\(/g, ' ')
+      .replace(/\)/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
   }
 
-  // --- leitura das respostas (campo json pode vir string, objeto OU Uint8Array/array de bytes no runtime goja) ---
+  // --- respostas: string, objeto OU Uint8Array (runtime goja) ---
   let resp = {}
   let raw = record.get('respostas')
   if (
@@ -88,11 +110,8 @@ onRecordCreate((e) => {
     typeof raw.length === 'number' &&
     typeof raw[0] === 'number'
   ) {
-    // bytes -> string com decodificacao UTF-8 CORRETA (corrigido 28/10/2026).
-    // Antes era String.fromCharCode(byte) um a um, o que decodifica como Latin-1:
-    // "escritórios" (UTF-8 C3 B3) virava "escritÃ³rios" e NENHUM segmento com
-    // acento casava com a carteira, nem "não" era reconhecido como prestador
-    // negativo. Bug silencioso que afetava toda a classificacao.
+    // bytes -> UTF-8 CORRETO. String.fromCharCode byte a byte decodifica como Latin-1
+    // e corrompe qualquer acento ("escritórios" vira "escritÃ³rios").
     const bytes = []
     for (let i = 0; i < raw.length; i++) bytes.push(raw[i] & 0xff)
     let s = ''
@@ -135,23 +154,34 @@ onRecordCreate((e) => {
     resp = raw
   }
 
-  const prest = norm(resp['prestador'])
-  const seg = norm(resp['segmento'])
-  const cargo = norm(resp['cargo'])
-  const fat = norm(resp['faturamento'])
-  const prestNeg =
-    prest === 'nao' || prest === 'não' || prest === 'false' || prest === '0' || prest === 'n'
-  const prestSim = prest === 'sim' || prest === 's'
-  // excluído: qualquer palavra da lista presente no segmento (pega "comércio / loja / varejo")
+  // --- leitura com as DUAS grafias de chave ---
+  // BUG CORRIGIDO em 28/10/2026: os hooks liam 'prestador' e 'faturamento', mas a
+  // automação grava 'prestador_servicos' e 'faturamento_medio'. Resultado: em 45 leads
+  // o prestador nunca era lido e o faturamento nunca pontuava — a regra v1 exigia
+  // score >= 4, e o máximo atingível era 3. NENHUM lead podia ser qualificado.
+  const pick = (a, b) => {
+    const va = resp[a]
+    const vb = resp[b]
+    if (va !== null && va !== undefined && String(va).trim() !== '') return va
+    if (vb !== null && vb !== undefined && String(vb).trim() !== '') return vb
+    return ''
+  }
+  const segBruto = pick('segmento', 'segmento')
+  const seg = norm(segBruto)
+  const cargo = norm(pick('cargo', 'cargo'))
+  const fat = norm(pick('faturamento', 'faturamento_medio'))
+  const prest = norm(pick('prestador', 'prestador_servicos'))
+  const prestNeg = prest === 'nao' || prest === 'false' || prest === '0' || prest === 'n'
+
   const segPalavras = seg.split(' ')
   const segExcluido = excluidosPalavras.some((p) => segPalavras.indexOf(p) !== -1)
-  const segCarteira = carteira.indexOf(seg) !== -1
+  const segOficial = legado[seg] !== undefined ? legado[seg] : seg
+  const segNaCarteira = oficiais.indexOf(segOficial) !== -1
 
-  // --- aplicacao da regra na ordem exata da v1 ---
   let estado = 'pendente_revisao'
   let score = null
-  let motivo = 'score abaixo do limiar'
-  let proxima = 'aguardar_revisao_humana'
+  let motivo = 'segmento nao informado'
+  let proxima = 'solicitar_complemento_segmento'
   let componentes = {
     segmento_na_carteira: 0,
     receita_ou_faturamento_informado: 0,
@@ -160,37 +190,31 @@ onRecordCreate((e) => {
   }
 
   if (prestNeg) {
-    // 1. prestador negativo explicito -> nao_qualificado (regra inegociavel)
+    // 1. prestador negativo explícito -> não qualifica (regra inegociável)
     estado = 'nao_qualificado'
     motivo = 'prestador negativo explicito'
     proxima = 'sem_roteamento'
-  } else if ((prestSim && segExcluido) || (prestNeg && segCarteira)) {
-    // 2. conflito entre prestador e segmento -> revisao
-    estado = 'pendente_revisao'
-    motivo = 'conflito prestador x segmento'
-    proxima = 'aguardar_revisao_humana'
   } else if (segExcluido) {
-    // 3. segmento excluido (comercio/industria) -> nao_qualificado
+    // 2. comércio / indústria em qualquer grafia -> não qualifica
     estado = 'nao_qualificado'
     motivo = 'segmento fora do perfil (comercio/industria)'
     proxima = 'sem_roteamento'
-  } else if (!seg || !cargo) {
-    // 4. dados criticos ausentes (sem segmento ou cargo) -> revisao
+    componentes['segmento_excluido'] = -3
+  } else if (!seg) {
+    // 3. sem segmento (formulário de Cadastro não pergunta) -> pedir complemento
     estado = 'pendente_revisao'
-    motivo = 'dados criticos ausentes'
-    proxima = 'aguardar_complemento_dados'
-  } else if (!segCarteira) {
-    // 5. segmento nao mapeado -> excecao
-    estado = 'excecao'
-    motivo = 'segmento nao mapeado'
-    proxima = 'revisar_excecao'
-  } else {
-    // 6. pontuacao
-    score = 0
-    if (segCarteira) {
-      score += 2
-      componentes['segmento_na_carteira'] = 2
-    }
+    motivo = 'segmento nao informado'
+    proxima = 'solicitar_complemento_segmento'
+  } else if (segOficial === SEG_OUTRO) {
+    // 4. "outro prestador" é confissão de que o segmento não é conhecido:
+    //    NÃO valida sozinho — vai para aprovação com a declaração do lead.
+    estado = 'pendente_revisao'
+    motivo = 'segmento fora da carteira - aguardando aprovacao (' + segBruto + ')'
+    proxima = 'aprovar_segmento'
+  } else if (segNaCarteira) {
+    // 5. segmento oficial -> válido. Score fica como diagnóstico, não como porteiro.
+    score = 2
+    componentes['segmento_na_carteira'] = 2
     if (fat) {
       score += 2
       componentes['receita_ou_faturamento_informado'] = 2
@@ -206,15 +230,14 @@ onRecordCreate((e) => {
       score += 1
       componentes['cargo_decisor'] = 1
     }
-    if (score >= limiarQualificado) {
-      estado = 'qualificado'
-      motivo = 'score acima do limiar'
-      proxima = 'agendar_reuniao_fechamento'
-    } else {
-      estado = 'pendente_revisao'
-      motivo = 'score abaixo do limiar'
-      proxima = 'aguardar_revisao_humana'
-    }
+    estado = 'qualificado'
+    motivo = 'segmento valido (regra v1.2)'
+    proxima = 'agendar_reuniao_fechamento'
+  } else {
+    // 6. segmento não reconhecido -> aprovação
+    estado = 'pendente_revisao'
+    motivo = 'segmento nao reconhecido - aguardando aprovacao (' + segBruto + ')'
+    proxima = 'aprovar_segmento'
   }
 
   // --- escrita dos campos de qualificacao (F2-T02) ---
