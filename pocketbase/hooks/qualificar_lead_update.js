@@ -61,18 +61,44 @@ onRecordUpdate((e) => {
   // estética" (com acento) e "comércio_/_loja_/_varejo" (com barra) — só 2 das 9
   // categorias casavam. Agora remove acento e troca "/" e "-" por espaço, então
   // o valor humano do formulário casa com a carteira.
+  // ATENÇÃO: String.prototype.normalize('NFD') NÃO funciona no goja (runtime do
+  // PocketBase) — testado em 28/10: os segmentos com acento continuavam sem casar.
+  // Por isso o mapa explícito abaixo.
+  const SEM_ACENTO = {
+    á: 'a',
+    à: 'a',
+    â: 'a',
+    ã: 'a',
+    ä: 'a',
+    é: 'e',
+    è: 'e',
+    ê: 'e',
+    ë: 'e',
+    í: 'i',
+    ì: 'i',
+    î: 'i',
+    ï: 'i',
+    ó: 'o',
+    ò: 'o',
+    ô: 'o',
+    õ: 'o',
+    ö: 'o',
+    ú: 'u',
+    ù: 'u',
+    û: 'u',
+    ü: 'u',
+    ç: 'c',
+    ñ: 'n',
+  }
   const norm = (v) => {
     if (v === null || v === undefined) return ''
-    return String(v)
-      .trim()
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/_/g, ' ')
-      .replace(/\//g, ' ')
-      .replace(/-/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
+    let s = String(v).trim().toLowerCase()
+    let out = ''
+    for (let i = 0; i < s.length; i++) {
+      const ch = s.charAt(i)
+      out += SEM_ACENTO[ch] !== undefined ? SEM_ACENTO[ch] : ch
+    }
+    return out.replace(/_/g, ' ').replace(/\//g, ' ').replace(/-/g, ' ').replace(/\s+/g, ' ').trim()
   }
 
   // --- leitura das respostas (campo json pode vir string, objeto OU Uint8Array/array de bytes no runtime goja) ---
