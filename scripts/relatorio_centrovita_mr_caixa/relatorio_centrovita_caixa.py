@@ -289,18 +289,15 @@ D = {n: dados_cc(n, c) for n, c in UNIDADES}
 # consolidado
 tot_saldo_contas = bal("2017-01-01", FIM_MES_ANT.isoformat())["balanceDone"]
 
-# ===== AJUSTE DE CLASSIFICAÇÃO (decisão do Vinícius, 09/11) =====
-# Sobram lançamentos SEM centro de custo na licença (transferências, que se anulam, e
-# eventual lançamento não classificado). Por decisão do Vinícius, o resíduo é atribuído
-# a MAURO RAMOS para que a soma dos dois centros de custo feche no centavo com o total
-# das contas. Não entra em nenhuma linha de resultado: é ajuste de SALDO DE ABERTURA,
-# aparece como linha própria e explicada, e a descrição é derivada dos lançamentos reais
-# que ainda estão sem centro de custo.
-RESIDUO = tot_saldo_contas - sum(D[n]["saldo_cc"] for n, _ in UNIDADES)
-CC_AJUSTE = "MAURO RAMOS"
-
+# ===== TRAVA DE CLASSIFICAÇÃO (regra do Vinícius, 09/11) =====
+# TODOS os lançamentos precisam ter centro de custo. A ÚNICA exceção são as
+# transferências entre contas, que não pertencem a unidade nenhuma e se anulam.
+# Se aparecer lançamento que não é transferência e está sem centro de custo, o
+# relatório NÃO é gerado: aborta com a lista, para o lançamento ser classificado
+# na origem. Nenhum ajuste automático, nenhuma atribuição por conta própria —
+# o número do relatório é sempre o número real do Controlle.
 def _sem_cc_relevantes():
-    """Lançamentos sem CC que NÃO são transferência entre contas (o que sobra de fato)."""
+    """Lançamentos sem centro de custo que NÃO são transferência entre contas."""
     out = []
     for t in _tx:
         if ccs(t) or not t.get("value_in_cent"):
@@ -314,22 +311,26 @@ def _sem_cc_relevantes():
         out.append(t)
     return out
 
-SEM_CC = _sem_cc_relevantes() if RESIDUO else []
+SEM_CC = _sem_cc_relevantes()
 if SEM_CC:
-    _desc = "; ".join(sorted({f"{(t.get('ds_transaction') or '')[:40]} ({(bdate(t)[8:10])}/{bdate(t)[5:7]}/{bdate(t)[:4]})"
-                              for t in SEM_CC}))
-else:
-    _desc = ""
+    print("ERRO: lançamento sem centro de custo (só transferência pode ficar sem).")
+    print("      Classifique na origem no Controlle e rode de novo. Nada foi gerado, nada será enviado.")
+    for t in sorted(SEM_CC, key=bdate):
+        print(f"  {bdate(t)}  {(t.get('ds_transaction') or '')[:56]:56s} "
+              f"{t['value_in_cent']/100:>12,.2f}  conta={t.get('ds_account_main')}  "
+              f"cat={(t.get('apportionments_plan_account') or [{}])[0].get('ds_category')}")
+    raise SystemExit(11)
 
-if RESIDUO:
-    _D = D[CC_AJUSTE]
-    # desloca o saldo inicial e todos os saldos finais do fluxo (ajuste de abertura)
-    _fl = [(lab, si + RESIDUO, e, x, sf + RESIDUO) for lab, si, e, x, sf in _D["fluxo"]]
-    _D["fluxo"] = _fl
-    _D["saldo_cc"] += RESIDUO
-    # proj_ac é calculada depois, a partir de saldo_cc — já herda o ajuste
-    _D["ajuste_classificacao"] = RESIDUO
-    print(f"ajuste de classificação: {RESIDUO/100:,.2f} atribuído a {CC_AJUSTE} (saldo de abertura)")
+# sem lançamento pendente de classificação: a soma dos CCs tem de fechar com as contas.
+_sobra = tot_saldo_contas - sum(D[n]["saldo_cc"] for n, _ in UNIDADES)
+if _sobra:
+    print(f"ERRO: soma dos centros de custo ({sum(D[n]['saldo_cc'] for n, _ in UNIDADES)/100:,.2f}) "
+          f"não fecha com o total das contas ({tot_saldo_contas/100:,.2f}): diferença {_sobra/100:,.2f}.")
+    print("      Todos os lançamentos já têm centro de custo, então a diferença é de transferência.")
+    print("      Verifique no Controlle antes de gerar. Nada foi gerado, nada será enviado.")
+    raise SystemExit(11)
+print(f"trava de classificação OK: nenhum lançamento não-transferência sem centro de custo; "
+      f"soma dos CCs = total das contas ({tot_saldo_contas/100:,.2f})")
 
 C = {}
 for campo in ("ant_rec", "ant_desp", "ant_capex", "g_aberto", "prev_rec", "prev_desp", "prev_capex"):
@@ -650,11 +651,6 @@ def bloco_fluxo_proj(d, titulo_unidade, resíduo=None):
     els.append(t)
     nota = ("Nota: entradas e saídas realizadas das contas do centro de custo (baixas do período), "
             "sem transferências entre contas. Saldo final conferido contra o saldo real do centro de custo.")
-    if d.get("ajuste_classificacao"):
-        _quem = f" ({_desc})" if _desc else ""
-        nota += (f" O saldo inicial inclui {brl(d['ajuste_classificacao'])} de ajuste de classificação: "
-                 f"lançamento sem centro de custo na origem{_quem}, atribuído a esta unidade por decisão "
-                 f"de classificação, para que a soma das unidades feche com o total das contas.")
     if resíduo:
         nota += f" {resíduo}"
     els.append(P(nota, sub))
@@ -698,9 +694,7 @@ E += bloco_comparativo(Cv, "Comparativo consolidado")
 E += bloco_mes(Cv, "UNIFICADO")
 E += bloco_aberto_previsao(Cv, "UNIFICADO")
 _res = (f"Soma dos dois centros de custo = {brl(C['saldo_cc'])} = total nas contas da licença em "
-        f"{FIM_MES_ANT_LABEL} ({brl(tot_saldo_contas)}). "
-        f"Os {brl(RESIDUO)} de lançamento sem centro de custo na origem estão atribuídos a {CC_AJUSTE} "
-        f"como ajuste de classificação no saldo de abertura.") if RESIDUO else ""
+        f"{FIM_MES_ANT_LABEL} ({brl(tot_saldo_contas)}).")
 E += bloco_fluxo_proj(Cv, "UNIFICADO", resíduo=_res)
 
 E.append(Spacer(1, 10))
@@ -852,9 +846,6 @@ for nome, _ in UNIDADES + [("UNIFICADO", None)]:
 ls = [("Centro de custo / conta", f"Saldo em {FIM_MES_ANT_LABEL}")]
 for nome, _ in UNIDADES:
     ls.append((nome, r_(D[nome]["saldo_cc"])))
-for nome, _ in UNIDADES:
-    if D[nome].get("ajuste_classificacao"):
-        ls.append((f"   (inclui ajuste de classificação em {nome})", r_(D[nome]["ajuste_classificacao"])))
 ls.append(("Soma dos centros de custo", r_(C["saldo_cc"])))
 ls.append(("Total nas contas (licença)", r_(tot_saldo_contas)))
 ls.append(("Diferença", r_(tot_saldo_contas - C["saldo_cc"])))
