@@ -144,11 +144,8 @@ for i, (nome, arq, fnd, uso, prop) in enumerate(familias):
     x = 0.6 + i * 3.07
     rect(s, x, 2.35, 2.92, 2.45, fnd, line=(LINE if fnd == WHITE else None))
     path = _a(arq)
-    iw, ih = Image.open(path).size
-    esc = 0.55 if "vertical" in arq or "simbolo" in arq else 0.78
-    alt = 2.45 * esc
-    larg = min(alt * iw / ih, 2.5)
-    pic(s, path, x + (2.92 - larg) / 2, 2.35 + (2.45 - alt) / 2, larg, alt)
+    esc = 0.62 if ("vertical" in arq or "simbolo" in arq) else 0.80
+    pic_fit(s, path, x, 2.35, 2.92, 2.45, esc=esc)
     txt(s, x, 4.95, 2.9, 0.3, nome, 15, DARK)
     txt(s, x, 5.32, 2.9, 0.3, prop, 10, ORANGE)
     txt(s, x, 5.62, 2.9, 0.8, uso, 10.5, GREY, ls=1.3)
@@ -215,7 +212,7 @@ for i, (t, f, fnd, uso) in enumerate(caixas):
     p = _a(f)
     iw, ih = Image.open(p).size
     hh = 1.85
-    ww = hh * iw / ih
+    ww = hh * iw / ih  # proporcao real do arquivo
     pic(s, p, x + (2.72 - ww) / 2, 2.4 + (2.7 - hh) / 2, ww, hh)
     txt(s, x, 5.22, 2.7, 0.3, t, 13, DARK)
     txt(s, x, 5.52, 2.7, 0.6, uso, 10.5, GREY, ls=1.3)
@@ -262,11 +259,14 @@ for i, e in enumerate(erros):
     y = 2.35 + row * 2.1
     rect(s, x, y, 3.85, 1.5, CARD, line=LINE)
     if i == 0:
-        img = Image.open(_a("logo-horizontal-preto.png")).convert("RGBA")
-        img = img.resize((900, int(img.height * 900 / img.width)), Image.LANCZOS)
+        # exemplo de uso errado: a logo esticada. a imagem e gerada ja com a
+        # proporcao errada e inserida nessa mesma proporcao, para a distorcao
+        # ser a do exemplo e nao um artefato de insercao.
+        alvo_w, alvo_h = 2.30, 0.42
+        src = Image.open(_a("logo-horizontal-preto.png")).convert("RGBA")
         tmp = "work/brand2026/tmp_esticada.png"
-        img.resize((1500, int(img.height * 1500 / 900)), Image.LANCZOS).save(tmp)
-        pic(s, tmp, x + 0.35, y + 0.52, 2.35, 0.42)
+        src.resize((int(alvo_w * 300), int(alvo_h * 300)), Image.LANCZOS).save(tmp)
+        pic(s, tmp, x + 0.75, y + 0.55, alvo_w, alvo_h)
     elif i == 1:
         p = s.shapes.add_picture(_a("logo-horizontal-preto.png"), Inches(x + 0.6), Inches(y + 0.25), width=Inches(2.5))
         p.rotation = 12
@@ -535,15 +535,15 @@ def mini_slide(x, y, dark=False, tipo="conteudo"):
         for k in range(3):
             rect(s, x + 0.16 + k * 1.15, y + 1.05, 1.05, 0.75, RGBColor(0x3A, 0x3B, 0x3D) if dark else CARD)
         p = _a("simbolo-branco.png" if dark else "simbolo-laranja.png")
-        pic(s, p, x + 3.16, y + 1.4, 0.3, 0.44)
+        pic_fit(s, p, x + 3.05, y + 1.3, 0.55, 0.7, esc=0.95)
     elif tipo == "capa":
         p = _a("logo-horizontal-branco.png")
         pic(s, p, x + 0.16, y + 0.14, 1.5)
         txt(s, x + 0.16, y + 0.9, 3.2, 0.7, ["título", "de capa."], 15, WHITE, ls=1.05)
-        pic(s, _a("simbolo-branco.png"), x + 3.05, y + 1.3, 0.45, 0.66)
+        pic_fit(s, _a("simbolo-branco.png"), x + 2.95, y + 1.2, 0.6, 0.8, esc=0.92)
     else:
         txt(s, x + 0.16, y + 0.6, 3.2, 0.8, ["grande ideia", "em uma frase."], 13, WHITE, ls=1.1)
-        pic(s, _a("simbolo-branco.png"), x + 3.05, y + 1.3, 0.45, 0.66)
+        pic_fit(s, _a("simbolo-branco.png"), x + 2.95, y + 1.2, 0.6, 0.8, esc=0.92)
 mini_slide(0.6, 2.35, False, "conteudo")
 mini_slide(4.55, 2.35, True, "capa")
 mini_slide(8.5, 2.35, True, "divisor")
@@ -598,10 +598,10 @@ for i, (rot, w_, h_) in enumerate([("post 1080×1080", 2.35, 2.35), ("carrossel"
     if i < 2:
         txt(s, x + 0.18, y + 0.35, w_ - 0.36, 1.5, ["seu dinheiro", "sai todo mês."], 15, WHITE, ls=1.1)
         txt(s, x + 0.18, y + h_ - 0.55, 1.2, 0.3, "@termaisterceirizou", 6, LGREY)
-        pic(s, _a("simbolo-branco.png"), x + w_ - 0.5, y + h_ - 0.85, 0.3, 0.44)
+        pic_fit(s, _a("simbolo-branco.png"), x + w_ - 0.55, y + h_ - 0.9, 0.4, 0.5, esc=0.9)
     else:
         txt(s, x + 0.16, y + 0.5, w_ - 0.32, 1.6, ["o mês", "fechou."], 15, WHITE, ls=1.1)
-        pic(s, _a("simbolo-branco.png"), x + w_ - 0.45, y + h_ - 0.8, 0.28, 0.41)
+        pic_fit(s, _a("simbolo-branco.png"), x + w_ - 0.5, y + h_ - 0.85, 0.4, 0.5, esc=0.9)
     txt(s, x, y + h_ + 0.12, w_, 0.3, rot, 9.5, GREY)
 txt(s, 8.3, 2.4, 4.45, 0.3, "regras sociais", 10.5, ORANGE)
 txt(s, 8.3, 2.8, 4.45, 3.3,
@@ -622,7 +622,7 @@ logoem(s, "horizontal-branco", 0.85, 2.62, 2.0)
 txt(s, 0.85, 3.75, 2.9, 0.4, ["vinícius oliveira da costa", "(48) 99122-6496"], 7.5, LGREY, ls=1.5)
 txt(s, 0.6, 4.55, 3.4, 0.3, "cartão · frente", 9.5, GREY)
 rect(s, 4.2, 2.4, 3.4, 2.0, WHITE, line=LINE)
-pic(s, _a("simbolo-laranja.png"), 5.25, 2.75, 0.85, 1.25)
+pic_fit(s, _a("simbolo-laranja.png"), 4.2, 2.4, 3.4, 2.0, esc=0.5)
 txt(s, 4.2, 4.55, 3.4, 0.3, "cartão · verso", 9.5, GREY)
 # assinatura email
 card(s, 8.0, 2.4, 4.73, 2.0, fill=CARD, line=LINE)
