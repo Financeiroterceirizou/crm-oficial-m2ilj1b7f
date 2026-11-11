@@ -259,8 +259,8 @@ eyebrow(s, "contraste e fundo", "olho-cortado")
 title(s, ["onde a logo pode", "e onde ela desaparece."], y=0.95, size=28, w=8.8)
 combos = [("branco sobre grafite", "horizontal-branco", DARK, True),
           ("preto sobre branco", "horizontal-preto", WHITE, True),
-          ("branco sobre laranja", "horizontal-branco", ORANGE, False),
-          ("laranja sobre grafite", "horizontal-laranja-branco", DARK, True)]
+          ("branco sobre laranja", "horizontal-branco", ORANGE, True),
+          ("preto sobre grafite", "horizontal-preto", DARK, False)]
 for i, (t, var, fnd, ok) in enumerate(combos):
     x = 0.6 + i * 3.07
     rect(s, x, 2.4, 2.9, 1.9, fnd, line=(LINE if fnd == WHITE else None))
@@ -303,7 +303,7 @@ for a, b, c in hier:
     txt(s, 5.0, y, 3.1, 0.26, c, 11, GREY)
     y += 0.3
 txt(s, 8.3, 5.0, 4.4, 1.5,
-    ["negrito não existe na marca. para dar ênfase, use tamanho, cor ou espaço — nunca peso.", "a fonte não tem “º” e “ª”: escreva “1o” como “1º” apenas em texto externo, ou reescreva."], 11, GREY, ls=1.4, space=8)
+    ["negrito não existe na marca. para dar ênfase, use tamanho, cor ou espaço. nunca peso.", "a fonte não tem “º” e “ª”: escreva “1o” como “1º” apenas em texto externo, ou reescreva."], 11, GREY, ls=1.4, space=8)
 symbol(s)
 page(s, 14)
 
