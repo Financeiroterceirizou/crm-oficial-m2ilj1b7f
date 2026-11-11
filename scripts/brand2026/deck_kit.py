@@ -138,6 +138,23 @@ def hline(slide, x, y, w, color=LINE, lw=1.0):
     return sh
 
 
+def pic_fit(slide, path, x, y, w, h, esc=0.8, ancora="centro"):
+    """encaixa a imagem dentro da caixa (x,y,w,h) preservando a proporcao original.
+    esc = fracao maxima da caixa que a imagem pode ocupar."""
+    from PIL import Image
+    iw, ih = Image.open(path).size
+    alt_max = h * esc
+    larg_max = w * esc
+    alt = alt_max
+    larg = alt * iw / ih
+    if larg > larg_max:
+        larg = larg_max
+        alt = larg * ih / iw
+    px = x + (w - larg) / 2 if ancora == "centro" else x + 0.01
+    py = y + (h - alt) / 2 if ancora == "centro" else y + 0.01
+    return slide.shapes.add_picture(path, Inches(px), Inches(py), Inches(larg), Inches(alt))
+
+
 def pic(slide, path, x, y, w=None, h=None):
     kw = {}
     if w:
@@ -148,10 +165,12 @@ def pic(slide, path, x, y, w=None, h=None):
 
 
 def symbol(slide, dark=False, h=0.92, x=None, y=None, op=1.0):
+    from PIL import Image
     s = "simbolo-branco.png" if dark else "simbolo-laranja.png"
     path = _a(s)
+    iw, ih = Image.open(path).size
     hh = h
-    ww = h * 4501 / 6655
+    ww = h * iw / ih
     x = (W - 0.45 - ww) if x is None else x
     y = (H - 0.35 - hh) if y is None else y
     p = pic(slide, path, x, y, ww, hh)
