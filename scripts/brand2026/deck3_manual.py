@@ -46,6 +46,41 @@ def spec(slide, x, y, w, h, titulo, linhas, dark=False):
         yy += 0.34
 
 
+def grade_logos(s, itens, y=2.32, cols=3, topo_nota=6.42):
+    """itens: (arquivo, fundo, titulo, uso). dimensiona sozinho para nao invadir a nota."""
+    n = len(itens)
+    linhas = (n + cols - 1) // cols
+    label_h = 0.5
+    disp = topo_nota - 0.12 - y
+    if linhas == 1:
+        ch = min(2.2, disp - label_h)
+        gapy = 0
+    else:
+        ch = (disp - label_h * linhas - 0.3) / linhas
+        gapy = 0.3
+    w = (12.13 - 0.26 * (cols - 1)) / cols
+    for i, (arq, fnd, tit, uso) in enumerate(itens):
+        row = i // cols
+        na_linha = min(cols, n - row * cols)
+        col = i - row * cols
+        # centraliza quando a ultima linha fica incompleta
+        x0 = 0.6 + (cols - na_linha) * (w + 0.26) / 2.0
+        x = x0 + col * (w + 0.26)
+        yy = y + row * (ch + gapy + label_h)
+        rect(s, x, yy, w, ch, fnd, line=(LINE if fnd == WHITE else None))
+        path = _a(arq)
+        iw, ih = Image.open(path).size
+        esc = 0.60 if ("vertical" in arq or "simbolo" in arq) else 0.80
+        alt = ch * esc
+        larg = alt * iw / ih
+        if larg > w * 0.86:
+            larg = w * 0.86
+            alt = larg * ih / iw
+        pic(s, path, x + (w - larg) / 2, yy + (ch - alt) / 2, larg, alt)
+        txt(s, x, yy + ch + 0.08, w, 0.22, tit, 9.5, ORANGE)
+        txt(s, x, yy + ch + 0.29, w, 0.2, uso, 9, GREY)
+
+
 # 01 capa ------------------------------------------------------------
 capa(prs, "manual de identidade visual",
      ["o sistema visual", "da terceirizou."],
@@ -71,18 +106,18 @@ for i, (n, t, c) in enumerate(grupos):
     txt(s, xx, yy + 0.35, 3.4, 0.4, t, 17, DARK)
     txt(s, xx, yy + 0.85, 3.5, 0.9, c, 11.5, GREY, ls=1.35)
 symbol(s)
-page(s, 2)
+page(s)
 
 # 03 divisor marca
-divisor(prs, "01 · a marca", ["a logo é a assinatura.", "não é enfeite."],
-        "toda peça começa e termina nela. se a logo aparece errada, o resto do trabalho não compensa.", n=3)
+divisor(prs, "01 · a marca", ["um sistema de logos.", "não uma logo só."],
+        "a marca tem quatro famílias, para quatro tipos de espaço. escolher a família errada é o erro mais comum e o mais visível.")
 
 # 04 a logo
 s = blank(prs)
 eyebrow(s, "a logo", "tag")
 title(s, ["símbolo, nome e assinatura.", "um só conjunto."], y=0.95, size=28, w=9.6)
 rect(s, 0.6, 2.4, 8.4, 3.9, DARK)
-logoem(s, "horizontal-branco", 2.2, 3.65, 5.2)
+logoem(s, "horizontal-branco", 2.05, 3.6, 5.5)
 txt(s, 0.9, 5.95, 6.0, 0.3, "versão principal · fundo grafite", 9.5, RGBColor(0x9A, 0x9B, 0x9D))
 spec(s, 9.25, 2.4, 3.48, 3.9, "anatomia", [
     ("símbolo", "“3” estilizado, laranja"),
@@ -91,56 +126,85 @@ spec(s, 9.25, 2.4, 3.48, 3.9, "anatomia", [
     ("desenho", "ampleSoft light, minúsculo"),
 ], dark=False)
 txt(s, 0.6, 6.55, 11.9, 0.35,
-    "a assinatura “terceirização financeira” faz parte da versão institucional. nas peças de campanha, usar a versão sem assinatura.", 11.5, GREY)
+    "a assinatura “terceirização financeira” existe em todas as famílias e pode ser omitida nas peças de campanha.", 11.5, GREY)
 symbol(s)
-page(s, 4)
+page(s)
 
-# 05 versões
+# 05 as quatro famílias
 s = blank(prs)
-eyebrow(s, "versões", "camadas")
-title(s, ["quatro versões aprovadas.", "nenhuma outra."], y=0.95, size=28, w=9.0)
-caixas = [("fundo escuro", "horizontal-branco", DARK, "padrão em capa, slide e peça institucional"),
-          ("fundo claro", "horizontal-preto", WHITE, "documento, contrato, assinatura de e-mail"),
-          ("só sobre branco", "horizontal-laranja-preto", WHITE, "quando o laranja precisa aparecer no nome"),
-          ("versão curta", "horizontal-branco-sem-tagline", DARK, "espaço pequeno: story, avatar, rodapé")]
-for i, (t, var, fnd, uso) in enumerate(caixas):
-    col, row = i % 2, i // 2
-    x = 0.6 + col * 6.17
-    y = 2.3 + row * 2.35
-    rect(s, x, y, 5.95, 1.55, fnd, line=(LINE if fnd == WHITE else None))
-    logoem(s, var, x + 0.55, y + 0.42, 4.2 if "sem" not in var else 3.2)
-    txt(s, x, y + 1.65, 5.9, 0.3, t.upper(), 10, ORANGE)
-    txt(s, x, y + 1.92, 5.9, 0.3, uso, 11, GREY)
+eyebrow(s, "as quatro famílias", "camadas")
+title(s, ["cada família tem um espaço.", "escolher é a primeira decisão."], y=0.95, size=28, w=10.4)
+familias = [
+    ("horizontal", "logo-horizontal-branco.png", DARK, "capa, slide, assinatura de e-mail", "1 linha · 2,85:1"),
+    ("quadrado", "quadrado-laranja-preto.png", WHITE, "post, card, carrossel, avatar", "2 linhas · 2,07:1"),
+    ("vertical", "logo-vertical-laranja-preto.png", WHITE, "story, banner estreito, roll-up", "empilhada · 0,68:1"),
+    ("símbolo", "simbolo-laranja.png", WHITE, "canto, favicon, marca d’água", "só o “3” · 0,68:1"),
+]
+for i, (nome, arq, fnd, uso, prop) in enumerate(familias):
+    x = 0.6 + i * 3.07
+    rect(s, x, 2.35, 2.92, 2.45, fnd, line=(LINE if fnd == WHITE else None))
+    path = _a(arq)
+    iw, ih = Image.open(path).size
+    esc = 0.55 if "vertical" in arq or "simbolo" in arq else 0.78
+    alt = 2.45 * esc
+    larg = min(alt * iw / ih, 2.5)
+    pic(s, path, x + (2.92 - larg) / 2, 2.35 + (2.45 - alt) / 2, larg, alt)
+    txt(s, x, 4.95, 2.9, 0.3, nome, 15, DARK)
+    txt(s, x, 5.32, 2.9, 0.3, prop, 10, ORANGE)
+    txt(s, x, 5.62, 2.9, 0.8, uso, 10.5, GREY, ls=1.3)
+txt(s, 0.6, 6.6, 11.9, 0.5,
+    "as quatro famílias têm o mesmo desenho. nunca misturar duas na mesma peça: um slide usa horizontal, o post da mesma campanha usa quadrado.", 11, GREY)
 symbol(s)
-page(s, 5)
+page(s)
 
-# 06 área de reserva
+# 06 horizontais
 s = blank(prs)
-eyebrow(s, "área de reserva", "check-circulo")
-title(s, ["o espaço ao redor", "é parte da logo."], y=0.95, size=28, w=8.6)
-rect(s, 0.6, 2.4, 8.4, 3.7, WHITE, line=LINE)
-area_marcada(s, 1.35, 2.95, 6.9, 2.6, None)
-logoem(s, "horizontal-preto", 2.45, 3.6, 4.7)
-# cota
-c = s.shapes.add_connector(1, Inches(2.45), Inches(3.28), Inches(2.45), Inches(3.6))
-c.line.color.rgb = ORANGE
-c.line.width = Pt(1)
-txt(s, 1.95, 3.15, 0.6, 0.3, "x", 13, ORANGE)
-txt(s, 1.35, 5.62, 6.9, 0.3, "x = altura do símbolo “3”", 10, ORANGE, align=PP_ALIGN.CENTER)
-spec(s, 9.25, 2.4, 3.48, 3.7, "regra", [
-    ("margem", "mínima de 1x em todos os lados"),
-    ("1x", "altura do símbolo"),
-    ("nunca", "encostar texto, borda ou foto"),
-    ("exceção", "capa e fechamento de deck"),
-])
-txt(s, 0.6, 6.45, 11.9, 0.35,
-    "a área de reserva protege a leitura. sem ela, a logo parece colada e a peça parece amadora.", 11.5, GREY)
+eyebrow(s, "família horizontal", "camadas")
+title(s, ["cinco versões de cor.", "com e sem assinatura."], y=0.95, size=27, w=9.6)
+itens = [("logo-horizontal-branco.png", DARK, "branco", "fundo escuro, vídeo, foto"),
+         ("logo-horizontal-preto.png", WHITE, "preto", "documento, contrato, branco"),
+         ("logo-horizontal-laranja-preto.png", WHITE, "laranja e preto", "quando o laranja precisa aparecer"),
+         ("logo-horizontal-laranja-branco.png", DARK, "laranja e branco", "fundo escuro com símbolo laranja"),
+         ("logo-horizontal-branco-sem-tagline.png", DARK, "branco sem assinatura", "espaço curto, rodapé"),
+         ("logo-horizontal-laranja-preto-sem-tagline.png", WHITE, "laranja e preto sem assinatura", "campanha, peça de venda")]
+grade_logos(s, itens)
+txt(s, 0.6, 6.5, 11.9, 0.4, "a versão sem assinatura é a mesma logo, só sem a linha “terceirização financeira”. não é outra marca.", 10.5, GREY)
 symbol(s)
-page(s, 6)
+page(s)
 
-# 07 símbolo isolado
+# 07 quadrados
 s = blank(prs)
-eyebrow(s, "símbolo", "bussola")
+eyebrow(s, "família quadrada", "camadas")
+title(s, ["o bloco de duas linhas.", "para peça social."], y=0.95, size=27, w=9.4)
+itens = [("quadrado-laranja-preto.png", WHITE, "laranja e preto", "padrão para post em fundo claro"),
+         ("quadrado-laranja-branco.png", DARK, "laranja e branco", "post em fundo escuro"),
+         ("quadrado-branco.png", DARK, "branco", "fundo escuro com foto"),
+         ("quadrado-preto.png", WHITE, "preto", "peça impressa 1 cor"),
+         ("quadrado-laranja.png", WHITE, "laranja", "peça de campanha, alto contraste")]
+grade_logos(s, itens, cols=3)
+txt(s, 0.6, 6.5, 11.9, 0.4, "o quadrado quebra “terceirizou” em duas linhas. só usar onde a largura é limitada: feed, card, avatar quadrado.", 10.5, GREY)
+symbol(s)
+page(s)
+
+# 08 verticais
+s = blank(prs)
+eyebrow(s, "família vertical", "camadas")
+title(s, ["a versão empilhada.", "para espaço estreito."], y=0.95, size=27, w=9.6)
+itens = [("logo-vertical-laranja-preto.png", WHITE, "laranja e preto", "story em fundo claro"),
+         ("logo-vertical-laranja-branco.png", DARK, "laranja e branco", "story e banner escuro"),
+         ("logo-vertical-branco.png", DARK, "branco", "foto e vídeo escuro"),
+         ("logo-vertical-preto.png", WHITE, "preto", "impresso, roll-up"),
+         ("logo-vertical-laranja.png", WHITE, "laranja", "peça 1 cor de campanha")]
+grade_logos(s, itens, cols=5, topo_nota=6.28)
+txt(s, 0.6, 6.35, 11.9, 0.6,
+    ["bloco alto: nome em cima, símbolo embaixo. é a única família que pode receber a assinatura em coluna, quando o suporte for muito estreito.",
+     "nunca usar a vertical dentro de slide 16:9, ela sobra espaço e some."], 10.5, GREY, ls=1.35)
+symbol(s)
+page(s)
+
+# 09 símbolo isolado
+s = blank(prs)
+eyebrow(s, "símbolo isolado", "bussola")
 title(s, ["o “3” sozinho", "carrega a marca."], y=0.95, size=28, w=8.2)
 caixas = [("laranja", "simbolo-laranja.png", WHITE, "canto de slide, marca d’água, favicon"),
           ("branco", "simbolo-branco.png", DARK, "fundo escuro, capa, fechamento"),
@@ -149,8 +213,9 @@ for i, (t, f, fnd, uso) in enumerate(caixas):
     x = 0.6 + i * 2.92
     rect(s, x, 2.4, 2.72, 2.7, fnd, line=(LINE if fnd == WHITE else None))
     p = _a(f)
+    iw, ih = Image.open(p).size
     hh = 1.85
-    ww = hh * 4501 / 6655
+    ww = hh * iw / ih
     pic(s, p, x + (2.72 - ww) / 2, 2.4 + (2.7 - hh) / 2, ww, hh)
     txt(s, x, 5.22, 2.7, 0.3, t, 13, DARK)
     txt(s, x, 5.52, 2.7, 0.6, uso, 10.5, GREY, ls=1.3)
@@ -161,9 +226,32 @@ txt(s, 9.6, 2.85, 3.1, 2.4,
      "nunca em cima de foto sem área limpa."], 11.5, GREY, ls=1.4, space=9)
 txt(s, 0.6, 6.35, 11.9, 0.5, "o símbolo é assinatura, não ilustração. se aparecer grande demais, virou enfeite.", 11.5, GREY)
 symbol(s)
-page(s, 7)
+page(s)
 
-# 08 usos errados
+# 10 área de reserva
+s = blank(prs)
+eyebrow(s, "área de reserva", "check-circulo")
+title(s, ["o espaço ao redor", "é parte da logo."], y=0.95, size=28, w=8.6)
+rect(s, 0.6, 2.4, 8.4, 3.7, WHITE, line=LINE)
+area_marcada(s, 1.35, 3.0, 6.9, 2.55, None)
+logoem(s, "horizontal-preto", 2.5, 3.62, 4.6)
+c = s.shapes.add_connector(1, Inches(2.5), Inches(3.3), Inches(2.5), Inches(3.62))
+c.line.color.rgb = ORANGE
+c.line.width = Pt(1)
+txt(s, 2.0, 3.16, 0.6, 0.3, "x", 13, ORANGE)
+txt(s, 1.35, 5.6, 6.9, 0.3, "x = altura do símbolo “3”", 10, ORANGE, align=PP_ALIGN.CENTER)
+spec(s, 9.25, 2.4, 3.48, 3.7, "regra", [
+    ("margem", "mínima de 1x em todos os lados"),
+    ("1x", "altura do símbolo"),
+    ("vale para", "as 4 famílias"),
+    ("exceção", "capa e fechamento de deck"),
+])
+txt(s, 0.6, 6.45, 11.9, 0.35,
+    "a reserva é medida pela altura do símbolo, não pela altura da logo. numa versão vertical, a reserva é maior.", 11.5, GREY)
+symbol(s)
+page(s)
+
+# 11 usos errados
 s = blank(prs)
 eyebrow(s, "usos errados", "alerta")
 title(s, ["o que nunca fazer", "com a logo."], y=0.95, size=28, w=8.0)
@@ -173,32 +261,35 @@ for i, e in enumerate(erros):
     x = 0.6 + col * 4.07
     y = 2.35 + row * 2.1
     rect(s, x, y, 3.85, 1.5, CARD, line=LINE)
-    # logo com defeito
     if i == 0:
-        logoem(s, "horizontal-preto", x + 0.6, y + 0.5, 3.1)
+        img = Image.open(_a("logo-horizontal-preto.png")).convert("RGBA")
+        img = img.resize((900, int(img.height * 900 / img.width)), Image.LANCZOS)
+        tmp = "work/brand2026/tmp_esticada.png"
+        img.resize((1500, int(img.height * 1500 / 900)), Image.LANCZOS).save(tmp)
+        pic(s, tmp, x + 0.35, y + 0.52, 2.35, 0.42)
     elif i == 1:
-        p = s.shapes.add_picture(_a("logo-horizontal-preto.png"), Inches(x + 0.55), Inches(y + 0.28), width=Inches(2.6))
+        p = s.shapes.add_picture(_a("logo-horizontal-preto.png"), Inches(x + 0.6), Inches(y + 0.25), width=Inches(2.5))
         p.rotation = 12
     elif i == 2:
-        p = s.shapes.add_picture(_a("logo-horizontal-laranja-preto.png"), Inches(x + 0.5), Inches(y + 0.5), width=Inches(2.9))
+        s.shapes.add_picture(_a("logo-horizontal-laranja-branco.png"), Inches(x + 0.5), Inches(y + 0.55), width=Inches(2.8))
     elif i == 3:
-        p = s.shapes.add_picture(_a("logo-horizontal-preto.png"), Inches(x + 0.5), Inches(y + 0.5), width=Inches(2.9))
+        p = s.shapes.add_picture(_a("logo-horizontal-preto.png"), Inches(x + 0.5), Inches(y + 0.5), width=Inches(2.8))
         p.shadow.inherit = True
     elif i == 4:
-        p = s.shapes.add_picture(_a("logo-horizontal-preto.png"), Inches(x + 0.5), Inches(y + 0.5), width=Inches(2.9))
+        p = s.shapes.add_picture(_a("logo-horizontal-preto.png"), Inches(x + 0.5), Inches(y + 0.5), width=Inches(2.8))
         p.line.color.rgb = ORANGE
         p.line.width = Pt(2.5)
     else:
         rect(s, x + 0.15, y + 0.15, 3.55, 1.2, RGBColor(0x8E, 0x6A, 0x55))
-        pic(s, _a("logo-horizontal-branco.png"), x + 0.5, y + 0.45, 2.9)
+        s.shapes.add_picture(_a("logo-horizontal-branco.png"), Inches(x + 0.5), Inches(y + 0.45), width=Inches(2.8))
     txt(s, x, y + 1.55, 3.85, 0.3, "× " + e, 11.5, ORANGE)
-txt(s, 0.6, 6.75, 11.9, 0.3, "em dúvida, use a versão original do arquivo. não redesenhe, não recorte, não “melhore”.", 11, GREY)
+txt(s, 0.6, 6.75, 11.9, 0.3, "em dúvida, use o arquivo original. não redesenhe, não recorte, não “melhore”.", 11, GREY)
 symbol(s)
-page(s, 8)
+page(s)
 
 # 09 divisor cor
 divisor(prs, "02 · cor", ["duas cores,", "nenhuma terceira."],
-        "o laranja é energia e ação. o grafite é seriedade. juntos, fazem a marca parecer firme sem ficar fria.", n=9)
+        "o laranja é energia e ação. o grafite é seriedade. juntos, fazem a marca parecer firme sem ficar fria.")
 
 # 10 paleta
 s = blank(prs)
@@ -226,7 +317,7 @@ for i, (hexv, cor, nome, fg) in enumerate(apoio):
     txt(s, x + 0.12, 5.55, 1.65, 0.4, nome, 9, fg)
 txt(s, 0.6, 6.3, 11.9, 0.4, "nenhuma cor fora desta lista entra em peça da marca. degradê, neon e dourado estão proibidos.", 11.5, GREY)
 symbol(s)
-page(s, 10)
+page(s)
 
 # 11 proporção
 s = blank(prs)
@@ -251,7 +342,7 @@ txt(s, 0.6, 5.7, 11.9, 1.0,
     ["o laranja é acento, não fundo de página inteira. quando ele domina, a marca fica infantil e a leitura cansa.",
      "em peça de campanha pode subir para 30%. em documento e proposta, não passar de 10%."], 12.5, GREY, ls=1.4, space=6)
 symbol(s)
-page(s, 11)
+page(s)
 
 # 12 contraste
 s = blank(prs)
@@ -271,11 +362,11 @@ txt(s, 0.6, 5.45, 11.9, 1.2,
     ["só com área limpa ou com véu de 60% de grafite. se a foto for clara ou cheia de detalhe, escolha outra foto.",
      "a logo nunca compete com a imagem: ela assina."], 12.5, GREY, ls=1.4, space=6)
 symbol(s)
-page(s, 12)
+page(s)
 
 # 13 divisor tipo
 divisor(prs, "03 · tipografia", ["uma fonte só,", "bem usada."],
-        "ampleSoft light em tudo. o que muda é tamanho, peso e espaço. misturar fontes é o jeito mais rápido de parecer amador.", n=13)
+        "ampleSoft light em tudo. o que muda é tamanho, peso e espaço. misturar fontes é o jeito mais rápido de parecer amador.")
 
 # 14 tipografia
 s = blank(prs)
@@ -305,7 +396,7 @@ for a, b, c in hier:
 txt(s, 8.3, 5.0, 4.4, 1.5,
     ["negrito não existe na marca. para dar ênfase, use tamanho, cor ou espaço. nunca peso.", "a fonte não tem “º” e “ª”: escreva “1o” como “1º” apenas em texto externo, ou reescreva."], 11, GREY, ls=1.4, space=8)
 symbol(s)
-page(s, 14)
+page(s)
 
 # 15 exemplo tipográfico
 s = blank(prs, "dark")
@@ -317,11 +408,11 @@ txt(s, 0.6, 4.15, 9.4, 1.2,
     15, LGREY, ls=1.4)
 txt(s, 0.6, 5.75, 9.0, 0.3, "capa · 44 pt · linha 1,04 · branco sobre grafite", 10, RGBColor(0x8A, 0x8B, 0x8D))
 symbol(s, dark=True, h=2.0, x=11.6, y=4.7)
-page(s, 15, dark=True)
+page(s, dark=True)
 
 # 16 divisor composição
 divisor(prs, "04 · composição", ["grid, margem", "e respiro."],
-        "o layout é sempre o mesmo: margem de 0,6, doze colunas, título no topo e símbolo no canto. o que muda é o conteúdo.", n=16)
+        "o layout é sempre o mesmo: margem de 0,6, doze colunas, título no topo e símbolo no canto. o que muda é o conteúdo.")
 
 # 17 grid
 s = blank(prs)
@@ -354,11 +445,11 @@ txt(s, 8.55, 5.0, 4.2, 1.6,
     ["nunca encher o slide. se não cabe, é sinal de que o conteúdo precisa ser dividido em dois.",
      "um slide, uma ideia."], 11.5, GREY, ls=1.4, space=8)
 symbol(s)
-page(s, 17)
+page(s)
 
 # 18 divisor elementos
 divisor(prs, "05 · elementos", ["ícone, foto", "e gráfico."],
-        "os elementos existem para ajudar a leitura, não para decorar. cada um tem uma função e um limite.", n=18)
+        "os elementos existem para ajudar a leitura, não para decorar. cada um tem uma função e um limite.")
 
 # 19 ícones
 s = blank(prs)
@@ -383,7 +474,7 @@ txt(s, 9.0, 2.8, 3.75, 3.4,
      "um ícone por bloco, no máximo."], 11.5, GREY, ls=1.4, space=10)
 txt(s, 0.6, 6.05, 11.9, 0.5, "os ícones vêm do mesmo conjunto. não misturar família de traço diferente.", 11.5, GREY)
 symbol(s)
-page(s, 19)
+page(s)
 
 # 20 foto
 s = blank(prs)
@@ -401,7 +492,7 @@ for i, (t, c) in enumerate(cards_f):
     txt(s, x + 1.05, y + 0.22, 4.6, 1.2, c, 12.5, DARK, ls=1.35)
 txt(s, 0.6, 6.25, 11.9, 0.5, "tratamento: dessaturar levemente e manter o laranja só no que é da marca.", 11.5, GREY)
 symbol(s)
-page(s, 20)
+page(s)
 
 # 21 gráficos
 s = blank(prs)
@@ -425,11 +516,11 @@ txt(s, 7.15, 2.8, 5.62, 3.1,
      "título sempre com a leitura, não com o nome da variável."], 11.5, GREY, ls=1.4, space=10)
 txt(s, 0.6, 6.1, 11.9, 0.5, "gráfico sem leitura é enfeite. escreva o que ele quer dizer antes de desenhar.", 11.5, GREY)
 symbol(s)
-page(s, 21)
+page(s)
 
 # 22 divisor aplicação
 divisor(prs, "06 · aplicação", ["onde a marca", "aparece."],
-        "quatro peças que a equipe vai produzir toda semana. se essas quatro estiverem certas, o resto segue.", n=22)
+        "quatro peças que a equipe vai produzir toda semana. se essas quatro estiverem certas, o resto segue.")
 
 # 23 apresentação
 s = blank(prs)
@@ -469,7 +560,7 @@ spec(s, 6.83, 4.95, 5.9, 1.75, "o que pode variar", [
     ("imagem", "só quando for prova real"),
 ], dark=False)
 symbol(s)
-page(s, 23)
+page(s)
 
 # 24 proposta
 s = blank(prs)
@@ -493,7 +584,7 @@ txt(s, 8.7, 2.8, 4.05, 3.4,
      "nada de análise do período anterior como prova, quando a proposta é de preço alto.",
      "nenhum travessão no texto. “terceirizou” sempre em minúsculo."], 11.5, GREY, ls=1.4, space=10)
 symbol(s)
-page(s, 24)
+page(s)
 
 # 25 social
 s = blank(prs)
@@ -519,7 +610,7 @@ txt(s, 8.3, 2.8, 4.45, 3.3,
      "o símbolo sempre no canto, pequeno.",
      "nunca logo completa dentro do post: ela já está no perfil."], 11.5, GREY, ls=1.4, space=10)
 symbol(s)
-page(s, 25)
+page(s)
 
 # 26 papelaria
 s = blank(prs)
@@ -544,23 +635,23 @@ txt(s, 0.6, 5.55, 11.9, 1.1,
     ["cartão 9 × 5 cm, 300 g, laminação fosca · papel timbrado A4 com margem 2 cm · assinatura de e-mail sem imagem pesada, sempre com a versão curta da logo.",
      "fonte do e-mail: ampleSoft quando disponível; se não, arial 10 pt na cor grafite."], 11.5, GREY, ls=1.4, space=6)
 symbol(s)
-page(s, 26)
+page(s)
 
 # 27 arquivos
 s = blank(prs)
 eyebrow(s, "arquivos", "chaves")
 title(s, ["o que está na pasta", "e como usar."], y=0.95, size=28, w=8.0)
 cols = ["arquivo", "formato", "para que serve"]
-rows = [["logo horizontal", "png (transparente) e ai", "peça digital, apresentação, documento"],
-        ["logo vertical", "png", "espaço estreito: capa, story, banner"],
-        ["símbolo", "png", "canto de slide, avatar, favicon"],
-        ["logo quadrada", "png", "post, card, carrossel"],
+rows = [["horizontal", "7 arquivos png + .ai", "branco, preto, laranja/preto, laranja/branco, com e sem assinatura"],
+        ["quadrado", "5 arquivos png", "laranja/preto, laranja/branco, laranja, branco, preto"],
+        ["vertical", "5 arquivos png", "laranja/preto, laranja/branco, laranja, branco, preto"],
+        ["símbolo", "3 arquivos png", "laranja, branco, preto"],
         ["fonte ampleSoft", "ttf", "instalar na máquina antes de editar"],
-        ["paleta", "libreOffice / adobe", "importar no editor"]]
-tabela(s, 0.6, 2.4, 12.13, cols, rows, cw=[3.3, 3.4, 5.43], rh=0.55, size=12, bold_col0=True)
+        ["vetor da logo", "ai / svg", "para ampliar sem perder qualidade"]]
+tabela(s, 0.6, 2.35, 12.13, cols, rows, cw=[2.5, 3.2, 6.43], rh=0.5, size=11.5, bold_col0=True)
 txt(s, 0.6, 6.05, 11.9, 0.6, "todos os arquivos originais ficam na pasta oficial da marca. não usar versão retirada de post ou de print.", 11.5, GREY)
 symbol(s)
-page(s, 27)
+page(s)
 
 # 28 checklist
 s = blank(prs)
@@ -582,7 +673,7 @@ for i, c in enumerate(checks):
     txt(s, x + 0.4, y, 5.5, 0.5, c, 13, DARK, ls=1.25)
 txt(s, 0.6, 6.1, 11.9, 0.5, "um “não” é motivo para voltar. nenhuma exceção vale a pena.", 12, ORANGE)
 symbol(s)
-page(s, 28)
+page(s)
 
 # 29 fecho
 s = blank(prs, "dark")
@@ -591,7 +682,7 @@ txt(s, 0.6, 2.5, 10.8, 1.7, ["a marca é o que", "não muda quando muda a peça.
 txt(s, 0.6, 4.75, 9.6, 1.0, ["manual de identidade visual · v1 · 2026",
                               "terceirização financeira consultiva · florianópolis e tubarão/sc"], 12, RGBColor(0x9A, 0x9B, 0x9D), ls=1.4)
 symbol(s, dark=True, h=2.1, x=11.55, y=4.55)
-page(s, 29, dark=True)
+page(s, dark=True)
 
 cp = prs.core_properties
 cp.title = "manual de identidade visual · terceirizou · 2026"
