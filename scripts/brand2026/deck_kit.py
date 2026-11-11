@@ -177,8 +177,18 @@ def logo(slide, variant="horizontal-branco", x=0.6, y=0.5, w=3.2):
     return pic(slide, path, x, y, w, w * ih / iw)
 
 
-def page(slide, n, dark=False):
-    txt(slide, 0.6, 7.02, 2.0, 0.24, str(n).zfill(2), 9,
+_PGC = {"n": 1}
+
+
+def page(slide, n=None, dark=False):
+    """n=None numera pela ordem de criacao; n fixo mantem a numeracao manual do deck"""
+    if n is None:
+        _PGC["n"] += 1
+        num = _PGC["n"]
+    else:
+        num = n
+        _PGC["n"] = max(_PGC["n"], n)
+    txt(slide, 0.6, 7.02, 2.0, 0.24, str(num).zfill(2), 9,
         LGREY if not dark else RGBColor(0x7A, 0x7B, 0x7D))
 
 
@@ -222,8 +232,7 @@ def divisor(prs, selo, titulo, apoio=None, n=None):
     if apoio:
         txt(s, 0.6, 5.05, 10.6, 1.0, apoio, 14, LGREY, ls=1.35)
     symbol(s, dark=True, h=2.1, x=11.55, y=4.55)
-    if n:
-        page(s, n, dark=True)
+    page(s, n, dark=True)
     return s
 
 
