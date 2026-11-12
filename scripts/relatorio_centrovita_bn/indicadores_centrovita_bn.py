@@ -5,8 +5,11 @@
 #   (jan→dez); quando chegar em jan/2027, nova folha (pedido Vinícius 20/10).
 #   Cores Terceirizou (laranja #FF501C) + logo Centrovita (uploads/675a4f3a).
 #   Indicadores (todos CAIXA — situação in 1,2, mês por dt_billing; sem 99.01):
-#     Nº Hóspedes / Ticket Médio: planilha Drive (fev-ago) + informado (set=24 / 4.906,86);
-#       futuros: aba do mês na planilha do Drive (1Pr2l8h9Y0JTi_WtGX4E-zbfLWun2nNGqxgoYCzWtfho)
+#     Nº Hóspedes / Ticket Médio: CONTROLle desde 12/11/2026 (pedido Vinícius) —
+#       hóspedes = contatos DISTINTOS (id_contacts) que pagaram mensalidade (01.01) no mês de caixa;
+#       contato com mais de um pagamento no mês conta 1; lançamento de mensalidade SEM contato conta 1.
+#       Ticket = soma das receitas de mensalidade (01.01) ÷ nº de hóspedes.
+#       (Antes: planilha de ocupação fev-ago + informado set=24 / 4.906,86.)
 #     Receitas Operacionais: categoria 01. RECEITAS (9190487 e filhos) + 02.04 Reembolso Família (9988394)
 #     Despesas Operacionais: 01. IMPOSTO (9190492+filhos) + 02. CUSTOS OP (9190494+filhos)
 #       + 03. DESPESAS ADM (9190511+filhos) + 04.01 Tarifas (9190540)
@@ -86,6 +89,7 @@ def bdate(t):
 
 # ===== IDs das categorias (plano Centrovita BN) =====
 REC_OP = {9190487, 9190488, 9190489, 9190490, 9190491, 9988373, 9988394}  # 01. RECEITAS + Reembolso Família
+CAT_MENSAL = {9190488}  # 01.01 Mensalidades — base de hóspedes e ticket médio
 DESP_OP = {9190492, 9190493, 9190494, 9190495, 9190496, 9190497, 9190499, 9190501, 9190502,
            9190505, 9190507, 9190508, 9190509, 9190510, 9190511, 9190512, 9190513, 9190514,
            9190515, 9190517, 9190518, 9190525, 9190527, 9190528, 9190530, 9190531, 9190532,
@@ -107,6 +111,8 @@ HOJE_LABEL = date.today().strftime("%d/%m/%Y")
 # ===== dados do Controlle (caixa) =====
 _tx = tx_list(f"{ANO}-01-01", f"{ANO}-12-31")
 por_mes = defaultdict(lambda: defaultdict(int))
+mens_contatos = defaultdict(set)   # mês -> contatos distintos que pagaram mensalidade
+mens_orfaos = defaultdict(int)     # mês -> lançamentos de mensalidade SEM contato (cada um = 1 hóspede)
 for t in _tx:
     if t.get("situation") not in (1, 2):
         continue
@@ -116,7 +122,16 @@ for t in _tx:
     cats = t.get("apportionments_plan_account") or []
     cid = cats[0].get("id_category") if cats else None
     v = t["value_in_cent"]
+    # valor efetivo (pago com ajuste): payment_in_cent quando existir
+    ve = t["payment_in_cent"] if t.get("payment_in_cent") is not None else v
     if cid in REC_OP: por_mes[mes]["rec_op"] += v
+    if cid in CAT_MENSAL:
+        por_mes[mes]["mensal"] += ve
+        # HÓSPEDE = contato que pagou mensalidade no mês (1 por contato, mesmo com vários pagamentos)
+        if t.get("id_contacts"):
+            mens_contatos[mes].add(t["id_contacts"])
+        else:
+            mens_orfaos[mes] += 1
     if cid in DESP_OP: por_mes[mes]["desp_op"] += v
     if cid in APORTES: por_mes[mes]["aportes"] += v
     if cid in JUROS_APL: por_mes[mes]["juros_apl"] += v
@@ -134,17 +149,17 @@ for mes in range(1, 13):
     abertos[mes][0] = sum(t["value_in_cent"] for t in ab if t["value_in_cent"] > 0)
     abertos[mes][1] = sum(t["value_in_cent"] for t in ab if t["value_in_cent"] < 0)
 
-# ===== indicadores manuais (planilha Drive + informados) — fev-ago planilha, set informado =====
-# fonte: uploads/36dbf9fd (planilha anexa) + mensagem do Vinícius 20/10
+# ===== indicadores manuais (inadimplência e despesas em aberto até ago) — planilha de ocupação =====
+# fonte: uploads/36dbf9fd (planilha anexa, fev-ago). Nº Hóspedes e Ticket Médio agora vêm do Controlle.
 MANUAL = {
-    2:  dict(hosp=1, ticket=4200.00, inad=0.0, desp_ab=0.0),
-    3:  dict(hosp=3, ticket=5066.67, inad=0.0, desp_ab=2500.0),
-    4:  dict(hosp=10, ticket=5105.00, inad=0.0, desp_ab=5000.0),
-    5:  dict(hosp=17, ticket=4799.95, inad=0.0, desp_ab=7500.0),
-    6:  dict(hosp=23, ticket=4696.00, inad=0.0, desp_ab=10000.0),
-    7:  dict(hosp=21, ticket=4619.00, inad=8722.23, desp_ab=12000.0),
-    8:  dict(hosp=25, ticket=4717.35, inad=29270.23, desp_ab=12000.0),
-    9:  dict(hosp=24, ticket=4906.86, inad=None, desp_ab=None),  # inad/desp_ab do Controlle
+    2:  dict(inad=0.0, desp_ab=0.0),
+    3:  dict(inad=0.0, desp_ab=2500.0),
+    4:  dict(inad=0.0, desp_ab=5000.0),
+    5:  dict(inad=0.0, desp_ab=7500.0),
+    6:  dict(inad=0.0, desp_ab=10000.0),
+    7:  dict(inad=8722.23, desp_ab=12000.0),
+    8:  dict(inad=29270.23, desp_ab=12000.0),
+    9:  dict(inad=None, desp_ab=None),  # inad/desp_ab do Controlle
 }
 INAD_CTL_DE = 9  # a partir de setembro: Controlle
 
@@ -168,16 +183,18 @@ for mes in range(1, 13):
                      despab_row, distrib_row):
             _row.append(None)
         continue
-    # hóspedes/ticket: manual se existir; senão None
-    hosp_row.append(m.get("hosp"))
-    ticket_row.append(m.get("ticket"))
+    # hóspedes/ticket: Controlle — contatos distintos que pagaram mensalidade no mês
+    hosp = len(mens_contatos.get(mes, ())) + mens_orfaos.get(mes, 0)
+    soma_mens = d["mensal"] / 100
+    hosp_row.append(hosp if hosp else None)
+    ticket_row.append(round(soma_mens / hosp, 2) if hosp else None)
     # inad/desp_ab: manual até ago; a partir de setembro Controlle
-    if mes < INAD_CTL_DE and mes in m:
+    if mes < INAD_CTL_DE and mes in MANUAL:
         inad_row.append(m["inad"])
         despab_row.append(m["desp_ab"])
     else:
         inad_row.append(abertos[mes][0] / 100 if abertos[mes][0] else 0.0)
-        despab_row.append(abertos[mes][1] / 100 if abertos[mes][1] else 0.0)
+        despab_row.append(abs(abertos[mes][1]) / 100 if abertos[mes][1] else 0.0)
     rec_row.append(d["rec_op"] / 100)
     desp_row.append(d["desp_op"] / 100)
     resop_row.append((d["rec_op"] + d["desp_op"]) / 100)
@@ -276,7 +293,7 @@ if os.path.exists(LOGO_CV):
     E.append(t_cab)
     E.append(Spacer(1, 2))
 E.append(P("<b>CENTROVITA BRAÇO DO NORTE — Indicadores Gerenciais</b>", h1))
-E.append(P(f"Ano {ANO} · Gerado em {HOJE_LABEL} · Regime de caixa · Fonte: Controlle + planilha de ocupação · Terceirizou — mais do que terceirizar o financeiro", sub))
+E.append(P(f"Ano {ANO} · Gerado em {HOJE_LABEL} · Regime de caixa · Fonte: Controlle · Terceirizou — mais do que terceirizar o financeiro", sub))
 
 def fmt(v, tipo):
     if v is None:
@@ -335,7 +352,7 @@ for bi, (titulo, defs) in enumerate(BLOCOS):
     E.append(t)
     E.append(Spacer(1, 6))
 
-E.append(P("Nº Hóspedes e Ticket Médio: planilha de ocupação (fev–ago) e informação mensal da operação (set). Inadimplência e Despesas em Aberto: fev–ago da planilha de ocupação; a partir de setembro, Controlle (receitas/despesas em aberto até o último dia do mês). Demais indicadores: Controlle, regime de caixa. Janeiro: casa em implantação (sem operação). Meses sem informação: em branco.", sub))
+E.append(P("Nº Hóspedes: contatos distintos que pagaram mensalidade (01.01) no mês; contato com mais de um pagamento no mês conta uma única vez e lançamento de mensalidade sem contato vinculado conta um hóspede. Ticket Médio: receitas de mensalidade (01.01) do mês divididas pelo número de hóspedes. Todo o Controlle em regime de caixa. Inadimplência e Despesas em Aberto: fev–ago da planilha de ocupação; a partir de setembro, Controlle (receitas/despesas em aberto até o último dia do mês). Janeiro: casa em implantação (sem operação). Meses sem informação: em branco.", sub))
 doc.build(E)
 print(f"OK: {ARQ_PDF}")
 
@@ -395,6 +412,8 @@ for bi, (titulo, defs) in enumerate(BLOCOS):
                 cc.value = v
                 if tipo == "qtd":
                     cc.number_format = "0"
+                elif tipo == "ticket":
+                    cc.number_format = "#,##0.00"
                 else:
                     cc.number_format = '"R$" #,##0.00'
                 if tipo == "moeda_pos" and v:
