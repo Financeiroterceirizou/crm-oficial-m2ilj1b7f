@@ -196,9 +196,11 @@ page(s, 13)
 s = blank(prs, "dark")
 txt(s, 0.6, 1.3, 9.0, 0.3, "a bandeira", 12, ORANGE)
 txt(s, 0.6, 2.0, 11.2, 2.2, ["terceirizar", "é ter mais."], 64, WHITE, ls=1.02)
-txt(s, 0.6, 4.75, 7.4, 0.9, ["mais tempo, mais leitura, mais controle, mais direção.",
+txt(s, 0.6, 4.72, 7.2, 0.9, ["mais tempo, mais leitura, mais controle, mais direção.",
                               "nunca “mais um fornecedor”."], 15, LGREY, ls=1.35)
-txt(s, 8.55, 4.85, 3.9, 1.4, ["a bandeira não promete preço.", "promete o que o dinheiro do cliente compra: tempo e direção."], 12, RGBColor(0x9A, 0x9B, 0x9D), ls=1.35)
+# nota de apoio: largura total abaixo da bandeira, sem encostar no simbolo
+txt(s, 0.6, 5.95, 10.5, 0.9, ["a bandeira não promete preço. promete o que o dinheiro do cliente compra:",
+                              "tempo e direção."], 12, RGBColor(0x9A, 0x9B, 0x9D), ls=1.35)
 symbol(s, dark=True, h=2.1, x=11.55, y=4.55)
 page(s, 14, dark=True)
 
@@ -313,8 +315,9 @@ txt(s, 0.6, 1.6, 10.4, 4.9,
      "mais tempo para tocar o que você sabe fazer.",
      "mais clareza na hora de decidir.",
      "mais controle sobre o que entra e o que sai."], 27, WHITE, ls=1.22)
-txt(s, 0.6, 5.95, 10.2, 1.0,
-    "a gente não entra na empresa para virar mais um fornecedor. entra para fazer parte do time e levar profissionalização a quem vive de prestar serviço.", 12.5, LGREY, ls=1.35)
+txt(s, 0.6, 5.9, 9.6, 1.1,
+    ["a gente não entra na empresa para virar mais um fornecedor.",
+     "entra para fazer parte do time e levar profissionalização a quem vive de prestar serviço."], 12.5, LGREY, ls=1.35)
 symbol(s, dark=True, h=2.0, x=11.62, y=4.7)
 page(s, 20, dark=True)
 
