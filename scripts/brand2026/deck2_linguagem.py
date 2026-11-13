@@ -10,7 +10,7 @@ prs = new_deck()
 # 01 capa
 capa(prs, "linguagem da marca",
      ["como a terceirizou", "fala, escreve e cobra."],
-     "o tom, as palavras, as frases e os limites de quem fala em nome da marca. guia prático para o time de marketing e para quem atende cliente.",
+     "o tom, as palavras e os limites de quem fala em nome da marca. guia para o marketing e para quem atende cliente.",
      "documento de marca · v1 2026")
 
 # 02 regra de ouro
