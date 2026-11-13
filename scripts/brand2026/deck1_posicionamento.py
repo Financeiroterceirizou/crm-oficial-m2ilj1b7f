@@ -221,12 +221,12 @@ for i, n in enumerate(nichos):
         y += 0.78
 txt(s, 0.6, 4.35, 5.8, 0.35, "como qualificamos", 12, ORANGE)
 txt(s, 0.6, 4.75, 5.8, 1.6,
-    ["prestador de serviço, com receita recente, que já sente o financeiro apertar.",
-     "segmento define a entrada. porte não é porta."], 13, GREY, ls=1.4)
+    ["prestador de serviço, com receita recorrente, que já sente o financeiro apertar.",
+     "segmento define a entrada. porte não é porta."], 12.5, GREY, ls=1.4)
 txt(s, 6.85, 4.35, 5.8, 0.35, "quem não é nosso", 12, ORANGE)
 txt(s, 6.85, 4.75, 5.8, 1.6,
     ["quem vende ou fabrica produto. quem quer crédito. quem procura o menor preço.",
-     "esses três custam mais do que pagam."], 13, GREY, ls=1.4)
+     "esses três custam mais do que pagam."], 12.5, GREY, ls=1.4)
 symbol(s)
 page(s, 15)
 
