@@ -1,32 +1,36 @@
 #!/usr/bin/env python3
-# Relatórios Mensais — FRATERNIDADE E HARMONIA (F e H | FILOSÓFICO) — v1.2, 2026-10-14
-#   v1.2 (14/10): saldo anterior/final = soma das movimentações DO CC (a conta CORA é
-#     compartilhada entre os 2 CCs — saldo de conta não separa os pacotes).
-#   v1.1 (feedback Vinícius 14/10): comparativo 12m POR CATEGORIA (matriz + totais por mês);
-#     fluxo de caixa com SALDO ANTERIOR (31/08) e SALDO FINAL (30/09).
+# Relatórios Mensais — FRATERNIDADE E HARMONIA (F e H | FILOSÓFICO) — v1.3, 2026-11-04
+#   v1.1 (14/10): comparativo 12m POR CATEGORIA (matriz + totais por mês); fluxo com saldo anterior/final.
+#   v1.2 (14/10): saldo anterior/final = soma das movimentações DO CC (a conta CORA é compartilhada).
+#   v1.3 (04/11, pedido Vinícius) — 4 ajustes:
+#     a) COMPARATIVO em PÁGINA PAISAGEM (layout limpo, sem quebra de linha nas categorias)
+#     b) SALDO ANTERIOR do fluxo = saldo das CONTAS no último dia do mês anterior, SEPARADO POR CC
+#        (F e H leva só a parte do CC "F e H"; FILOSÓFICO só a do CC "FILOSOFICO")
+#     c) SALDO NAS CONTAS demonstra a abertura: quanto é F e H, quanto é FILOSÓFICO e o residual
+#        sem centro de custo (que fecha exatamente com o saldo real das contas)
+#     d) Logo da Fraternidade e Harmonia SÓ no pacote F e H
 #   Layout NASPOLINI (logo capa compacta + símbolo no rodapé). Regime de CAIXA (sit in 1,2).
-#   Dois pacotes em ARQUIVOS SEPARADOS (pedido Vinícius 14/10): feh | filosofico
+#   Dois pacotes em ARQUIVOS SEPARADOS: feh | filosofico
 #     feh        → CC "F e H" (170068)
 #     filosofico → CC "FILOSOFICO" (170069)
-#   Relatórios (pedido Vinícius 14/10):
-#     1. Comparativo dos últimos 12 meses POR CATEGORIA (caixa; matriz + entradas/saídas/resultado do mês)
-#     2. Fluxo de Caixa do mês anterior por categoria (caixa) + saldo anterior e saldo final do CC
-#     3. Receitas em aberto até o último dia do mês anterior, POR IRMÃO (agrupa name_contact)
-#     4. Resultado dos últimos 12 meses (caixa; totais por mês + linha de total)
-#     5. Saldo Tronco de Solidariedade no último dia do mês anterior — TODAS as movimentações
-#        (sit qualquer) do CC do pacote com a TAG "TRONCO DE SOLIDARIEDADE <pacote>" do início
-#        até o último dia do mês anterior; saldo = soma
+#   Relatórios:
+#     1. Comparativo dos últimos 12 meses por categoria (caixa)      [paisagem]
+#     2. Fluxo de Caixa do mês anterior por categoria (caixa)
+#     3. Receitas em aberto até o último dia do mês anterior, POR IRMÃO
+#     4. Resultado dos últimos 12 meses (caixa)
+#     5. Saldo Tronco de Solidariedade + Saldo nas contas (aberto por CC)
 # Uso: python3 relatorio_feh.py [YYYY-MM-DD] [feh|filosofico]  (default: hoje, feh)
-import json, os, sys, urllib.request, time
+import json, os, sys, urllib.request, urllib.error, http.client, time
 from collections import defaultdict
 from datetime import date, timedelta
 
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import cm
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-                                PageBreak, Image as RLImage, KeepTogether)
+from reportlab.platypus import (BaseDocTemplate, PageTemplate, Frame, Paragraph, Spacer,
+                                Table, TableStyle, PageBreak, NextPageTemplate,
+                                Image as RLImage, KeepTogether)
 from reportlab.lib.utils import ImageReader
 
 BASE = "https://api-v1.controlle.com"
@@ -40,6 +44,7 @@ CINZA = colors.HexColor("#f5f5f5")
 VERDE = colors.HexColor("#1a7f37")
 VERMELHO = colors.HexColor("#c0392b")
 LOGO = os.path.join(_dir, "logo-terceirizou.png")
+LOGO_FEH = os.path.join(_dir, "logo-feh.png")
 SIMBOLO = os.path.join(_dir, "simbolo-terceirizou.png")
 
 MES_PT = {1:"janeiro",2:"fevereiro",3:"março",4:"abril",5:"maio",6:"junho",7:"julho",8:"agosto",9:"setembro",10:"outubro",11:"novembro",12:"dezembro"}
@@ -47,15 +52,20 @@ MES_AB = {1:"jan",2:"fev",3:"mar",4:"abr",5:"mai",6:"jun",7:"jul",8:"ago",9:"set
 
 # ===== pacote (centro de custo) =====
 PACOTES = {
-    "feh":        {"nome": "F e H",        "cc_id": 170068, "tag_tronco": "TRONCO DE SOLIDARIEDADE F e H",        "arq": "F_e_H"},
-    "filosofico": {"nome": "FILOSÓFICO",   "cc_id": 170069, "tag_tronco": "TRONCO DE SOLIDARIEDADE FILOSÓFICO",   "arq": "Filosofico"},
+    "feh":        {"nome": "F e H",        "cc_id": 170068, "tag_tronco": "TRONCO DE SOLIDARIEDADE F e H",        "arq": "F_e_H",      "logo": True},
+    "filosofico": {"nome": "FILOSÓFICO",   "cc_id": 170069, "tag_tronco": "TRONCO DE SOLIDARIEDADE FILOSÓFICO",   "arq": "Filosofico", "logo": False},
 }
 _p = sys.argv[2] if len(sys.argv) > 2 else "feh"
 PK = PACOTES[_p]
 CC_ID = PK["cc_id"]
 TAG_TRONCO = PK["tag_tronco"]
+# Decisão Vinícius (04/11): o SALDO DE ABERTURA (lançamentos sem centro de custo) é todo do "F e H".
+# Vale para qualquer lançamento sem CC, o que mantém as contas fechando com o Controlle.
+CC_ABERTURA = 170068
 
-def req(url, tries=4):
+def req(url, tries=5):
+    """Retry em falha de REDE, não só HTTP: SSL/EOF, IncompleteRead, timeout.
+    A API do Controlle derruba conexão no meio com frequência — sem isso o relatório morre."""
     for i in range(tries):
         try:
             r = urllib.request.Request(url)
@@ -64,12 +74,22 @@ def req(url, tries=4):
             with urllib.request.urlopen(r, timeout=120) as resp:
                 return json.loads(resp.read().decode("utf-8", "replace"))
         except urllib.error.HTTPError as e:
-            if e.code in (500, 502, 503) and i < tries - 1:
+            if e.code in (500, 502, 503, 504) and i < tries - 1:
                 time.sleep(3 * (i + 1))
+                continue
+            raise
+        except (urllib.error.URLError, http.client.IncompleteRead, ConnectionError,
+                TimeoutError, OSError) as e:
+            # SSL: UNEXPECTED_EOF, conexão cortada, leitura truncada — tudo é rede
+            if i < tries - 1:
+                time.sleep(4 * (i + 1))
                 continue
             raise
 
 def tx_list(start, end, **filtros):
+    """Pagina até a página VAZIA — nunca até a página curta.
+    A API corta a resposta no meio (IncompleteRead / página curta sem erro) e parar em
+    len(tl) < 100 perde lançamentos silenciosamente. Trap conhecido do motor Controlle."""
     out, page = [], 1
     while True:
         url = (f"{BASE}/transaction/v1/transactions/list?start_date={start}&end_date={end}"
@@ -77,9 +97,9 @@ def tx_list(start, end, **filtros):
         for k, v in filtros.items():
             url += f"&{k}={v}"
         tl = req(url).get("results", {}).get("transactionsList", [])
-        out.extend(tl)
-        if len(tl) < 100:
+        if not tl:
             return out
+        out.extend(tl)
         page += 1
 
 def brl(cents):
@@ -103,6 +123,9 @@ def cat_nome(t):
 def tem_tag(t, ds_tag):
     return any((tg.get("ds_tag") or "").upper() == ds_tag.upper() for tg in (t.get("array_tags") or []))
 
+def cc_ids(t):
+    return {a.get("cost_center_id") for a in (t.get("apportionments_cost_center") or [])}
+
 def no_cc(t):
     """CC do pacote + sem transferências entre contas (categoria 99.01 ou descrição Transferência)."""
     for c in (t.get("apportionments_plan_account") or []):
@@ -110,19 +133,41 @@ def no_cc(t):
             return False
     if (t.get("ds_transaction") or "").upper().startswith("TRANSFERÊNCIA"):
         return False
-    ids = {c.get("cost_center_id") for c in (t.get("apportionments_cost_center") or [])}
-    return CC_ID in ids
+    return CC_ID in cc_ids(t)
 
 # ===== datas =====
 HOJE = date.fromisoformat(sys.argv[1]) if len(sys.argv) > 1 else date.today()
-MES_ANT = add_months(HOJE.replace(day=1), -1)          # mês anterior
-FIM_MES_ANT = MES_ANT.replace(day=28) + timedelta(days=4)
-FIM_MES_ANT = FIM_MES_ANT - timedelta(days=FIM_MES_ANT.day)
+# Data final do recorte (opcional): FIM_DATA=YYYY-MM-DD ou 3º argumento.
+# Sem ela, o comportamento é o mensal padrão: fecha no último dia do mês anterior.
+# COM ela, o relatório fecha na data informada (competência = mês da data final), o que
+# permite rodada PARCIAL dentro do mês corrente (ex.: 12/11/2026 fecha nov/26 até dia 12).
+_fim_env = os.environ.get("FIM_DATA") or (sys.argv[3] if len(sys.argv) > 3 else "")
+FIM_DATA = date.fromisoformat(_fim_env) if _fim_env else None
+
+if FIM_DATA:
+    MES_ANT = FIM_DATA.replace(day=1)                   # competência = mês da data final
+    FIM_MES_ANT = FIM_DATA
+    PARCIAL = FIM_DATA.day < (FIM_DATA.replace(day=28) + timedelta(days=4)
+                              - timedelta(days=(FIM_DATA.replace(day=28) + timedelta(days=4)).day)).day
+else:
+    MES_ANT = add_months(HOJE.replace(day=1), -1)      # mês anterior
+    FIM_MES_ANT = MES_ANT.replace(day=28) + timedelta(days=4)
+    FIM_MES_ANT = FIM_MES_ANT - timedelta(days=FIM_MES_ANT.day)
+    PARCIAL = False
 HOJE_LABEL = HOJE.strftime("%d/%m/%Y")
 FIM_MES_ANT_LABEL = FIM_MES_ANT.strftime("%d/%m/%Y")
+# rótulo da competência: em modo parcial deixa explícito que o mês não está fechado
+MES_LABEL = MES_PT[MES_ANT.month].capitalize() + " de " + str(MES_ANT.year)
+# em modo parcial o "até" entra na própria frase para não duplicar parênteses com o "(regime de caixa)"
+MES_LABEL = (f"{MES_LABEL} até {FIM_MES_ANT_LABEL}" if PARCIAL else MES_LABEL)
+MES_LABEL_TIT = MES_LABEL
+
+# mês anterior ao mês anterior (data do "saldo anterior" do fluxo)
+MES_ANT2 = add_months(MES_ANT, -1)
+FIM_MES_ANT2 = MES_ANT2.replace(day=28) + timedelta(days=4)
+FIM_MES_ANT2 = FIM_MES_ANT2 - timedelta(days=FIM_MES_ANT2.day)
 
 # ===== dados =====
-# janela completa: 12 meses do comparativo + tudo para o tronco (licença pequena: 2 anos cabem)
 INI_12 = add_months(MES_ANT, -11)
 _tx = tx_list(f"{INI_12.year}-01-01", f"{MES_ANT.year + 1}-12-31")
 tx_cc = [t for t in _tx if no_cc(t)]
@@ -131,14 +176,15 @@ tx_cc = [t for t in _tx if no_cc(t)]
 meses_12 = []
 for i in range(0, 12):
     ini_m = add_months(INI_12, i)
-    fim_m = add_months(ini_m, 1) - timedelta(days=1)
     meses_12.append((ini_m.isoformat()[:7], f"{MES_AB[ini_m.month]}/{str(ini_m.year)[2:]}"))
 
-# 1. Comparativo 12 meses (caixa): POR CATEGORIA (matriz categoria × mês) + totais por mês
+# 1. Comparativo 12 meses (caixa): matriz categoria × mês + totais por mês
 comp = {m: [0, 0] for m, _ in meses_12}
 matriz_12 = defaultdict(lambda: defaultdict(int))
 for t in tx_cc:
     if t.get("situation") not in (1, 2):
+        continue
+    if bdate(t) > FIM_MES_ANT.isoformat():      # recorte (relevante no modo parcial)
         continue
     m = bdate(t)[:7]
     if m in comp:
@@ -151,7 +197,7 @@ for t in tx_cc:
 
 # 2. Fluxo de Caixa do mês anterior por categoria (caixa)
 mes_ant_tx = [t for t in tx_cc if bdate(t)[:7] == f"{MES_ANT.year}-{MES_ANT.month:02d}"
-              and t.get("situation") in (1, 2)]
+              and t.get("situation") in (1, 2) and bdate(t) <= FIM_MES_ANT.isoformat()]
 rec = defaultdict(lambda: [0, 0])
 desp = defaultdict(lambda: [0, 0])
 for t in mes_ant_tx:
@@ -163,7 +209,7 @@ tot_rec = sum(v for v, _ in rec.values())
 tot_desp = sum(v for v, _ in desp.values())
 resultado = tot_rec + tot_desp
 
-# 3. Receitas em aberto até o último dia do mês anterior, POR IRMÃO (contato)
+# 3. Receitas em aberto até o último dia do mês anterior, POR IRMÃO
 aberto_tx = [t for t in tx_cc
              if t["value_in_cent"] > 0 and t.get("situation") == 0
              and bdate(t) <= FIM_MES_ANT.isoformat()]
@@ -174,36 +220,80 @@ for t in aberto_tx:
     por_irmao[nome][1] += 1
 total_aberto = sum(v for v, _ in por_irmao.values())
 
-# 4. Resultado dos últimos 12 meses (caixa) = comparativo + linha de total
+# 4. Resultado dos últimos 12 meses
 res_12_total = sum(e + s for e, s in comp.values())
 
-# 5. Saldo Tronco de Solidariedade (todas as situações, do início até fim do mês anterior)
-#    movimentações do CC com a TAG do tronco — janela desde o início da licença
+# 5. Tronco de Solidariedade (todas as situações, do início até o fim do mês anterior)
 _tx_tudo = tx_list("2017-01-01", FIM_MES_ANT.isoformat())
 tronco_tx = [t for t in _tx_tudo if no_cc(t) and tem_tag(t, TAG_TRONCO)]
 saldo_tronco = sum(t["value_in_cent"] for t in tronco_tx)
 ent_tronco = sum(t["value_in_cent"] for t in tronco_tx if t["value_in_cent"] > 0)
 sai_tronco = sum(t["value_in_cent"] for t in tronco_tx if t["value_in_cent"] < 0)
 
-# saldo anterior/final DO CENTRO DE CUSTO (v1.2): todas as movimentações do CC (sit 1,2)
-# até 31/08 = saldo anterior; + resultado do mês = saldo final em 30/09
-MES_ANT2 = add_months(MES_ANT, -1)
-FIM_MES_ANT2 = MES_ANT2.replace(day=28) + timedelta(days=4)
-FIM_MES_ANT2 = FIM_MES_ANT2 - timedelta(days=FIM_MES_ANT2.day)
-saldo_anterior = sum(t["value_in_cent"] for t in _tx_tudo
-                     if no_cc(t) and t.get("situation") in (1, 2) and bdate(t) <= FIM_MES_ANT2.isoformat())
+# ===== SALDO POR CONTA E POR CC (v1.4) =====
+# Método validado em 04/11: o valor CHEIO do lançamento pertence ao CC quando ele aparece no
+# rateio (apportionments_cost_center). Somando saldo por conta × CC, CADA CONTA FECHA EXATAMENTE
+# com o saldo real da API (balanceDone) — 30/09: CORA 39.712,27 · 31/10: 36.786,69.
+# v1.4 (decisão Vinícius 04/11): o SALDO DE ABERTURA (lançamentos sem CC) é atribuído ao "F e H",
+# então a abertura fica 100% alocada e não existe mais coluna Residual.
+hist_sit12 = [t for t in _tx_tudo if t.get("situation") in (1, 2)]
+
+def eh_do_cc(t, ccid):
+    """Pertence ao CC quando ele aparece no rateio OU, tratando-se do CC de abertura,
+    quando o lançamento não tem centro de custo nenhum (saldo de abertura da licença)."""
+    ids = cc_ids(t)
+    if ccid in ids:
+        return True
+    return ccid == CC_ABERTURA and not ids
+
+def saldo_cc_ate(ccid, fim_iso):
+    return sum(t["value_in_cent"] for t in hist_sit12
+               if bdate(t) <= fim_iso and eh_do_cc(t, ccid))
+
+def saldo_cc_conta_ate(ccid, conta, fim_iso):
+    return sum(t["value_in_cent"] for t in hist_sit12
+               if bdate(t) <= fim_iso and eh_do_cc(t, ccid)
+               and t.get("ds_account_main") == conta)
+
+# SALDO ANTERIOR do fluxo = parte do CC do pacote no saldo das contas ao fim do mês anterior ao anterior
+saldo_anterior = saldo_cc_ate(CC_ID, FIM_MES_ANT2.isoformat())
 saldo_final = saldo_anterior + resultado
 
-# saldos das contas no último dia do mês anterior (contexto)
+# abertura de saldos por conta e CC no fim do mês anterior
 contas_api = [c for c in req(f"{BASE}/account/v1/accounts").get("results", []) if c.get("status") == 1]
 saldos_conta = []
 for c in contas_api:
+    nome_c = c["ds_account"]
     try:
-        b = req(f"{BASE}/transaction/v1/transactions/balances?start_date=2017-01-01&end_date={FIM_MES_ANT.isoformat()}&id_account_main={c['id']}")["results"]
-        saldos_conta.append((c["ds_account"], b["balanceDone"]))
+        b = req(f"{BASE}/transaction/v1/transactions/balances?start_date=2017-01-01"
+                f"&end_date={FIM_MES_ANT.isoformat()}&id_account_main={c['id']}")["results"]
+        real = b["balanceDone"]
     except Exception:
-        pass
-saldos_conta = [(n, v) for n, v in saldos_conta if v != 0]
+        continue
+    feh = saldo_cc_conta_ate(170068, nome_c, FIM_MES_ANT.isoformat())
+    fil = saldo_cc_conta_ate(170069, nome_c, FIM_MES_ANT.isoformat())
+    saldos_conta.append((nome_c, real, feh, fil, real - feh - fil))
+# só as contas com saldo ou com alguma parcela de CC
+saldos_conta = [s for s in saldos_conta if s[1] != 0 or s[2] != 0 or s[3] != 0]
+
+# ===== TRAVA DE CONSISTÊNCIA (obrigatória) =====
+# Verificação REAL (não tautológica): o total dos lançamentos carregados de cada conta tem de
+# bater com o balanceDone da API. Se não bater, a leitura veio truncada (IncompleteRead /
+# página curta no meio) e o relatório sairia com saldo errado — aborta em vez de emitir.
+_erros = []
+for _nome, _real, _feh, _fil, _res in saldos_conta:
+    _lanc = sum(t["value_in_cent"] for t in hist_sit12
+                if bdate(t) <= FIM_MES_ANT.isoformat() and t.get("ds_account_main") == _nome)
+    if abs(_lanc - _real) > 1:
+        _erros.append(f"  {_nome}: lançamentos {_lanc/100:,.2f} != balanceDone {_real/100:,.2f}"
+                      f" (dif {( _real-_lanc)/100:,.2f})")
+if _erros:
+    raise SystemExit("ABORTADO: leitura da API inconsistente — rerodar.\n" + "\n".join(_erros))
+# e a alocação tem de cobrir o saldo inteiro das contas (sem coluna residual)
+_soma_aloc = sum(s[2] + s[3] for s in saldos_conta)
+_soma_real = sum(s[1] for s in saldos_conta)
+if abs(_soma_aloc - _soma_real) > 1:
+    raise SystemExit(f"ABORTADO: alocação {_soma_aloc/100:,.2f} != saldo das contas {_soma_real/100:,.2f}")
 
 print("dados prontos")
 
@@ -232,14 +322,16 @@ def P_val_int(cents, style):
     s2 = ParagraphStyle("vi", parent=style, textColor=(VERDE if cents > 0 else VERMELHO if cents < 0 else PRETO))
     return P(s, s2)
 
-def tabela(rows, widths, fs=7.5):
+def tabela(rows, widths, fs=7.5, hpad=None, vpad=3):
     t = Table(rows, colWidths=widths, repeatRows=1)
     style = [("FONTNAME", (0,0), (-1,-1), "Helvetica"), ("FONTSIZE", (0,0), (-1,-1), fs),
-             ("TOPPADDING", (0,0), (-1,-1), 3), ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+             ("TOPPADDING", (0,0), (-1,-1), vpad), ("BOTTOMPADDING", (0,0), (-1,-1), vpad),
              ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
              ("BACKGROUND", (0,0), (-1,0), LARANJA), ("TEXTCOLOR", (0,0), (-1,0), colors.white),
              ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
              ("LINEBELOW", (0,-1), (-1,-1), 0.7, LARANJA)]
+    if hpad is not None:
+        style += [("LEFTPADDING", (0,0), (-1,-1), hpad), ("RIGHTPADDING", (0,0), (-1,-1), hpad)]
     for i in range(1, len(rows)):
         if i % 2 == 0:
             style.append(("BACKGROUND", (0,i), (-1,i), CINZA))
@@ -247,30 +339,70 @@ def tabela(rows, widths, fs=7.5):
     return t
 
 def rodape_simbolo(canvas, doc):
+    """Símbolo no canto inferior direito — funciona em retrato e em paisagem."""
     if os.path.exists(SIMBOLO):
         alt = 1.2 * cm
-        canvas.drawImage(SIMBOLO, 18.4*cm, 1.1*cm, width=alt*372/553, height=alt, mask="auto")
+        larg = alt * 372 / 553
+        canvas.drawImage(SIMBOLO, canvas._pagesize[0] - 1.5*cm - larg, 1.1*cm,
+                         width=larg, height=alt, mask="auto")
+
+# documentos com DOIS templates: retrato (A4) e paisagem (A4 landscape)
+_ml, _mr, _mt, _mb = 1.5*cm, 1.5*cm, 1.3*cm, 1.6*cm
+# Frame já recebe a posição/tamanho: os paddings ficam zerados para não deslocar o conteúdo
+_marg = dict(leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0, id="normal")
+fr_r = Frame(_ml, _mb, A4[0]-_ml-_mr, A4[1]-_mt-_mb, **_marg)
+fr_l = Frame(_ml, _mb, landscape(A4)[0]-_ml-_mr, landscape(A4)[1]-_mt-_mb, **_marg)
+LARG_PAISAGEM = landscape(A4)[0] - _ml - _mr
 
 ARQ_PDF = f"artifacts/{HOJE.strftime('%y%m%d')}_Relatorio_Feh_{PK['arq']}.pdf"
-doc = SimpleDocTemplate(ARQ_PDF, pagesize=A4, leftMargin=1.5*cm, rightMargin=1.5*cm,
-                        topMargin=1.3*cm, bottomMargin=1.6*cm,
-                        title=f"Relatório Gerencial — Fraternidade e Harmonia {PK['nome']}")
+doc = BaseDocTemplate(ARQ_PDF, pagesize=A4, leftMargin=_ml, rightMargin=_mr,
+                      topMargin=_mt, bottomMargin=_mb,
+                      title=f"Relatório Gerencial — Fraternidade e Harmonia {PK['nome']}")
+# "paisagem" é o template PADRÃO: a capa e o comparativo ficam na MESMA página, na horizontal.
+# O restante do relatório volta para retrato via NextPageTemplate("retrato").
+doc.addPageTemplates([
+    PageTemplate(id="paisagem", frames=[fr_l], onPage=rodape_simbolo, pagesize=landscape(A4)),
+    PageTemplate(id="retrato",  frames=[fr_r], onPage=rodape_simbolo, pagesize=A4),
+])
+
 E = []
-h1c = ParagraphStyle("h1c", parent=h1, fontSize=13, alignment=1, spaceAfter=1)
-h2c = ParagraphStyle("h2c", parent=h2, fontSize=11, alignment=1, spaceBefore=2, spaceAfter=2)
-subc = ParagraphStyle("subc", parent=sub, fontSize=8, alignment=1, spaceAfter=0)
+h1c = ParagraphStyle("h1c", parent=h1, fontSize=12, alignment=1, spaceAfter=0)
+h2c = ParagraphStyle("h2c", parent=h2, fontSize=10, alignment=1, spaceBefore=0, spaceAfter=1)
+subc = ParagraphStyle("subc", parent=sub, fontSize=7.5, alignment=1, spaceAfter=0)
+
+# ---- capa (logo F&H SÓ no pacote F e H) — em paisagem, logos CENTRALIZADAS ----
+_imgs = []
+if PK["logo"] and os.path.exists(LOGO_FEH):
+    _imgs.append(RLImage(LOGO_FEH, width=2.3*cm, height=2.3*cm))
 if os.path.exists(LOGO):
-    img = RLImage(LOGO, width=5.5*cm, height=5.5*cm*561/1600)
-    img.hAlign = "CENTER"
-    E.append(img)
-E.append(Spacer(1, 8))
+    _imgs.append(RLImage(LOGO, width=3.3*cm, height=3.3*cm*561/1600))
+if _imgs:
+    # uma célula por logo + célula vazia entre elas para o respiro; o grupo todo centralizado
+    _celulas, _larguras = [], []
+    for _i, _im in enumerate(_imgs):
+        if _i:
+            _celulas.append("")
+            _larguras.append(1.1*cm)
+        _celulas.append(_im)
+        _larguras.append(_im.drawWidth)
+    cab = Table([_celulas], colWidths=_larguras)
+    cab.hAlign = "CENTER"                      # centraliza o CONJUNTO das logos na página
+    cab.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+                             ("ALIGN",  (0,0), (-1,-1), "CENTER"),
+                             ("LEFTPADDING", (0,0), (-1,-1), 0),
+                             ("RIGHTPADDING", (0,0), (-1,-1), 0),
+                             ("TOPPADDING", (0,0), (-1,-1), 0),
+                             ("BOTTOMPADDING", (0,0), (-1,-1), 0)]))
+    E.append(cab)
+E.append(Spacer(1, 3))
 E.append(P(f"<b>FRATERNIDADE E HARMONIA — {PK['nome']}</b>", h1c))
 E.append(P("Relatório Gerencial Mensal", h2c))
-E.append(P(f"Gerado em {HOJE_LABEL} · Fonte: Controlle · Ref.: {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} — regime de caixa", subc))
-E.append(Spacer(1, 6))
+E.append(P(f"Gerado em {HOJE_LABEL} · Fonte: Controlle · Ref.: {MES_LABEL} — regime de caixa", subc))
+E.append(Spacer(1, 2))
 
-# 1. Comparativo dos últimos 12 meses (caixa) — POR CATEGORIA
-E.append(P(f"Comparativo dos Últimos 12 Meses por Categoria — {MES_AB[INI_12.month]}/{str(INI_12.year)[2:]} a {MES_AB[MES_ANT.month]}/{str(MES_ANT.year)[2:]} (regime de caixa)", h2))
+# 1. Comparativo dos últimos 12 meses — MESMA PÁGINA da capa (paisagem)
+h2_cmp = ParagraphStyle("h2cmp", parent=h2, spaceBefore=2, spaceAfter=2)
+E.append(P(f"Comparativo dos Últimos 12 Meses por Categoria — {MES_AB[INI_12.month]}/{str(INI_12.year)[2:]} a {MES_AB[MES_ANT.month]}/{str(MES_ANT.year)[2:]} (regime de caixa)", h2_cmp))
 cat_names_12 = sorted({c for c in matriz_12})
 cm_rows = [[P("<b>Categoria</b>", cell)] + [P(f"<b>{lab}</b>", cellr) for _, lab in meses_12] + [P("<b>Total</b>", cellr)]]
 for cat in cat_names_12:
@@ -280,20 +412,31 @@ for cat in cat_names_12:
         row.append(P_val_int(v, cellr) if v else P("—", cellr))
     row.append(P_val_int(sum(matriz_12[cat].values()), cellrb))
     cm_rows.append(row)
-# linhas de totais por mês (entradas/saídas/resultado) no rodapé da matriz
 tot_e = sum(v[0] for v in comp.values()); tot_s = sum(v[1] for v in comp.values())
 row_e = [P("<b>Entradas do mês</b>", cellb)] + [P_val_int(comp[m][0], cellrb) for m, _ in meses_12] + [P_val_int(tot_e, cellrb)]
 row_s = [P("<b>Saídas do mês</b>", cellb)] + [P_val_int(comp[m][1], cellrb) for m, _ in meses_12] + [P_val_int(tot_s, cellrb)]
 row_r = [P("<b>Resultado do mês</b>", cellb)] + [P_val_int(comp[m][0] + comp[m][1], cellrb) for m, _ in meses_12] + [P_val_int(tot_e + tot_s, cellrb)]
 cm_rows += [row_e, row_s, row_r]
-t = tabela(cm_rows, [4.2*cm] + [1.25*cm]*12 + [1.9*cm], fs=6)
+# Larguras MEDIDAS (pdfmetrics): a categoria mais longa tem 5,37 cm e "nov/25" em negrito
+# 7,5pt tem 0,84 cm. Com padding de 3pt/lado, categoria 6,3 cm e mês 1,5 cm deixam tudo em
+# UMA linha — antes o mês ficava com 1,24 cm e "nov/25" quebrava em duas linhas ("nov/2" / "5").
+FS_CMP = 7.5
+H_PAD = 3
+w_cat, w_tot = 6.3*cm, 1.7*cm
+w_mes = (LARG_PAISAGEM - w_cat - w_tot) / 12
+t = tabela(cm_rows, [w_cat] + [w_mes]*12 + [w_tot], fs=FS_CMP, hpad=H_PAD, vpad=1.2)
+# impede qualquer quebra dentro da célula: se algo não couber, é melhor vazar do que virar 2 linhas
+t.setStyle(TableStyle([("LEFTPADDING", (0,0), (0,-1), H_PAD),
+                       ("RIGHTPADDING", (0,0), (0,-1), H_PAD)]))
 t.setStyle(TableStyle([("BACKGROUND", (0,len(cm_rows)-3), (-1,len(cm_rows)-1), LARANJA_CLARO)]))
 E.append(t)
 
-# 2. Fluxo de Caixa do mês anterior por categoria
+# 2. Fluxo de Caixa do mês anterior — volta ao retrato
+E.append(NextPageTemplate("retrato"))
 E.append(PageBreak())
-E.append(P(f"Fluxo de Caixa — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (regime de caixa)", h2))
-E.append(P(f"Saldo anterior e saldo final do centro de custo {PK['nome']} (soma das movimentações realizadas).", sub))
+E.append(P(f"Fluxo de Caixa — {MES_LABEL} (regime de caixa)", h2))
+E.append(P(f"Saldo anterior e saldo final do centro de custo {PK['nome']} "
+           f"(parte do CC {PK['nome']} no saldo das contas).", sub))
 fc_rows = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
 for nome, (v, n) in sorted(rec.items()):
     fc_rows.append([P(nome, cell), P(str(n), cellc), P_val(v, cellr)])
@@ -361,20 +504,35 @@ E.append(t)
 E.append(Spacer(1, 8))
 E.append(P(f"Movimentações do Centro de Custo {PK['nome']} com a tag {TAG_TRONCO}, do início da licença até {FIM_MES_ANT_LABEL} (todas as situações).", sub))
 
-# contexto: saldos nas contas
+# 6. Saldo nas contas — com abertura por centro de custo (v1.4: saldo de abertura todo no F e H)
 E.append(Spacer(1, 14))
 E.append(P(f"Saldo nas contas em {FIM_MES_ANT_LABEL}", h2))
-sc_rows = [[P("<b>Conta</b>", cell), P(f"<b>Saldo em {FIM_MES_ANT_LABEL}</b>", cellr)]]
-for nome, v in saldos_conta:
-    sc_rows.append([P(nome, cell), P_val(v, cellr)])
-sc_rows.append([P("<b>Total</b>", cellrb), P_val(sum(v for _, v in saldos_conta), cellrb)])
-t = tabela(sc_rows, [11*cm, 5*cm])
-t.setStyle(TableStyle([("BACKGROUND", (0,len(sc_rows)-1), (-1,len(sc_rows)-1), LARANJA_CLARO)]))
+E.append(P("Abertura do saldo de cada conta entre os centros de custo. O saldo de abertura "
+           "(lançamentos sem centro de custo no Controlle) está integralmente atribuído ao F e H.", sub))
+_ch = ParagraphStyle("ch", parent=cellb, fontSize=7.5)
+_chr = ParagraphStyle("chr", parent=_ch, alignment=2)
+sc_rows = [[P("<b>Conta</b>", _ch), P("<b>F e H</b>", _chr),
+            P("<b>FILOSÓFICO</b>", _chr),
+            P(f"<b>Total em {FIM_MES_ANT_LABEL}</b>", _chr)]]
+for nome, real, feh, fil, resid in saldos_conta:
+    sc_rows.append([P(nome, cell),
+                    P_val(feh, cellr) if feh else P("—", cellr),
+                    P_val(fil, cellr) if fil else P("—", cellr),
+                    P_val(real, cellrb)])
+s_tot = sum(s[1] for s in saldos_conta)
+sc_rows.append([P("<b>Total</b>", cellrb),
+                P_val(sum(s[2] for s in saldos_conta), cellrb),
+                P_val(sum(s[3] for s in saldos_conta), cellrb),
+                P_val(s_tot, cellrb)])
+t = tabela(sc_rows, [6.2*cm, 3.3*cm, 3.3*cm, 3.4*cm])
+_col_pacote = 1 if _p == "feh" else 2
+t.setStyle(TableStyle([("BACKGROUND", (0,len(sc_rows)-1), (-1,len(sc_rows)-1), LARANJA_CLARO),
+                       ("BACKGROUND", (_col_pacote,1), (_col_pacote,-2), LARANJA_CLARO)]))
 E.append(KeepTogether([t]))
 
 E.append(Spacer(1, 10))
 E.append(P("Gerado automaticamente pela Terceirizou · dados do Controlle", sub))
-doc.build(E, onFirstPage=rodape_simbolo, onLaterPages=rodape_simbolo)
+doc.build(E)
 print(f"OK: {ARQ_PDF}")
 
 # ===== Excel =====
@@ -431,8 +589,52 @@ def aba(nome, linhas, larguras, titulo=None):
                     c.number_format = '"R$" #,##0.00'
                     cor = VERDE_XL if c.value > 0 else (VERMELHO_XL if c.value < 0 else "1A1A1A")
                     c.font = Font(bold=is_total, color=cor)
-    for j, w in enumerate(larguras, 1):
-        ws.column_dimensions[get_column_letter(j)].width = w
+    # ---- largura das colunas: MEDIDA pelo conteúdo, para caber em UMA linha ----
+    # (antes as larguras eram fixas por aba e textos longos, tipo "01.04 Reembolso despesas
+    #  Agape e Eventos", quebravam em 2-3 linhas dentro da célula)
+    LARG_MIN, LARG_MAX = 9, 62
+    for j in range(1, ws.max_column + 1):
+        col = get_column_letter(j)
+        maior = 0
+        for cell_ in ws[col]:
+            v = cell_.value
+            if v is None:
+                continue
+            if isinstance(v, str):
+                # cabeçalho sai em NEGRITO (é mais largo); o resto em fonte normal
+                fnt = "bold" if cell_.row == hdr_row or (desloc and cell_.row == 1) else "normal"
+                # a fonte do Excel é Calibri 11 por padrão, ~10% mais estreita que o Helvetica;
+                # usar 1.05 sobre o comprimento do texto erra para mais, o que é seguro
+                maior = max(maior, len(v) * (1.10 if fnt == "bold" else 1.0))
+            else:
+                txt = f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                maior = max(maior, len(txt))
+        w_final = max(LARG_MIN, min(LARG_MAX, maior + 3))
+        ws.column_dimensions[col].width = w_final
+
+    # a linha 1 é o título MESCLADO: precisa caber na soma das colunas, senão trunca.
+    # Se não couber, engrossa as colunas proporcionalmente (ninguém mais é afetado).
+    if desloc and titulo:
+        _soma = sum(ws.column_dimensions[get_column_letter(j)].width for j in range(1, ws.max_column + 1))
+        _prec = len(titulo) * 1.10 + 2          # negrito + folga
+        if _soma < _prec:
+            _fator = _prec / _soma
+            for j in range(1, ws.max_column + 1):
+                _c = get_column_letter(j)
+                ws.column_dimensions[_c].width = (ws.column_dimensions[_c].width or LARG_MIN) * _fator
+
+    # nenhuma célula pode ter quebra de linha: alinhamento em 1 linha + sem wrap
+    # (inclui a linha 1 do título — ela é mesclada, então o texto longo não trunca)
+    _ini = 1 if desloc else hdr_row
+    for row in ws.iter_rows(min_row=_ini):
+        for c in row:
+            al = c.alignment
+            c.alignment = Alignment(horizontal=al.horizontal or "left",
+                                    vertical="center", wrap_text=False)
+    # altura de linha padrão, sem auto-ajuste para múltiplas linhas
+    for r_ in range(_ini, ws.max_row + 1):
+        ws.row_dimensions[r_].height = 22 if (desloc and r_ == 1) else 18
+
     ws.freeze_panes = ws.cell(row=hdr_row + 1, column=1)
 
 r_ = lambda v: v / 100
@@ -459,7 +661,7 @@ aba("Fluxo " + MES_AB[MES_ANT.month],
      ("Resultado do mês", len(mes_ant_tx), r_(resultado)),
      (f"Saldo final em {FIM_MES_ANT_LABEL}", "", r_(saldo_final))],
     [45, 14, 16],
-    titulo=f"Fluxo de Caixa — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (regime de caixa)")
+    titulo=f"Fluxo de Caixa — {MES_LABEL} (regime de caixa)")
 
 # 3. receitas em aberto por irmão
 aba("Em aberto por irmão",
@@ -469,7 +671,7 @@ aba("Em aberto por irmão",
     [40, 14, 18],
     titulo=f"Receitas em Aberto até {FIM_MES_ANT_LABEL} — por Irmão")
 
-# 4. resultado 12m (mesma matriz do comparativo, com linha final de resultado)
+# 4. resultado 12m
 aba("Resultado 12 meses",
     [("Mês", "Entradas", "Saídas", "Resultado")] +
     [(lab, r_(comp[m][0]), r_(comp[m][1]), r_(comp[m][0] + comp[m][1])) for m, lab in meses_12] +
@@ -486,11 +688,12 @@ aba("Tronco Solidariedade",
     [45, 14, 18],
     titulo=f"Saldo Tronco de Solidariedade {PK['nome']} em {FIM_MES_ANT_LABEL} (tag {TAG_TRONCO}, CC {PK['nome']})")
 
-# saldos nas contas
+# saldos nas contas — com abertura por CC (v1.4: saldo de abertura todo no F e H)
 aba("Saldo contas",
-    [("Conta", f"Saldo em {FIM_MES_ANT_LABEL}")] +
-    [(n, r_(v)) for n, v in saldos_conta] + [("Total", r_(sum(v for _, v in saldos_conta)))],
-    [30, 18], titulo=f"Saldo nas contas em {FIM_MES_ANT_LABEL}")
+    [("Conta", "F e H", "FILOSÓFICO", f"Total em {FIM_MES_ANT_LABEL}")] +
+    [(n, r_(feh), r_(fil), r_(real)) for n, real, feh, fil, res in saldos_conta] +
+    [("Total", r_(sum(s[2] for s in saldos_conta)), r_(sum(s[3] for s in saldos_conta)), r_(s_tot))],
+    [28, 18, 18, 20], titulo=f"Saldo nas contas em {FIM_MES_ANT_LABEL} — abertura por centro de custo (abertura no F e H)")
 
 # detalhe dos lançamentos do tronco
 det_rows = [("Data", "Descrição", "Conta", "Situação", "Valor")]
