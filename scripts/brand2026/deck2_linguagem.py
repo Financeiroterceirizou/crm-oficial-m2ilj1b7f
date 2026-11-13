@@ -192,8 +192,8 @@ itens = [("marca", "uma conversa sobre o seu financeiro.", "site, perfil, instit
          ("comercial", "vamos marcar 30 minutos e olhar o seu número.", "proposta, whatsapp, e-mail"),
          ("cliente", "o relatório fecha dia 05. preciso da conciliação até dia 03.", "rotina, cobrança")]
 cols = ["onde", "como termina", "contexto"]
-tabela(s, 0.6, 2.35, 12.13, cols, [[a, b, c] for a, b, c in itens], cw=[2.2, 6.4, 3.53], rh=0.72, size=12.5, bold_col0=True)
-txt(s, 0.6, 5.7, 11.9, 0.9,
+fim = tabela(s, 0.6, 2.35, 12.13, cols, [[a, b, c] for a, b, c in itens], cw=[2.2, 6.4, 3.53], rh=0.72, size=12.5, bold_col0=True)
+txt(s, 0.6, fim + 0.22, 11.4, 0.9,
     ["nunca “clique aqui” sozinho. nunca “saiba mais” sem dizer mais sobre o quê.",
      "a ação tem que ser a coisa mais concreta da peça."], 13, GREY, ls=1.35)
 symbol(s)
