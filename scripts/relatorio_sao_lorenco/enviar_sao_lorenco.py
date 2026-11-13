@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # Envio do Relatório Mensal SÃO LOURENÇO (L & R) VISTORIA por e-mail (Resend).
-# Uso: python3 enviar_sao_lorenco.py [caminho-do-pdf]
+# Uso: python3 enviar_uberlandia.py [caminho-do-pdf]
 #   Sem argumento: usa o PDF de hoje (artifacts/YYMMDD_Relatorio_Sao_Lorenco.pdf).
 # Chave Resend: scripts/95b7f382c0a1ba1d/resend_key.txt (fora do repo) ou env RESEND_API_KEY.
-# Destinatário: vinicius@terceirizou.com.br.
+# Destinatários: financeirodabemviver@gmail.com (to) + financeiro@terceirizou.com.br (bcc).
 import base64, json, os, sys, urllib.request
 from datetime import date
 
@@ -32,22 +32,31 @@ if os.path.exists(xlsx_path):
     with open(xlsx_path, "rb") as f:
         anexos.append({"filename": os.path.basename(xlsx_path), "content": base64.b64encode(f.read()).decode()})
 
+# comparativo 13 meses (PDF próprio em paisagem)
+comp_path = pdf_path.replace("_Relatorio_Sao_Lorenco.pdf", "_Comparativo_Bem_Viver.pdf")
+if os.path.exists(comp_path):
+    with open(comp_path, "rb") as f:
+        anexos.insert(0, {"filename": os.path.basename(comp_path), "content": base64.b64encode(f.read()).decode()})
+
 # idempotência inclui a hora do PDF (regeneração = reenvio legítimo; mesmo arquivo = bloqueado)
 hora_pdf = date.today().strftime("%Y%m%d") + "-" + str(int(os.path.getmtime(pdf_path)) % 100000)
 
 html = """<p>Boa tarde!</p>
 <p>Segue em anexo o <b>relatório gerencial mensal da SÃO LOURENÇO (L & R) VISTORIA</b> (fonte Controlle).</p>
-<p>Inclui: Receitas e Despesas por categoria do mês anterior (regime de competência), Comparativo dos
-últimos 6 meses por categoria (regime de competência), Previsão de despesas do mês corrente,
-Saldo nas contas no último dia do mês anterior, Despesas em aberto até o último dia do mês anterior
-e Resumo com a Previsão de Resultado do mês (faturamento, despesa, resultado e saldo projetado).</p>
-<p>PDF e Excel em anexo. Qualquer dúvida estamos à disposição.</p>
+<p>Inclui: Receitas e Despesas por categoria do mês anterior, Comparativo dos últimos 6 meses por
+categoria, Previsão de despesas do mês corrente, Saldo nas contas no último dia do mês anterior,
+Despesas em aberto até o último dia do mês anterior e Resumo com a Previsão de Resultado do mês
+(faturamento, despesa, resultado e saldo projetado).</p>
+<p>PDF e Excel em anexo. Qualquer dúvida estamos à disposição.</p>""" + ("""
+<p><b>Retificação:</b> o Excel anterior trazia a coluna Média/Total do comparativo somando meses fora do
+período exibido. Segue a versão corrigida.</p>""" if os.environ.get("RETIFICAR") == "1" else "") + """
 <p>Att,<br>Terceirizou — mais do que terceirizar o financeiro</p>"""
 
 payload = {
     "from": FROM,
     "to": TO,
-    "subject": f"Relatório Gerencial Mensal — SÃO LOURENÇO (L & R) VISTORIA — {date.today().strftime('%d/%m/%Y')}",
+    "subject": ("[RETIFICAÇÃO] " if os.environ.get("RETIFICAR") == "1" else "")
+               + f"Relatório Gerencial Mensal — SÃO LOURENÇO (L & R) VISTORIA — {date.today().strftime('%d/%m/%Y')}",
     "html": html,
     "attachments": anexos,
 }
@@ -56,7 +65,8 @@ req = urllib.request.Request(API, data=json.dumps(payload).encode(), method="POS
 req.add_header("Authorization", f"Bearer {KEY}")
 req.add_header("User-Agent", "terceirizou-relatorio-saolorenco/1.0")
 destinos = "-".join((TO + BCC))
-req.add_header("Idempotency-Key", f"relatorio-saolorenco-{hora_pdf}-{len(anexos)}-{destinos}")
+_ret = "-retif" if os.environ.get("RETIFICAR") == "1" else ""
+req.add_header("Idempotency-Key", f"relatorio-saolorenco-{hora_pdf}-{len(anexos)}-{destinos}{_ret}")
 req.add_header("Content-Type", "application/json")
 
 with urllib.request.urlopen(req, timeout=60) as resp:
