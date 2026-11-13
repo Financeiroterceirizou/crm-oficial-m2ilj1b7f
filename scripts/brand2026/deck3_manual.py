@@ -41,9 +41,9 @@ def spec(slide, x, y, w, h, titulo, linhas, dark=False):
     txt(slide, x + 0.28, y + 0.24, w - 0.5, 0.3, titulo, 10.5, ORANGE)
     yy = y + 0.62
     for rot, val in linhas:
-        txt(slide, x + 0.28, yy, 1.5, 0.26, rot, 9.5, LGREY if dark else GREY)
-        txt(slide, x + 1.75, yy, w - 2.0, 0.28, val, 10, WHITE if dark else DARK)
-        yy += 0.34
+        txt(slide, x + 0.28, yy, 1.45, 0.26, rot, 9.5, LGREY if dark else GREY)
+        txt(slide, x + 1.62, yy, w - 1.9, 0.5, val, 9.5, WHITE if dark else DARK, ls=1.15)
+        yy += 0.46
 
 
 def grade_logos(s, itens, y=2.32, cols=3, topo_nota=6.42):
@@ -238,10 +238,10 @@ c.line.width = Pt(1)
 txt(s, 2.0, 3.16, 0.6, 0.3, "x", 13, ORANGE)
 txt(s, 1.35, 5.6, 6.9, 0.3, "x = altura do símbolo “3”", 10, ORANGE, align=PP_ALIGN.CENTER)
 spec(s, 9.25, 2.4, 3.48, 3.7, "regra", [
-    ("margem", "mínima de 1x em todos os lados"),
+    ("margem", "1x em todos os lados"),
     ("1x", "altura do símbolo"),
     ("vale para", "as 4 famílias"),
-    ("exceção", "capa e fechamento de deck"),
+    ("exceção", "capa e fechamento"),
 ])
 txt(s, 0.6, 6.45, 11.9, 0.35,
     "a reserva é medida pela altura do símbolo, não pela altura da logo. numa versão vertical, a reserva é maior.", 11.5, GREY)
@@ -438,7 +438,7 @@ spec(s, 8.55, 2.35, 4.18, 2.1, "medidas", [
     ("formato", "16:9 · 13,333 × 7,5 in"),
     ("margem", "0,6 in em todos os lados"),
     ("colunas", "12 · gutter 0,22 in"),
-    ("símbolo", "canto inferior direito, 0,45 in da borda"),
+    ("símbolo", "canto inf. direito, 0,45 in"),
 ])
 txt(s, 8.55, 4.65, 4.2, 0.3, "regra de respiro", 10.5, ORANGE)
 txt(s, 8.55, 5.0, 4.2, 1.6,
