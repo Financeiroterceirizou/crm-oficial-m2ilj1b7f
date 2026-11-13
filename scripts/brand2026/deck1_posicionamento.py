@@ -330,8 +330,8 @@ rows = [["discurso", "as peças repetem a mesma frase de lugar", "cliente repete
         ["lead", "quantos chegam dizendo que querem “organizar e decidir”", "menos pedido de preço no primeiro contato"],
         ["venda", "quantas propostas fecham no preço cheio", "desconto deixa de ser assunto recorrente"],
         ["entrega", "reunião de resultados realizada no mês", "cliente chega na reunião com pergunta, não com queixa"]]
-tabela(s, 0.6, 2.35, 12.13, cols, rows, cw=[2.3, 4.9, 4.93], rh=0.72, size=12, bold_col0=True)
-txt(s, 0.6, 5.6, 11.9, 1.0,
+fim = tabela(s, 0.6, 2.35, 12.13, cols, rows, cw=[2.3, 4.9, 4.93], rh=0.72, size=12, bold_col0=True)
+txt(s, 0.6, fim + 0.22, 11.4, 0.9,
     ["revisão a cada ciclo comercial, com os sócios. posicionamento não é campanha: é o que a empresa recusa fazer.",
      "quem cuida do arquivo: marketing, com aprovação de vinícius e henrique."], 12.5, GREY, ls=1.35)
 symbol(s)
