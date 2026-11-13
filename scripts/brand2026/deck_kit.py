@@ -235,8 +235,8 @@ def capa(prs, kicker, titulo, sub, tipo, rodape="uso interno · 2026"):
     logo(s, "horizontal-branco", 0.6, 0.5, 3.2)
     selo = card(s, 0.6, 2.15, 4.9, 0.5, fill=PINK, line=None, radius=50000)
     txt(s, 0.6, 2.15, 4.9, 0.5, kicker, 12.5, DARK, align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE)
-    txt(s, 0.6, 2.98, 11.6, 2.1, titulo, 44, WHITE, ls=1.04)
-    txt(s, 0.6, 5.25, 10.4, 1.0, sub, 14.5, LGREY, ls=1.35)
+    txt(s, 0.6, 2.98, 10.85, 2.1, titulo, 44, WHITE, ls=1.04)
+    txt(s, 0.6, 5.25, 10.35, 1.0, sub, 14.5, LGREY, ls=1.35)
     txt(s, 0.6, 6.62, 8.0, 0.32, rodape, 11, RGBColor(0x8A, 0x8B, 0x8D))
     symbol(s, dark=True, h=2.1, x=11.55, y=4.55)
     return s
@@ -247,9 +247,9 @@ def divisor(prs, selo, titulo, apoio=None, n=None):
     if selo:
         card(s, 0.6, 1.65, 6.2, 0.5, fill=PINK, line=None, radius=50000)
         txt(s, 0.6, 1.65, 6.2, 0.5, selo, 12.5, DARK, align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE)
-    txt(s, 0.6, 2.6, 11.4, 2.2, titulo, 36, WHITE, ls=1.08)
+    txt(s, 0.6, 2.6, 10.85, 2.2, titulo, 36, WHITE, ls=1.08)
     if apoio:
-        txt(s, 0.6, 5.05, 10.6, 1.0, apoio, 14, LGREY, ls=1.35)
+        txt(s, 0.6, 5.05, 10.4, 1.0, apoio, 14, LGREY, ls=1.35)
     symbol(s, dark=True, h=2.1, x=11.55, y=4.55)
     page(s, n, dark=True)
     return s
