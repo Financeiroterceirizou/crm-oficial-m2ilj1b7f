@@ -323,9 +323,9 @@ page(s)
 s = blank(prs)
 eyebrow(s, "proporção", "check-circulo")
 title(s, ["quanto de cada cor", "em cada peça."], y=0.95, size=28, w=8.4)
-barras = [("peça institucional", [("branco", 65, WHITE), ("grafite", 25, DARK), ("laranja", 10, ORANGE)]),
-          ("peça de campanha", [("branco", 45, WHITE), ("grafite", 25, DARK), ("laranja", 30, ORANGE)]),
-          ("peça social", [("grafite", 55, DARK), ("branco", 25, WHITE), ("laranja", 20, ORANGE)])]
+barras = [("peça institucional", [("branco", 60, WHITE), ("grafite", 25, DARK), ("laranja", 15, ORANGE)]),
+          ("peça de campanha", [("branco", 40, WHITE), ("grafite", 25, DARK), ("laranja", 35, ORANGE)]),
+          ("peça social", [("grafite", 50, DARK), ("branco", 25, WHITE), ("laranja", 25, ORANGE)])]
 y = 2.4
 for nome, partes in barras:
     txt(s, 0.6, y, 3.0, 0.3, nome, 12, DARK)
@@ -339,8 +339,8 @@ for nome, partes in barras:
     y += 0.95
 txt(s, 0.6, 5.35, 11.9, 0.35, "regra do laranja", 10.5, ORANGE)
 txt(s, 0.6, 5.7, 11.9, 1.0,
-    ["o laranja é acento, não fundo de página inteira. quando ele domina, a marca fica infantil e a leitura cansa.",
-     "em peça de campanha pode subir para 30%. em documento e proposta, não passar de 10%."], 12.5, GREY, ls=1.4, space=6)
+    ["o laranja é acento, não fundo de página inteira. quando ele domina tudo, a marca fica infantil e a leitura cansa.",
+     "teto: 15% em documento e proposta, 35% em peça de campanha, 25% em peça social. pode ser usado como fundo de bloco, nunca de página inteira."], 12.5, GREY, ls=1.4, space=6)
 symbol(s)
 page(s)
 
@@ -378,7 +378,7 @@ txt(s, 0.95, 3.85, 6.6, 0.5, "0123456789 .,:;!?@#%&*()[]{}", 15, GREY)
 spec(s, 8.3, 2.35, 4.43, 2.3, "fonte oficial", [
     ("família", "ampleSoft light"),
     ("fallback", "inter light / segoe ui light"),
-    ("peso", "só regular. sem bold"),
+    ("peso", "regular 400. negrito só para ênfase"),
     ("caixa", "tudo minúsculo, exceto sigla"),
 ])
 txt(s, 0.6, 4.95, 7.4, 0.35, "hierarquia", 10.5, ORANGE)
@@ -394,7 +394,9 @@ for a, b, c in hier:
     txt(s, 5.0, y, 3.1, 0.26, c, 11, GREY)
     y += 0.3
 txt(s, 8.3, 5.0, 4.4, 1.5,
-    ["negrito não existe na marca. para dar ênfase, use tamanho, cor ou espaço. nunca peso.", "a fonte não tem “º” e “ª”: escreva “1o” como “1º” apenas em texto externo, ou reescreva."], 11, GREY, ls=1.4, space=8)
+    ["o negrito é permitido para ênfase pontual: uma palavra, um número, um título curto. nunca em bloco inteiro.",
+     "a família ampleSoft tem um peso só (400). o negrito é aplicado pelo programa e espessa o traço: use pouco.",
+     "a fonte não tem “º” e “ª”: escreva “1o” como “1º” apenas em texto externo, ou reescreva."], 11, GREY, ls=1.4, space=8)
 symbol(s)
 page(s)
 
