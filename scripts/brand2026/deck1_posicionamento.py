@@ -154,7 +154,7 @@ eyebrow(s, "o porquê", "seta-cima")
 title(s, ["por que existimos, para onde vamos."], y=0.95, size=29)
 itens = [("propósito", "democratizar a profissionalização das empresas.", "o motivo. não muda com o mercado."),
          ("missão", "levar informação que vira decisão para dentro da rotina de quem presta serviço.", "o trabalho. é o que fazemos todos os dias."),
-         ("visão", "ser a referência nacional em terceirização financeira consultiva para prestadores de serviço.", "o horizonte. define o que recusamos crescer fazendo.")]
+         ("visão", "ser a referência nacional em terceirização financeira consultiva e atender 200 empresas até o final de 2027.", "o horizonte. define o que recusamos crescer fazendo.")]
 x = 0.6
 for tag, frase, nota in itens:
     card(s, x, 2.4, 3.85, 3.35)
@@ -162,7 +162,7 @@ for tag, frase, nota in itens:
     txt(s, x + 0.32, 3.1, 3.2, 1.75, frase, 16, DARK, ls=1.22)
     txt(s, x + 0.32, 4.95, 3.2, 0.6, nota, 11.5, GREY, ls=1.3)
     x += 4.07
-txt(s, 0.6, 6.1, 11.6, 0.5, "visão sem número é intenção. o número é dos sócios, não do marketing.", 12, GREY)
+txt(s, 0.6, 6.1, 11.6, 0.5, "200 empresas até o final de 2027 é a meta que os sócios assinam. a visão é o que recusamos crescer fazendo.", 12, GREY)
 symbol(s)
 page(s, 12)
 
