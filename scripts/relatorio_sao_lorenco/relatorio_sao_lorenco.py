@@ -122,7 +122,7 @@ FIM_MES_COR = FIM_MES_COR - timedelta(days=FIM_MES_COR.day)
 # feriados nacionais fixos no semestre corrente (mês corrente e anterior)
 FERIADOS = set()
 for y in (MES_COR.year, MES_ANT.year):
-    for d, m in ((1,1),(21,4),(1,5),(7,9),(12,10),(2,11),(15,11),(25,12)):
+    for d, m in ((1,1),(21,4),(1,5),(7,9),(12,10),(2,11),(15,11),(20,11),(25,12)):
         FERIADOS.add(date(y, m, d))
 
 HOJE_LABEL = HOJE.strftime("%d/%m/%Y")
@@ -360,7 +360,7 @@ t.setStyle(TableStyle([("BACKGROUND", (0,2), (-1,2), LARANJA_CLARO), ("BACKGROUN
 E.append(t)
 E.append(Spacer(1, 10))
 E.append(P(f"Base do cálculo: faturamento de {MES_PT[MES_ANT.month].capitalize()} para previsão = receitas de vistoria (categorias 01.01–01.05) = {brl(FAT_ANT)} em {DU_ANT} dias úteis "
-           f"(média de {brl(int(round(MEDIA_DIA)))} por dia útil). Previsão de setembro: média/dia × {DU_COR} dias úteis. "
+           f"(média de {brl(int(round(MEDIA_DIA)))} por dia útil). Previsão de {MES_PT[MES_COR.month]}: média/dia × {DU_COR} dias úteis. "
            f"Previsão de saldo final = previsão de resultado − despesas em aberto + saldo nas contas.", sub))
 
 E.append(Spacer(1, 10))
@@ -491,7 +491,8 @@ aba("Receitas e Despesas " + MES_AB[MES_ANT.month],
 aba("Comparativo 6 meses",
     [("Categoria",) + tuple(lab for _, _, lab in meses_6) + ("Média", "Total")] +
     [(cat,) + tuple((r_(v) if (v := matriz_6[cat].get(fim_m_iso[:7], 0)) else None) for _, fim_m_iso, _ in meses_6)
-     + (r_(round(sum(matriz_6[cat].values()) / len(meses_6))), r_(sum(matriz_6[cat].values())),)
+     + (r_(round(sum(matriz_6[cat].get(fim_m[:7], 0) for _, fim_m, _ in meses_6) / len(meses_6))),
+        r_(sum(matriz_6[cat].get(fim_m[:7], 0) for _, fim_m, _ in meses_6)),)
      for cat in cat_names_6],
     [40] + [13]*6 + [13, 15], titulo=f"Comparativo dos Últimos 6 Meses por Categoria ({MES_AB[INI_6.month]}/{str(INI_6.year)[2:]} a {MES_AB[MES_ANT.month]}/{str(MES_ANT.year)[2:]}) — regime de competência")
 

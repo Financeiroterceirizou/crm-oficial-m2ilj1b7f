@@ -7,10 +7,10 @@
 # CCs: CONTAGEM 1 170040 · CORONEL FABRICIANO 170037 · ITUIUTABA 2 170039 · UNAI 2 170036 · ADMINISTRATIVO 170038
 # Contas por unidade (mapeamento Vinícius 30/09):
 #   Contagem 1 → CONTAGEM 1 CORA (227179) + CONTAGEM 1 CAIXINHA (227178)
-#   Coronel Fabriciano → COR. FABRICIANO CORA (227181) + COR. FABRICIANO CAIXINHA (227180)
+#   Coronel Fabriciano → CORONEL FABRICIANO CORA (227181) + CORONEL FABRICIANO CAIXINHA (227180) + CORONEL FABRICIANO INTER (230560, aberta 09/2026 — migracao do CORA)
 #   Ituiutaba 2 → ITUIUTABA 2 CORA (227183) + ITUIUTABA 2 CAIXINHA (227182)
 #   Unaí 2 → UNAI 2 CORA (227184) + UNAI 2 CAIXINHA (229986)
-#   Unificado → as 8 contas
+#   Unificado → as 9 contas
 # Estrutura: capa compacta + 1. Receitas e Despesas por categoria do mês anterior NA MESMA PÁGINA
 # (REGIME DE COMPETÊNCIA: janela larga + dt_competence, INCLUI NÃO PAGOS, sem transferências;
 # 06.01 em negrito) · 2. Comparativo 6 meses por categoria (competência; Média, R$ inteiros,
@@ -30,6 +30,7 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
                                 PageBreak, Image as RLImage)
+from reportlab.lib.utils import ImageReader
 
 BASE = "https://api-v1.controlle.com"
 _dir = os.path.dirname(os.path.abspath(__file__))
@@ -44,11 +45,11 @@ LOGO = os.path.join(_dir, "logo-terceirizou.png")
 # ===== unidade (centro de custo) =====
 UNIDADES = {
     "contagem_1":        {"nome": "CONTAGEM 1 (VISTORIA)",        "doc": "Relatório Gerencial — Contagem 1 Vistoria",        "arq": "Contagem_1",        "cc": "CONTAGEM 1",        "contas": ["CONTAGEM 1 CORA", "CONTAGEM 1 CAIXINHA"]},
-    "coronel_fabriciano": {"nome": "CORONEL FABRICIANO (VISTORIA)", "doc": "Relatório Gerencial — Coronel Fabriciano Vistoria", "arq": "Coronel_Fabriciano", "cc": "CORONEL FABRICIANO", "contas": ["COR. FABRICIANO CORA", "COR. FABRICIANO CAIXINHA"]},
+    "coronel_fabriciano": {"nome": "CORONEL FABRICIANO (VISTORIA)", "doc": "Relatório Gerencial — Coronel Fabriciano Vistoria", "arq": "Coronel_Fabriciano", "cc": "CORONEL FABRICIANO", "contas": ["CORONEL FABRICIANO CORA", "CORONEL FABRICIANO CAIXINHA", "CORONEL FABRICIANO INTER"]},
     "ituiutaba_2":       {"nome": "ITUIUTABA 2 (VISTORIA)",       "doc": "Relatório Gerencial — Ituiutaba 2 Vistoria",       "arq": "Ituiutaba_2",       "cc": "ITUIUTABA 2",       "contas": ["ITUIUTABA 2 CORA", "ITUIUTABA 2 CAIXINHA"]},
     "unai_2":            {"nome": "UNAI 2 (VISTORIA)",            "doc": "Relatório Gerencial — Unaí 2 Vistoria",            "arq": "Unai_2",            "cc": "UNAI 2",            "contas": ["UNAI 2 CORA", "UNAI 2 CAIXINHA"]},
     "unificado":         {"nome": "EDJEL VISTORIAS — UNIFICADO (CONTAGEM 1 + CORONEL FABRICIANO + ITUIUTABA 2 + UNAI 2 + ADMINISTRATIVO)", "doc": "Relatório Gerencial — EDJEL Vistorias (Unificado)", "arq": "Unificado", "cc": None,
-        "contas": ["CONTAGEM 1 CORA", "CONTAGEM 1 CAIXINHA", "COR. FABRICIANO CORA", "COR. FABRICIANO CAIXINHA", "ITUIUTABA 2 CORA", "ITUIUTABA 2 CAIXINHA", "UNAI 2 CORA", "UNAI 2 CAIXINHA"]},
+        "contas": ["CONTAGEM 1 CORA", "CONTAGEM 1 CAIXINHA", "CORONEL FABRICIANO CORA", "CORONEL FABRICIANO CAIXINHA", "CORONEL FABRICIANO INTER", "ITUIUTABA 2 CORA", "ITUIUTABA 2 CAIXINHA", "UNAI 2 CORA", "UNAI 2 CAIXINHA"]},
 }
 _un = sys.argv[2] if len(sys.argv) > 2 else "contagem_1"
 UN = UNIDADES[_un]
@@ -75,16 +76,27 @@ def req(url, tries=4):
             raise
 
 def tx_list(start, end, **filtros):
-    out, page = [], 1
+    out, page, vistos = [], 1, set()
     while True:
         url = (f"{BASE}/transaction/v1/transactions/list?start_date={start}&end_date={end}"
                f"&page={page}&orderBy=date&orderByCardinality=ASC")
         for k, v in filtros.items():
             url += f"&{k}={v}"
         tl = req(url).get("results", {}).get("transactionsList", [])
-        out.extend(tl)
-        if len(tl) < 100:
+        if not tl:
+            # pagina VAZIA = fim. Nunca parar por "pagina curta": sob carga a API
+            # devolve pagina truncada sem erro e a serie sai incompleta.
             return out
+        # DEDUP canonico: orderBy=date nao e unico, entao sob carga a paginacao
+        # repete linhas (infla) e omite outras. Chave = (id, valor, competencia, data),
+        # NUNCA o id sozinho (mesmo id pode ter parcelas de valores diferentes).
+        for t in tl:
+            k = (t.get("id_transactions"), t.get("value_in_cent"),
+                 (t.get("dt_competence") or "")[:10], (t.get("date") or "")[:10])
+            if k in vistos:
+                continue
+            vistos.add(k)
+            out.append(t)
         page += 1
 
 def brl(cents):
@@ -112,7 +124,7 @@ def cat_nome(t):
     return (cats[0].get("ds_category") or "?") if cats else "(sem categoria)"
 
 def ok_ub(t):
-    """Filtro: sem transferências entre contas + CENTRO DE CUSTO da unidade (ou conjunto p/ unificado)."""
+    """Filtro: sem transferências entre contas + CENTRO DE CUSTO da unidade."""
     for c in (t.get("apportionments_plan_account") or []):
         if (c.get("ds_category") or "").startswith("99.01"):
             return False
@@ -121,7 +133,8 @@ def ok_ub(t):
     aps = t.get("apportionments_cost_center") or []
     if not aps:
         return False  # sem CC não pertence a nenhuma unidade
-    return any((a.get("ds_cost_center") or "").upper() in CC_NOMES for a in aps)
+    ccs_ok = CC_NOMES if CC_NOMES else {CC_NOME.upper()}
+    return any((a.get("ds_cost_center") or "").upper() in ccs_ok for a in aps)
 
 def agrupa_por_categoria(txs, so_negativas=False, so_positivas=False):
     g = defaultdict(lambda: [0, 0])
@@ -153,7 +166,7 @@ FIM_MES_COR = FIM_MES_COR - timedelta(days=FIM_MES_COR.day)
 # feriados nacionais fixos no semestre corrente (mês corrente e anterior)
 FERIADOS = set()
 for y in (MES_COR.year, MES_ANT.year):
-    for d, m in ((1,1),(21,4),(1,5),(7,9),(12,10),(2,11),(15,11),(25,12)):
+    for d, m in ((1,1),(21,4),(1,5),(7,9),(12,10),(2,11),(15,11),(20,11),(25,12)):
         FERIADOS.add(date(y, m, d))
 
 HOJE_LABEL = HOJE.strftime("%d/%m/%Y")
@@ -161,8 +174,8 @@ FIM_MES_ANT_LABEL = FIM_MES_ANT.strftime("%d/%m/%Y")
 
 # ===== dados =====
 # 1. Receitas e Despesas por categoria do mês anterior — REGIME DE COMPETÊNCIA
-# (janela larga + filtro dt_competence; inclui não pagos; sem transferências; FILTRO POR CC)
-_tx_janela = tx_list(f"{MES_ANT.year}-01-01", f"{MES_ANT.year}-12-31")
+# (janela larga + filtro dt_competence; inclui não pagos; sem transferências)
+_tx_janela = tx_list(f"{MES_ANT.year}-01-01", f"{MES_ANT.year}-12-31")  # licença grande: janela de 1 ano (2 anos dá 500)
 mes_ant_tx = [t for t in _tx_janela if (t.get("dt_competence") or "")[:7] == f"{MES_ANT.year}-{MES_ANT.month:02d}" and ok_ub(t)]
 ant_rec = agrupa_por_categoria(mes_ant_tx, so_positivas=True)
 ant_desp = agrupa_por_categoria(mes_ant_tx, so_negativas=True)
@@ -170,7 +183,7 @@ ant_entradas = sum(v for v, _ in ant_rec.values())
 ant_saidas = sum(v for v, _ in ant_desp.values())
 ant_resultado = ant_entradas + ant_saidas
 
-# 2. Comparativo dos últimos 06 meses por categoria — REGIME DE COMPETÊNCIA (inclui não pagos; FILTRO POR CC)
+# 2. Comparativo dos últimos 06 meses por categoria — REGIME DE COMPETÊNCIA (inclui não pagos, sem transferências)
 INI_6 = add_months(MES_ANT, -5)
 meses_6 = []
 for i in range(0, 6):
@@ -178,7 +191,7 @@ for i in range(0, 6):
     fim_m = add_months(ini_m, 1) - timedelta(days=1)
     meses_6.append((ini_m.isoformat(), fim_m.isoformat(), f"{MES_AB[ini_m.month]}/{str(ini_m.year)[2:]}"))
 # REGIME DE COMPETÊNCIA: janela larga + filtro dt_competence; inclui não pagos
-_tx_janela_6 = tx_list(f"{INI_6.year}-01-01", f"{MES_ANT.year}-12-31")
+_tx_janela_6 = tx_list(f"{INI_6.year}-01-01", f"{MES_ANT.year}-12-31")  # licença grande: janela de 1 ano
 matriz_6 = defaultdict(lambda: defaultdict(int))
 for t in _tx_janela_6:
     if not ok_ub(t):
@@ -186,17 +199,46 @@ for t in _tx_janela_6:
     mes = (t.get("dt_competence") or "")[:7]
     for c in (t.get("apportionments_plan_account") or []):
         matriz_6[c.get("ds_category") or "?"][mes] += c.get("value") or 0
+# TRAVA: a matriz (apportionment) tem de fechar com o valor efetivo das linhas.
+# Se divergir, a serie veio com pagina repetida/truncada e o comparativo sai errado
+# (caso EDJEL unificado 04/11: 01.01 out/26 saiu 46.894 contra 38.710 reais).
+_eff6 = defaultdict(int)
+for t in _tx_janela_6:
+    if ok_ub(t):
+        _eff6[(t.get("dt_competence") or "")[:7]] += t["value_in_cent"]
+for _m in sorted(set(_eff6) | {m for v in matriz_6.values() for m in v}):
+    _a = sum(v.get(_m, 0) for v in matriz_6.values())
+    _b = _eff6.get(_m, 0)
+    if abs(_a - _b) > 1:
+        sys.exit(f"ERRO: comparativo inconsistente em {_m}: matriz {_a/100:,.2f} x efetivo {_b/100:,.2f}")
 
-# 3. Previsão de despesas para o mês corrente por categoria (pago + pendente; FILTRO POR CC)
+# 3. Previsão de despesas para o mês corrente por categoria (pago + pendente, sem transferências)
 prev_cor = [t for t in tx_list(MES_COR.isoformat(), FIM_MES_COR.isoformat()) if ok_ub(t)]
 prev_desp = agrupa_por_categoria(prev_cor, so_negativas=True)
 prev_desp_total = sum(v for v, _ in prev_desp.values())
 
-# 4. Saldo nas contas no último dia do mês anterior (SÓ as contas da unidade — mapeamento Vinícius 30/09;
-#    filtro por NOME EXATO da conta na lista UN["contas"])
+# 4. Saldo nas contas no último dia do mês anterior (SÓ as contas da unidade — mapeamento Vinícius 30/09:
+#    Nova Serrana → NOVA SERRANA CAIXINHA + NOVA SERRANA CORA · Três Pontas → TRES PONTAS CORA + CAIXINHA + TRANSPOCRED IN)
 contas_todas = req(f"{BASE}/account/v1/accounts").get("results", [])
 _nomes_contas = set(UN["contas"])
 contas_un = [c for c in contas_todas if c["ds_account"] in _nomes_contas]
+
+# TRAVA: nenhuma conta da licenca pode ficar de fora do mapeamento.
+# Conta nova aberta sem entrar em UNIDADES faz o saldo da unidade sair menor
+# do que o real, sem erro (caso CORONEL FABRICIANO INTER, aberta em 09/2026).
+_MAPEADAS = {n for u in UNIDADES.values() for n in u["contas"]}
+_orfaos = []
+for c in contas_todas:
+    if c["ds_account"] in _MAPEADAS:
+        continue
+    _b = req(f"{BASE}/transaction/v1/transactions/balances?start_date=2017-01-01&end_date={FIM_MES_ANT.isoformat()}&id_account_main={c['id']}")["results"]["balanceDone"]
+    if _b == 0:
+        continue
+    _mov = [t for t in mes_ant_tx if (t.get("ds_account_main") or "") == c["ds_account"]]
+    _orfaos.append(f"{c['ds_account']} (id {c['id']}, saldo {brl(_b)}, {len(_mov)} lanc. no mes)")
+if _orfaos:
+    sys.exit("ERRO: conta fora do mapeamento da esteira EDJEL: " + " · ".join(_orfaos)
+             + ". Incluir em UNIDADES[<unidade>]['contas'] antes de gerar (sem ajuste automatico).")
 saldos_conta = []
 for c in contas_un:
     b = req(f"{BASE}/transaction/v1/transactions/balances?start_date=2017-01-01&end_date={FIM_MES_ANT.isoformat()}&id_account_main={c['id']}")["results"]
@@ -204,13 +246,13 @@ for c in contas_un:
 saldos_conta = [(n, v) for n, v in saldos_conta if v != 0]
 total_saldos = sum(v for _, v in saldos_conta)
 
-# 5. Despesas em aberto até o último dia do mês anterior (FILTRO POR CC)
+# 5. Despesas em aberto até o último dia do mês anterior
 desp_aberto = [t for t in tx_list(f"{FIM_MES_ANT.year}-01-01", FIM_MES_ANT.isoformat(), **{"activity_type": "0", "situation": "[0]"})
                if bdate(t) <= FIM_MES_ANT.isoformat() and ok_ub(t)]
 g_desp_aberto = agrupa_por_categoria(desp_aberto)
 total_desp_aberto = sum(v for v, _ in g_desp_aberto.values())
 
-# 6. Resumo — Previsão de Resultado do Mês corrente (faturamento pela COMPETÊNCIA do mês anterior)
+# 6. Resumo — Previsão de Resultado do Mês corrente
 DU_ANT = dias_uteis(MES_ANT, FIM_MES_ANT, FERIADOS)
 DU_COR = dias_uteis(MES_COR, FIM_MES_COR, FERIADOS)
 # Faturamento para previsão = SÓ receitas de vistoria (categorias 01.01–01.05), decisão Vinícius 30/09
@@ -284,13 +326,12 @@ if os.path.exists(LOGO):
     img.hAlign = "CENTER"
     E.append(img)
 E.append(Spacer(1, 10))
-E.append(P('<b>' + UN["nome"] + '</b>', h1c))
+E.append(P(f"<b>{UN["nome"]}</b>", h1c))
 E.append(P("Relatório Gerencial Mensal", h2c))
-_cc_label = "4 unidades + ADMINISTRATIVO" if CC_NOME is None else CC_NOME
-E.append(P(f"Gerado em {HOJE_LABEL} · Fonte: Controlle · Centro de custo: {_cc_label} · Ref.: {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year}", subc))
+E.append(P(f"Gerado em {HOJE_LABEL} · Fonte: Controlle · Ref.: {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year}", subc))
 E.append(Spacer(1, 8))
 
-# ===== 1. Receitas e Despesas por categoria do mês anterior (competência) =====
+# ===== 1. Receitas e Despesas por categoria do mês anterior =====
 bloco = []
 bloco.append(P(f"Receitas e Despesas por Categoria — {MES_PT[MES_ANT.month].capitalize()} de {MES_ANT.year} (regime de competência)", h2))
 rd_rows = [[P("<b>Categoria</b>", cell), P("<b>Lançamentos</b>", cellc), P("<b>Valor</b>", cellr)]]
@@ -309,7 +350,7 @@ t.setStyle(TableStyle([("BACKGROUND", (0,len(rd_rows)-3), (-1,len(rd_rows)-1), L
 bloco.append(t)
 E.extend(bloco)
 
-# ===== 2. Comparativo dos últimos 06 meses por categoria (competência) =====
+# ===== 2. Comparativo dos últimos 06 meses por categoria =====
 E.append(PageBreak())
 E.append(P(f"Comparativo dos Últimos 6 Meses por Categoria ({MES_AB[INI_6.month]}/{str(INI_6.year)[2:]} a {MES_AB[MES_ANT.month]}/{str(MES_ANT.year)[2:]}) — regime de competência", h2))
 cat_names_6 = sorted({c for c in matriz_6})
@@ -394,41 +435,57 @@ t = tabela(rs_rows, [12*cm, 4.5*cm], fs=11)
 t.setStyle(TableStyle([("BACKGROUND", (0,2), (-1,2), LARANJA_CLARO), ("BACKGROUND", (0,5), (-1,5), LARANJA_CLARO)]))
 E.append(t)
 E.append(Spacer(1, 10))
-_cc_txt = "4 unidades + ADMINISTRATIVO" if CC_NOME is None else CC_NOME
-E.append(P(f"Base do cálculo: faturamento de {MES_PT[MES_ANT.month].capitalize()} para previsão = receitas de vistoria (categorias 01.01–01.05, centro de custo {_cc_txt}) = {brl(FAT_ANT)} em {DU_ANT} dias úteis "
-           f"(média de {brl(int(round(MEDIA_DIA)))} por dia útil). Previsão de setembro: média/dia × {DU_COR} dias úteis. "
+E.append(P(f"Base do cálculo: faturamento de {MES_PT[MES_ANT.month].capitalize()} para previsão = receitas de vistoria (categorias 01.01–01.05) = {brl(FAT_ANT)} em {DU_ANT} dias úteis "
+           f"(média de {brl(int(round(MEDIA_DIA)))} por dia útil). Previsão de {MES_PT[MES_COR.month]}: média/dia × {DU_COR} dias úteis. "
            f"Previsão de saldo final = previsão de resultado − despesas em aberto + saldo nas contas.", sub))
 
 E.append(Spacer(1, 10))
 E.append(P("Gerado automaticamente pela Terceirizou · dados do Controlle", sub))
 
 # símbolo (o "5" laranja) no canto inferior direito das páginas seguintes
+def _desenha_logo(canvas, doc_):
+    if not os.path.exists(LOGO):
+        return
+    canvas.saveState()
+    # recorta só o símbolo (o "5" laranja fica na ~primeira metade esquerda da logo)
+    try:
+        sim = ImageReader(LOGO)
+        w, h = 1.1*cm, 1.1*cm*561/1600
+        # desenha a parte esquerda da logo (símbolo) recortada via clipping
+        p = canvas.beginPath()
+        p.rect(0, 0, 0, 0)
+        canvas.restoreState()
+        canvas.saveState()
+        canvas.setPageSize((A4[0], A4[1]))
+        # símbolo: recorte proporcional da logo (esquerda ~18% da largura)
+        logo_w, logo_h = 1600, 561
+        crop_w = int(logo_w * 0.16)
+        from PIL import Image as PILImage
+        sim_path = os.path.join(_dir, "simbolo-terceirizou.png")
+        if os.path.exists(sim_path):
+            from PIL import Image as PILImage2
+            sw, sh = PILImage2.open(sim_path).size
+            alt = 0.85*cm
+            img_s = RLImage(sim_path, width=alt*sw/sh, height=alt)
+            img_s.drawOn(canvas, A4[0]-1.9*cm, 0.8*cm)
+        canvas.restoreState()
+    except Exception:
+        pass
+
+def _capa(canvas, doc_):
+    pass
+
 # gerar recorte do símbolo (o "5" laranja = ~23% esquerdo da logo horizontal)
 from PIL import Image as PILImage
 img_full = PILImage.open(LOGO)
 _w, _h = img_full.size
 sim = img_full.crop((0, 0, int(_w * 0.233), _h))
+# aparar bordas transparentes
 bbox = sim.getbbox()
 if bbox:
     sim = sim.crop(bbox)
 sim.save(os.path.join(_dir, "simbolo-terceirizou.png"))
 print(f"simbolo: {sim.size}")
-
-def _desenha_logo(canvas, doc_):
-    if not os.path.exists(LOGO):
-        return
-    canvas.saveState()
-    sim_path = os.path.join(_dir, "simbolo-terceirizou.png")
-    if os.path.exists(sim_path):
-        from PIL import Image as PILImage2
-        sw, sh = PILImage2.open(sim_path).size
-        alt = 0.85*cm
-        img_s = RLImage(sim_path, width=alt*sw/sh, height=alt)
-        img_s.drawOn(canvas, A4[0]-1.9*cm, 0.8*cm)
-    canvas.restoreState()
-
-def _capa(canvas, doc_):
-    pass
 
 def _on_page(canvas, doc_):
     if doc_.page > 1:  # pula a capa
@@ -510,7 +567,8 @@ aba("Receitas e Despesas " + MES_AB[MES_ANT.month],
 aba("Comparativo 6 meses",
     [("Categoria",) + tuple(lab for _, _, lab in meses_6) + ("Média", "Total")] +
     [(cat,) + tuple((r_(v) if (v := matriz_6[cat].get(fim_m_iso[:7], 0)) else None) for _, fim_m_iso, _ in meses_6)
-     + (r_(round(sum(matriz_6[cat].values()) / len(meses_6))), r_(sum(matriz_6[cat].values())),)
+     + (r_(round(sum(matriz_6[cat].get(fim_m_iso[:7], 0) for _, fim_m_iso, _ in meses_6) / len(meses_6))),
+        r_(sum(matriz_6[cat].get(fim_m_iso[:7], 0) for _, fim_m_iso, _ in meses_6)),)
      for cat in cat_names_6],
     [40] + [13]*6 + [13, 15], titulo=f"Comparativo dos Últimos 6 Meses por Categoria ({MES_AB[INI_6.month]}/{str(INI_6.year)[2:]} a {MES_AB[MES_ANT.month]}/{str(MES_ANT.year)[2:]}) — regime de competência")
 
@@ -564,7 +622,7 @@ aba("Previsão " + MES_AB[MES_COR.month],
      (f"Previsão de Saldo em {FIM_MES_COR.strftime('%d/%m/%Y')}", r_(SALDO_PREV_FIM))],
     [55, 18], titulo=f"Previsão para {MES_PT[MES_COR.month].capitalize()} de {MES_COR.year}")
 
-# lançamentos do mês anterior (competência) agrupados por categoria, com total por categoria
+# lançamentos do mês anterior agrupados por categoria (receitas + despesas, com total por categoria)
 def detalhe_agrupado(txs):
     por_cat = defaultdict(list)
     for t in txs:

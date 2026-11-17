@@ -1,27 +1,19 @@
 #!/usr/bin/env python3
-# Relatório Mensal — CONGONHAS (IZIDORO) VISTORIA — v1.0, 2026-10-05 (replica do formato Campo Belo v1.4)
-# Uso: python3 relatorio_congonhas.py [YYYY-MM-DD]  (default: hoje)
+# Relatório Mensal — CONGONHAS (IZIDORO) VISTORIA — v1.0, 2026-09-29 (motor v1.4 Bem Viver + layout logo)
+# Uso: python3 relatorio_uberlandia.py [YYYY-MM-DD]  (default: hoje)
 # Gera UM PDF (um relatório por folha, logo Terceirizou na 1ª página e símbolo no canto inferior
 # direito nas seguintes) + UM Excel.
-# Estrutura (formato vistoria congelado 29/09):
-#   1. Receitas e Despesas por categoria do mês anterior (regime de competência; sem transferências)
-#   2. Comparativo dos últimos 06 meses por categoria (regime de competência)
-#   3. Previsão de despesas para o mês corrente por categoria (pago + pendente)
-#   4. Saldo nas contas no último dia do mês anterior
-#   5. Despesas em aberto até o último dia do mês anterior
-#   6. Resumo — Previsão de Resultado do Mês: faturamento previsto = SÓ receitas de vistoria
-#      (categorias 01.01–01.05; média/dia útil do mês anterior × dias úteis do mês corrente),
-#      despesa prevista, resultado, despesas em aberto, saldo contas e previsão de saldo final
-# Fonte: API Controlle v1 (token Congonhas). Envio: henrique@terceirizou.com.br (pedido Vinícius 05/10).
-# Realizado: situation in (1,2) — match exato com balances Done.
-# Específico desta licença (2026-10-05):
-#   - Conta dedicada; CC "CONGONHAS" (687 lanc; 146 sem CC = transferências/avulsos);
-#   - Contas ativas: Conta Inicial 227232 (saldo 0), CONGONHAS CAIXINHA 227233,
-#     CONGONHAS CORA 227234, CONGONHAS TRANSPOCRED 227235 (3,00);
-#     inativas (status 0, fora): JUIZ DE FORA II CORA 227236, A BALDEACAO CORA V. MINAS 227237;
-#   - MESMO TRAP da Cataguases: JANELA DE 1 ANO (não 2) — 14 lançamentos de 2027 com dt_competence
-#     RETROATIVO (cursos com competência fixa 2026-09/2026-10 e ASQCERT com competência 2026-05);
-#   - SEM multi-apportionment (comparativo por value_in_cent ok).
+# Estrutura (pedido Vinícius 29/09):
+#   1. Receitas e Despesas por categoria do mês anterior (ago; sem transferências)
+#   2. Comparativo dos últimos 06 meses por categoria (sem transferências)
+#   3. Previsão de despesas para o mês seguinte por categoria (setembro)
+#   4. Saldo nas contas no último dia do mês anterior (31/08)
+#   5. Despesas em aberto até o último dia do mês anterior (31/08)
+#   6. Resumo — Previsão de Resultado do Mês (setembro): faturamento previsto (média/dia útil de ago
+#      × dias úteis do mês corrente), despesa prevista, resultado, despesas em aberto, saldo contas
+#      e previsão de saldo no fim do mês corrente
+# Fonte: API Controlle v1 (token Uberlândia). Envio: vinicius@terceirizou.com.br.
+# Realizado: situation in (1,2) — match exato com balances Done (validado ago: 48.924,73 / -53.773,13).
 import json, os, sys, urllib.request
 from collections import defaultdict
 from datetime import date, timedelta
@@ -63,16 +55,24 @@ def req(url, tries=4):
             raise
 
 def tx_list(start, end, **filtros):
-    out, page = [], 1
+    out, page, _vistos = [], 1, set()
     while True:
         url = (f"{BASE}/transaction/v1/transactions/list?start_date={start}&end_date={end}"
                f"&page={page}&orderBy=date&orderByCardinality=ASC")
         for k, v in filtros.items():
             url += f"&{k}={v}"
         tl = req(url).get("results", {}).get("transactionsList", [])
-        out.extend(tl)
-        if len(tl) < 100:
+        if not tl:
+            # pagina VAZIA = fim. NUNCA parar por "pagina curta": sob carga a API
+            # devolve pagina truncada sem erro e a serie sai incompleta.
             return out
+        for t in tl:
+            _k = (t.get("id_transactions"), t.get("value_in_cent"),
+                  (t.get("dt_competence") or "")[:10], (t.get("date") or "")[:10])
+            if _k in _vistos:
+                continue
+            _vistos.add(_k)
+            out.append(t)
         page += 1
 
 def brl(cents):
@@ -99,15 +99,26 @@ def cat_nome(t):
     cats = t.get("apportionments_plan_account") or []
     return (cats[0].get("ds_category") or "?") if cats else "(sem categoria)"
 
+CC_NOME = "CONGONHAS"   # centro de custo da unidade (id 170107). CC novo (ex.: "aguiar", 175474)
+                       # NÃO entra no relatório: o pacote é fechado sobre o CC da unidade.
+
 def ok_ub(t):
-    """Filtro padrão: sem transferências entre contas (categoria 99.01 ou descrição 'Transferência')."""
+    """Filtro: sem transferências entre contas + CENTRO DE CUSTO da unidade.
+    Até 10/2026 a licença tinha um CC só e o relatório somava a licença inteira; a partir de
+    out/26 apareceram lançamentos em outro CC ("aguiar") e passaram a contaminar o resultado."""
     for c in (t.get("apportionments_plan_account") or []):
         if (c.get("ds_category") or "").startswith("99.01"):
             return False
     ds = (t.get("ds_transaction") or "").upper()
     if ds.startswith("TRANSFERÊNCIA") or ds.startswith("TRASFERENCIA"):
         return False
-    return True
+    aps = t.get("apportionments_cost_center") or []
+    if not aps:
+        # Sem CC: MANTÉM, como sempre esteve. Tirar lançamento sem classificação daqui
+        # derrubaria receita real (out/26: 1.065,36 de vistoria em dinheiro na CAIXINHA).
+        # Esses casos vão listados no aviso de fechamento para ele classificar na origem.
+        return True
+    return any((a.get("ds_cost_center") or "").upper() == CC_NOME for a in aps)
 
 def agrupa_por_categoria(txs, so_negativas=False, so_positivas=False):
     g = defaultdict(lambda: [0, 0])
@@ -129,17 +140,17 @@ def dias_uteis(ini, fim, feriados=()):
 
 # ===== datas =====
 HOJE = date.fromisoformat(sys.argv[1]) if len(sys.argv) > 1 else date.today()
-MES_ANT = add_months(HOJE.replace(day=1), -1)          # mês anterior
+MES_ANT = add_months(HOJE.replace(day=1), -1)          # mês anterior (agosto)
 FIM_MES_ANT = MES_ANT.replace(day=28) + timedelta(days=4)
-FIM_MES_ANT = FIM_MES_ANT - timedelta(days=FIM_MES_ANT.day)  # último dia do mês anterior
-MES_COR = HOJE.replace(day=1)                          # mês corrente
+FIM_MES_ANT = FIM_MES_ANT - timedelta(days=FIM_MES_ANT.day)  # último dia do mês anterior (31/08)
+MES_COR = HOJE.replace(day=1)                          # mês corrente (setembro)
 FIM_MES_COR = MES_COR.replace(day=28) + timedelta(days=4)
 FIM_MES_COR = FIM_MES_COR - timedelta(days=FIM_MES_COR.day)
 
-# feriados nacionais fixos
+# feriados nacionais fixos no semestre corrente (mês corrente e anterior)
 FERIADOS = set()
 for y in (MES_COR.year, MES_ANT.year):
-    for d, m in ((1,1),(21,4),(1,5),(7,9),(12,10),(2,11),(15,11),(25,12)):
+    for d, m in ((1,1),(21,4),(1,5),(7,9),(12,10),(2,11),(15,11),(20,11),(25,12)):
         FERIADOS.add(date(y, m, d))
 
 HOJE_LABEL = HOJE.strftime("%d/%m/%Y")
@@ -147,8 +158,10 @@ FIM_MES_ANT_LABEL = FIM_MES_ANT.strftime("%d/%m/%Y")
 
 # ===== dados =====
 # 1. Receitas e Despesas por categoria do mês anterior — REGIME DE COMPETÊNCIA
-# Janela SÓ do ano do mês anterior: esta licença tem lançamentos de 2027 com dt_competence
-# RETROATIVO (cursos com competência fixa 2026-09/10) — janela de 2 anos contaminaria o realizado.
+# (janela larga + filtro dt_competence; inclui não pagos; sem transferências)
+# Janela SÓ do ano do mês anterior: esta licença tem recorrências futuras (date 2027) com
+# dt_competence RETROATIVO (ex.: cursos com competência fixa em set/26) — janela de 2 anos
+# contaminaria o realizado. O comparativo 6m (mai–set/26) também cabe em 1 ano.
 _tx_janela = tx_list(f"{MES_ANT.year}-01-01", f"{MES_ANT.year}-12-31")
 mes_ant_tx = [t for t in _tx_janela if (t.get("dt_competence") or "")[:7] == f"{MES_ANT.year}-{MES_ANT.month:02d}" and ok_ub(t)]
 ant_rec = agrupa_por_categoria(mes_ant_tx, so_positivas=True)
@@ -157,13 +170,14 @@ ant_entradas = sum(v for v, _ in ant_rec.values())
 ant_saidas = sum(v for v, _ in ant_desp.values())
 ant_resultado = ant_entradas + ant_saidas
 
-# 2. Comparativo dos últimos 06 meses por categoria — REGIME DE COMPETÊNCIA
+# 2. Comparativo dos últimos 06 meses por categoria — REGIME DE COMPETÊNCIA (inclui não pagos, sem transferências)
 INI_6 = add_months(MES_ANT, -5)
 meses_6 = []
 for i in range(0, 6):
     ini_m = add_months(INI_6, i)
     fim_m = add_months(ini_m, 1) - timedelta(days=1)
     meses_6.append((ini_m.isoformat(), fim_m.isoformat(), f"{MES_AB[ini_m.month]}/{str(ini_m.year)[2:]}"))
+# REGIME DE COMPETÊNCIA: janela larga + filtro dt_competence; inclui não pagos
 _tx_janela_6 = tx_list(f"{MES_ANT.year}-01-01", f"{MES_ANT.year}-12-31")
 matriz_6 = defaultdict(lambda: defaultdict(int))
 for t in _tx_janela_6:
@@ -172,7 +186,8 @@ for t in _tx_janela_6:
     mes = (t.get("dt_competence") or "")[:7]
     aps = t.get("apportionments_plan_account") or []
     if len(aps) <= 1:
-        # 1 rateio: usar o valor da TRANSAÇÃO (apportionment pode divergir)
+        # 1 rateio: usar o valor da TRANSAÇÃO (apportionment pode divergir — caso real: salário
+        # lançado em 2 partes com apportionment = valor total em cada parte)
         matriz_6[cat_nome(t)][mes] += t["value_in_cent"]
     else:
         for c in aps:
@@ -191,6 +206,17 @@ for c in contas:
     saldos_conta.append((c["ds_account"], b["balanceDone"]))
 saldos_conta = [(n, v) for n, v in saldos_conta if v != 0]
 total_saldos = sum(v for _, v in saldos_conta)
+
+# TRAVA: conta ENCERRADA (status 0) com saldo diferente de zero some do relatorio sem erro.
+_encerradas = [c for c in req(f"{BASE}/account/v1/accounts").get("results", []) if c.get("status") != 1]
+_orfaos = []
+for c in _encerradas:
+    _b = req(f"{BASE}/transaction/v1/transactions/balances?start_date=2017-01-01&end_date={FIM_MES_ANT.isoformat()}&id_account_main={c['id']}")["results"]["balanceDone"]
+    if _b != 0:
+        _orfaos.append(f"{c['ds_account']} (id {c['id']}, saldo {brl(_b)})")
+if _orfaos:
+    sys.exit("ERRO: conta encerrada com saldo diferente de zero: " + " · ".join(_orfaos)
+             + ". Ajustar na origem antes de gerar (sem ajuste automatico).")
 
 # 5. Despesas em aberto até o último dia do mês anterior
 desp_aberto = [t for t in tx_list(f"{FIM_MES_ANT.year}-01-01", FIM_MES_ANT.isoformat(), **{"activity_type": "0", "situation": "[0]"})
@@ -382,7 +408,7 @@ t.setStyle(TableStyle([("BACKGROUND", (0,2), (-1,2), LARANJA_CLARO), ("BACKGROUN
 E.append(t)
 E.append(Spacer(1, 10))
 E.append(P(f"Base do cálculo: faturamento de {MES_PT[MES_ANT.month].capitalize()} para previsão = receitas de vistoria (categorias 01.01–01.05) = {brl(FAT_ANT)} em {DU_ANT} dias úteis "
-           f"(média de {brl(int(round(MEDIA_DIA)))} por dia útil). Previsão de setembro: média/dia × {DU_COR} dias úteis. "
+           f"(média de {brl(int(round(MEDIA_DIA)))} por dia útil). Previsão de {MES_PT[MES_COR.month]}: média/dia × {DU_COR} dias úteis. "
            f"Previsão de saldo final = previsão de resultado − despesas em aberto + saldo nas contas.", sub))
 
 E.append(Spacer(1, 10))
@@ -393,14 +419,30 @@ def _desenha_logo(canvas, doc_):
     if not os.path.exists(LOGO):
         return
     canvas.saveState()
-    sim_path = os.path.join(_dir, "simbolo-terceirizou.png")
-    if os.path.exists(sim_path):
-        from PIL import Image as PILImage2
-        sw, sh = PILImage2.open(sim_path).size
-        alt = 0.85*cm
-        img_s = RLImage(sim_path, width=alt*sw/sh, height=alt)
-        img_s.drawOn(canvas, A4[0]-1.9*cm, 0.8*cm)
-    canvas.restoreState()
+    # recorta só o símbolo (o "5" laranja fica na ~primeira metade esquerda da logo)
+    try:
+        sim = ImageReader(LOGO)
+        w, h = 1.1*cm, 1.1*cm*561/1600
+        # desenha a parte esquerda da logo (símbolo) recortada via clipping
+        p = canvas.beginPath()
+        p.rect(0, 0, 0, 0)
+        canvas.restoreState()
+        canvas.saveState()
+        canvas.setPageSize((A4[0], A4[1]))
+        # símbolo: recorte proporcional da logo (esquerda ~18% da largura)
+        logo_w, logo_h = 1600, 561
+        crop_w = int(logo_w * 0.16)
+        from PIL import Image as PILImage
+        sim_path = os.path.join(_dir, "simbolo-terceirizou.png")
+        if os.path.exists(sim_path):
+            from PIL import Image as PILImage2
+            sw, sh = PILImage2.open(sim_path).size
+            alt = 0.85*cm
+            img_s = RLImage(sim_path, width=alt*sw/sh, height=alt)
+            img_s.drawOn(canvas, A4[0]-1.9*cm, 0.8*cm)
+        canvas.restoreState()
+    except Exception:
+        pass
 
 def _capa(canvas, doc_):
     pass
@@ -410,6 +452,7 @@ from PIL import Image as PILImage
 img_full = PILImage.open(LOGO)
 _w, _h = img_full.size
 sim = img_full.crop((0, 0, int(_w * 0.233), _h))
+# aparar bordas transparentes
 bbox = sim.getbbox()
 if bbox:
     sim = sim.crop(bbox)
@@ -422,6 +465,18 @@ def _on_page(canvas, doc_):
 
 doc.build(E, onFirstPage=_capa, onLaterPages=_on_page)
 print(f"OK: {ARQ_PDF}")
+
+# ===== aviso: lancamentos do mes de referencia SEM centro de custo (fora da regra) =====
+_sem_cc = [t for t in mes_ant_tx if not (t.get("apportionments_cost_center") or [])]
+if _sem_cc:
+    print(f"AVISO: {len(_sem_cc)} lancamento(s) de {MES_PT[MES_ANT.month]} sem centro de custo "
+          f"(somam {brl(sum(t['value_in_cent'] for t in _sem_cc))}) — manter como está e pedir classificacao:")
+    for _t in sorted(_sem_cc, key=bdate):
+        print(f"   {bdate(_t)[:10]}  {brl(_t['value_in_cent']):>14}  {(_t.get('ds_transaction') or '')[:45]}  [{_t.get('ds_account_main')}]")
+for _t in [t for t in mes_ant_tx if (t.get('apportionments_cost_center') or [])]:
+    _ccs = {(a.get("ds_cost_center") or "").upper() for a in _t["apportionments_cost_center"]}
+    if _ccs - {CC_NOME}:
+        print(f"FORA DO CC: {bdate(_t)[:10]} {brl(_t['value_in_cent'])} {(_t.get('ds_transaction') or '')[:40]} -> {_ccs}")
 
 # ===== Excel =====
 from openpyxl import Workbook
@@ -496,7 +551,8 @@ aba("Receitas e Despesas " + MES_AB[MES_ANT.month],
 aba("Comparativo 6 meses",
     [("Categoria",) + tuple(lab for _, _, lab in meses_6) + ("Média", "Total")] +
     [(cat,) + tuple((r_(v) if (v := matriz_6[cat].get(fim_m_iso[:7], 0)) else None) for _, fim_m_iso, _ in meses_6)
-     + (r_(round(sum(matriz_6[cat].values()) / len(meses_6))), r_(sum(matriz_6[cat].values())),)
+     + (r_(round(sum(matriz_6[cat].get(fim_m_iso[:7], 0) for _, fim_m_iso, _ in meses_6) / len(meses_6))),
+        r_(sum(matriz_6[cat].get(fim_m_iso[:7], 0) for _, fim_m_iso, _ in meses_6)),)
      for cat in cat_names_6],
     [40] + [13]*6 + [13, 15], titulo=f"Comparativo dos Últimos 6 Meses por Categoria ({MES_AB[INI_6.month]}/{str(INI_6.year)[2:]} a {MES_AB[MES_ANT.month]}/{str(MES_ANT.year)[2:]}) — regime de competência")
 

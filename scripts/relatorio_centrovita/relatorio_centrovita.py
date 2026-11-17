@@ -3,7 +3,7 @@
 # Uso: python3 relatorio_bemviver.py [YYYY-MM-DD]  (default: hoje)
 # Gera UM PDF + UM Excel com os 11 relatórios no padrão dos exemplos de 14/09.
 # Fonte: API Controlle v1 (token Centrovita). Envio: segunda-feira 14:00 → raulroliveira@hotmail.com
-import json, os, sys, time, urllib.request
+import http.client, json, os, sys, time, urllib.error, urllib.request
 from collections import defaultdict
 from datetime import date, timedelta
 
@@ -29,19 +29,30 @@ MES_PT = {1:"janeiro",2:"fevereiro",3:"março",4:"abril",5:"maio",6:"junho",7:"j
 MES_AB = {1:"jan",2:"fev",3:"mar",4:"abr",5:"mai",6:"jun",7:"jul",8:"ago",9:"set",10:"out",11:"nov",12:"dez"}
 TAG_BOLETO = 131714  # "Boleto Emitido" (Centrovita)
 
+TRANSIENTES = (http.client.IncompleteRead, http.client.RemoteDisconnected,
+               ConnectionResetError, ConnectionError, TimeoutError,
+               urllib.error.URLError, json.JSONDecodeError)
+
 def req(url):
-    r = urllib.request.Request(url)
-    for k, v in UA.items():
-        r.add_header(k, v)
     ultimo = None
-    for tent in range(4):  # retry 4x em 500/502/503 (outage da API Controlle)
+    for tent in range(5):  # retry 5x: 500/502/503, corpo truncado e conexão cortada
+        r = urllib.request.Request(url)  # Request novo a cada tentativa
+        for k, v in UA.items():
+            r.add_header(k, v)
         try:
             with urllib.request.urlopen(r, timeout=120) as resp:
-                return json.loads(resp.read().decode("utf-8", "replace"))
+                corpo = resp.read()
+            return json.loads(corpo.decode("utf-8", "replace"))
         except urllib.error.HTTPError as e:
             ultimo = e
-            if e.code in (500, 502, 503) and tent < 3:
+            if e.code in (500, 502, 503, 504) and tent < 4:
                 time.sleep(5 * (tent + 1))
+                continue
+            raise
+        except TRANSIENTES as e:
+            ultimo = e
+            if tent < 4:
+                time.sleep(3 * (tent + 1))
                 continue
             raise
     raise ultimo
