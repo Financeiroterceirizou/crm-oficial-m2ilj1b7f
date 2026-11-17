@@ -18,6 +18,10 @@ import {
 } from 'lucide-react'
 import pb from '@/lib/pocketbase/client'
 
+// O app funciona sem login (mesmo padrão de pipeline/vendas); as decisões desta
+// tela ficam registradas no histórico do lead com este operador fixo.
+const OPERADOR_PADRAO = 'equipe-comercial (sem login)'
+
 type Lead = {
   id: string
   lead_id: string
@@ -85,10 +89,6 @@ const AprovacaoSegmentos = () => {
   const [salvando, setSalvando] = useState<string | null>(null)
   const [escolhas, setEscolhas] = useState<Record<string, string>>({})
   const [observacoes, setObservacoes] = useState<Record<string, string>>({})
-  const [authenticated, setAuthenticated] = useState(pb.authStore.isValid)
-  const [loginEmail, setLoginEmail] = useState('vinicius@terceirizou.com.br')
-  const [loginPassword, setLoginPassword] = useState('')
-  const [loginMessage, setLoginMessage] = useState('')
 
   const carregar = async () => {
     setLoading(true)
@@ -109,22 +109,7 @@ const AprovacaoSegmentos = () => {
 
   useEffect(() => {
     void carregar()
-    const unsub = pb.authStore.onChange((token) => setAuthenticated(Boolean(token)))
-    return unsub
   }, [])
-
-  const handleLogin = async (event: React.FormEvent) => {
-    event.preventDefault()
-    setLoginMessage('')
-    try {
-      await pb.collection('users').authWithPassword(loginEmail.trim(), loginPassword)
-      setLoginPassword('')
-      setLoginMessage('Acesso liberado.')
-      await carregar()
-    } catch (err) {
-      setLoginMessage(err instanceof Error ? err.message : 'Não foi possível entrar.')
-    }
-  }
 
   const porAba = useMemo(() => {
     const semSegmento = leads.filter((l) => l.proxima_acao === 'solicitar_complemento_segmento')
@@ -140,10 +125,6 @@ const AprovacaoSegmentos = () => {
   const lista = porAba[aba]
 
   const executar = async (lead: Lead, acao: string) => {
-    if (!pb.authStore.token) {
-      setMessage('Entre com sua conta para registrar a decisão.')
-      return
-    }
     const segmento = escolhas[lead.id] || ''
     if (acao === 'definir_segmento' && !segmento) {
       setMessage(`Escolha o segmento de ${lead.nome} antes de salvar.`)
@@ -154,12 +135,12 @@ const AprovacaoSegmentos = () => {
     try {
       const resp = await fetch(`${pb.baseUrl}/backend/v1/segmentos/definir`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: pb.authStore.token },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           lead_id: lead.id,
           acao,
           segmento,
-          operador: pb.authStore.model?.email || 'admin',
+          operador: OPERADOR_PADRAO,
           observacao: observacoes[lead.id] || '',
         }),
       })
@@ -226,45 +207,6 @@ const AprovacaoSegmentos = () => {
           Atualizar
         </button>
       </div>
-
-      {!authenticated && (
-        <form
-          onSubmit={handleLogin}
-          className="rounded-lg border border-blue-100 bg-blue-50/60 p-3"
-        >
-          <div className="flex flex-col lg:flex-row lg:items-end gap-2">
-            <div className="flex-1">
-              <label className="block text-[10px] uppercase tracking-wide font-semibold text-slate-500">
-                E-mail
-              </label>
-              <input
-                type="email"
-                value={loginEmail}
-                onChange={(event) => setLoginEmail(event.target.value)}
-                className="mt-1 w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-md"
-              />
-            </div>
-            <div className="flex-1">
-              <label className="block text-[10px] uppercase tracking-wide font-semibold text-slate-500">
-                Senha
-              </label>
-              <input
-                type="password"
-                value={loginPassword}
-                onChange={(event) => setLoginPassword(event.target.value)}
-                className="mt-1 w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-md"
-              />
-            </div>
-            <button
-              type="submit"
-              className="px-4 py-2 rounded-md bg-blue-600 text-white text-xs font-semibold"
-            >
-              Entrar
-            </button>
-          </div>
-          {loginMessage && <p className="text-xs text-slate-600 mt-2">{loginMessage}</p>}
-        </form>
-      )}
 
       {error && (
         <div className="p-3 rounded-lg bg-red-50 text-red-800 text-sm flex items-center gap-2">
@@ -384,7 +326,7 @@ const AprovacaoSegmentos = () => {
                       <button
                         type="button"
                         onClick={() => void executar(lead, 'definir_segmento')}
-                        disabled={ocupado || !authenticated}
+                        disabled={ocupado}
                         className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md bg-blue-600 text-white text-xs font-semibold disabled:opacity-50"
                       >
                         <Save className="w-3.5 h-3.5" />
@@ -394,7 +336,7 @@ const AprovacaoSegmentos = () => {
                         <button
                           type="button"
                           onClick={() => void executar(lead, 'aprovar')}
-                          disabled={ocupado || !authenticated}
+                          disabled={ocupado}
                           className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md bg-emerald-600 text-white text-xs font-semibold disabled:opacity-50"
                           title="Aprova o lead sem trocar o segmento declarado"
                         >
@@ -405,7 +347,7 @@ const AprovacaoSegmentos = () => {
                       <button
                         type="button"
                         onClick={() => void executar(lead, 'nao_qualificar')}
-                        disabled={ocupado || !authenticated}
+                        disabled={ocupado}
                         className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md border border-slate-200 text-slate-600 text-xs font-semibold disabled:opacity-50"
                       >
                         <XCircle className="w-3.5 h-3.5" />

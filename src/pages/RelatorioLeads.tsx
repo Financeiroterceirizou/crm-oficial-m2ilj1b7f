@@ -129,7 +129,7 @@ const RelatorioLeads = () => {
     titulo: string
     valor: number
     cor: string
-    icone: JSX.Element
+    icone: React.ReactNode
     nota: string
   }[] = [
     {
