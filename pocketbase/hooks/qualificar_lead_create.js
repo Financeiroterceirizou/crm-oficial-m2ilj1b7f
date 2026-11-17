@@ -11,11 +11,12 @@
 onRecordCreate((e) => {
   const record = e.record
 
-  // ===================== REGRA v1.2 (28/10/2026) =====================
+  // ===================== REGRA v1.3 (17/11/2026) =====================
   // Decisão do champion: o SEGMENTO decide a validade do lead.
   //   8 segmentos oficiais -> qualificado
   //   "Outro Segmento de Prestação de Serviço" -> fila de aprovação (não valida sozinho)
   //   fora da lista / não reconhecido -> fila de aprovação
+  //   "Segmento que não atendemos" -> não qualifica (regra inegociável, v1.3)
   //   comércio e indústria -> não qualifica (regra inegociável)
   //   sem segmento -> pedir complemento
   const oficiais = [
@@ -53,7 +54,8 @@ onRecordCreate((e) => {
   }
   const excluidosPalavras = ['comercio', 'industria']
   const decisores = ['socio', 'proprietario', 'diretor', 'gerente', 'ceo', 'administrador', 'dono']
-  const versaoRegra = '1.2'
+  const SEG_NAO_ATENDEMOS = 'segmento que nao atendemos'
+  const versaoRegra = '1.3'
 
   // String.prototype.normalize('NFD') NÃO funciona no goja (runtime do PocketBase).
   const SEM_ACENTO = {
@@ -205,6 +207,13 @@ onRecordCreate((e) => {
     estado = 'pendente_revisao'
     motivo = 'segmento nao informado'
     proxima = 'solicitar_complemento_segmento'
+  } else if (segOficial === SEG_NAO_ATENDEMOS) {
+    // 3b. "Segmento que não atendemos" (escolha humana na tela /segmentos):
+    //     regra inegociável — NÃO qualifica, SEM score (igual comércio/indústria).
+    estado = 'nao_qualificado'
+    motivo = 'segmento que a empresa nao atende'
+    proxima = 'sem_roteamento'
+    componentes['segmento_excluido'] = -3
   } else if (segOficial === SEG_OUTRO) {
     // 4. "outro prestador" é confissão de que o segmento não é conhecido:
     //    NÃO valida sozinho — vai para aprovação com a declaração do lead.

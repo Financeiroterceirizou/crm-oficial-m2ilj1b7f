@@ -38,6 +38,7 @@ routerAdd('POST', '/backend/v1/segmentos/definir', (e) => {
     'Vistoria Veicular',
     'Consultoria em Geral',
     'Outro Segmento de Prestação de Serviço',
+    'Segmento que não atendemos',
   ]
   const segmento = String(body.segmento || '').trim()
   if (acao === 'definir_segmento' && oficial.indexOf(segmento) === -1) {
@@ -124,7 +125,7 @@ routerAdd('POST', '/backend/v1/segmentos/definir', (e) => {
       data: agora,
       segmento: segmento,
       observacao: observacao,
-      regra_versao: '1.2',
+      regra_versao: '1.3',
     })
     record.set('historico', JSON.stringify(hist))
     $app.save(record)
@@ -175,7 +176,7 @@ routerAdd('POST', '/backend/v1/segmentos/definir', (e) => {
     segmento: segmento || '',
     observacao: observacao,
     motivo: motivo,
-    regra_versao: '1.2',
+    regra_versao: '1.3',
   })
   record.set('historico', JSON.stringify(hist))
   $app.save(record)

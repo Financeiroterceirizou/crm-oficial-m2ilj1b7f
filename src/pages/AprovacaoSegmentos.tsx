@@ -47,6 +47,7 @@ const SEGMENTOS = [
   'Vistoria Veicular',
   'Consultoria em Geral',
   'Outro Segmento de Prestação de Serviço',
+  'Segmento que não atendemos',
 ]
 
 function parseRespostas(value: unknown): Record<string, unknown> {
