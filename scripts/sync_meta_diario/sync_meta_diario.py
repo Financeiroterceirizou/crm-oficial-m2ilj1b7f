@@ -36,7 +36,13 @@ ESTADO_PATH = os.path.join(AQUI, 'estado.json')
 REPORT_PATH = os.path.join(AQUI, 'ultima_rodada.json')
 LOG_PATH = os.path.join(AQUI, 'sync.log')
 
-SSID_META = '1GiZZjYkBNz_i6r_0cg2D9N6FulB4rJftFctzh4WxeEk'  # propriedade Terceirizou
+# FONTE VIVA = 1I5F4 (a planilha em que o Make realmente grava).
+# A 1GiZZ ("PROPRIEDADE TERCEIRIZOU") é uma CÓPIA de 28/10, congelada: nenhum lead
+# depois de 01/10. Provas em 18/11: ela tem 17 linhas e a última é 01/10, enquanto a
+# 1I5F4 tem as 3 linhas de nov (sandro 01/11, João Carlos 01/11, Raiany 03/11) e o Meta
+# reporta exatamente 3 leads em nov/26; set/26 (7), ago/26 (6) e out/26 (1) também batem
+# só na 1I5F4. Não voltar para a 1GiZZ sem antes confirmar que o Make foi reconfigurado.
+SSID_META = '1I5F4-NMzkkaStAyVKrO89Dulfi-1POXZHVPZNLRv02A'
 ABAS = [
     ('meta_ads_jun', "'Leads Meta Ads - Jun.26'!A1:M200"),
     ('meta_ads_cadastro', "'Leads Anúncios de Cadastro'!A1:M200"),
