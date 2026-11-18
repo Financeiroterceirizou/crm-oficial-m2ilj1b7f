@@ -1,11 +1,12 @@
 import pb from '@/lib/pocketbase/client'
-import { PipelineDeal, PipelineStageId, PIPELINE_STAGES } from '@/lib/pipeline-data'
+import { PipelineDeal, PipelineStageId } from '@/lib/pipeline-data'
 
 export type DealEtapaPocketBase =
   | 'Novos leads'
   | 'Contato feito'
   | 'Proposta enviada'
   | 'Negociação'
+  | 'Aguardando Aprovação'
   | 'Fechado (ganho)'
 
 export interface DealRecord {
@@ -59,6 +60,7 @@ const STAGE_ID_TO_ETAPA: Record<PipelineStageId, DealEtapaPocketBase> = {
   contacted: 'Contato feito',
   proposal_sent: 'Proposta enviada',
   negotiation: 'Negociação',
+  awaiting_approval: 'Aguardando Aprovação',
   won: 'Fechado (ganho)',
 }
 
@@ -67,6 +69,7 @@ const ETAPA_TO_STAGE_ID: Record<string, PipelineStageId> = {
   'Contato feito': 'contacted',
   'Proposta enviada': 'proposal_sent',
   Negociação: 'negotiation',
+  'Aguardando Aprovação': 'awaiting_approval',
   'Fechado (ganho)': 'won',
 }
 

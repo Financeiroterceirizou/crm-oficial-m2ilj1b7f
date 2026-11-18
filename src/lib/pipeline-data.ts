@@ -1,6 +1,12 @@
 /* Mock data e tipos para a Pipeline de Vendas na área de Aquisição (estilo GA4) */
 
-export type PipelineStageId = 'new_leads' | 'contacted' | 'proposal_sent' | 'negotiation' | 'won'
+export type PipelineStageId =
+  | 'new_leads'
+  | 'contacted'
+  | 'proposal_sent'
+  | 'negotiation'
+  | 'awaiting_approval'
+  | 'won'
 
 export interface PipelineStageConfig {
   id: PipelineStageId
@@ -63,6 +69,14 @@ export const PIPELINE_STAGES: PipelineStageConfig[] = [
     badgeBg: 'bg-indigo-50',
     badgeText: 'text-indigo-700 border-indigo-200',
     accentBorder: 'border-t-indigo-500',
+  },
+  {
+    id: 'awaiting_approval',
+    title: 'Aguardando Aprovação',
+    color: 'bg-cyan-500',
+    badgeBg: 'bg-cyan-50',
+    badgeText: 'text-cyan-700 border-cyan-200',
+    accentBorder: 'border-t-cyan-500',
   },
   {
     id: 'won',

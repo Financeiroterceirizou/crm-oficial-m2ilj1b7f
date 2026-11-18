@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-17T14:42:04.185Z",
+  "generatedAt": "2026-11-18T14:27:41.401Z",
   "collections": [
     {
       "name": "users",
@@ -629,6 +629,7 @@
             "Contato feito",
             "Proposta enviada",
             "Negociação",
+            "Aguardando Aprovação",
             "Fechado (ganho)"
           ]
         },
