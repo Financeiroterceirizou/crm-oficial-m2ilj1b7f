@@ -327,6 +327,30 @@ def mapear_origem(fonte):
     return mapa.get(fonte['canal'], 'manual')
 
 
+# --------------------------------------------------------------- filtro de teste
+EMAILS_INTERNOS = {
+    'vinicius@terceirizou.com.br',
+    'henrique.tavano@gmail.com',
+    'oliveiradacosta.vinicius@gmail.com',
+    'rcadigital21@gmail.com',
+}
+
+
+def eh_linha_de_teste(nome, email):
+    """True para linha de teste/cadastro interno, que nunca deve virar lead."""
+    n = (nome or '').strip().lower()
+    e = (email or '').strip().lower()
+    if e in EMAILS_INTERNOS:
+        return True
+    if e.endswith('@example.com') or e.endswith('@example.comr'):
+        return True
+    if 'teste' in n:
+        return True
+    if 'f1-t04' in n or 'lead sint' in n:
+        return True
+    return False
+
+
 def processar_linhas(fonte, linhas, estado_atual):
     """linhas: lista de dicts (coluna -> valor). Retorna (criados, atualizados, ignorados, estado_novo)."""
     est = estado_atual.get(fonte['nome'], {})
@@ -376,6 +400,18 @@ def processar_linhas(fonte, linhas, estado_atual):
         if parece_criptografado(nome_raw) and parece_criptografado(email_raw) and not tel:
             ignorados.append({'linha': i + fonte['header_row'] + 1, 'motivo': 'dados criptografados'})
             # registra o hash para não re-avaliar a linha a cada rodada
+            h = hash_linha(linha)
+            base = estado_novo.get(chave) or est.get(chave)
+            hashes_chave = [base] if isinstance(base, str) else (list(base) if base else [])
+            estado_novo[chave] = sorted(set(hashes_chave + [h]))
+            continue
+
+        # Linha de TESTE: a planilha viva do Make carrega linhas de teste que a cópia
+        # congelada não tinha (F1-T04, "Robson Teste", cadastros dos próprios sócios).
+        # Sem este filtro elas viram lead no CRM (aconteceu em 18/11/2026, 4 criados
+        # indevidos). Descarta ANTES do dedup e registra o hash para não reavaliar.
+        if eh_linha_de_teste(nome_raw, email_raw):
+            ignorados.append({'linha': i + fonte['header_row'] + 1, 'motivo': 'linha de teste'})
             h = hash_linha(linha)
             base = estado_novo.get(chave) or est.get(chave)
             hashes_chave = [base] if isinstance(base, str) else (list(base) if base else [])
