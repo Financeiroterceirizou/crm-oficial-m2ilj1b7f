@@ -56,12 +56,15 @@ MES_AB = {1:"jan",2:"fev",3:"mar",4:"abr",5:"mai",6:"jun",7:"jul",8:"ago",9:"set
 # ROTEAMENTO POR NOME COMPLETO, nunca por prefixo curto: "02.05 Entrada de Empréstimo entre
 # Casas" (10335235) e "02.05 Plantão Extra" (9190506) COMPARTILHAM o código 02.05, e o prefixo
 # "02.05 " misturava despesa de plantão com empréstimo. Mesma armadilha em "02.01 Aporte dos
-# Sócios" x "02.01 Salários" e em "02.03 Juros Aplicação Financeira" x "02.03 Adiantamento (Vale)".
+# Sócios" x "02.01 Salários", "02.03 Juros Aplicação Financeira" x "02.03 Adiantamento (Vale)"
+# e "02.02 Entrada de Empréstimos ou Financiamentos a Bancos" x "02.02 Décimo Terceiro dos
+# Colaboradores" — este último estava classificado como despesa operacional até 20/11/2026.
 REC_PREFIXO = "01."                                                  # 01.01/01.02/01.03/01.99
 REEMBOLSO = "02.04 Reembolso Família"                                # receita, não despesa
 APORTE = "02.01 Aporte dos Sócios"                                   # fora do resultado
 JUROS = "02.03 Juros Aplicação Financeira"
-ENT_EMPR = ("02.05 Entrada de Empréstimo entre Casas",)
+ENT_EMPR = ("02.05 Entrada de Empréstimo entre Casas",
+            "02.02 Entrada de Empréstimos ou Financiamentos a Bancos")  # 9190536 (≠ 02.02 Décimo Terceiro)
 SAI_EMPR = ("04.03 Parcela de Empréstimo ou Financiamento a Bancos",
             "04.06 Saida de Empréstimo outras Casas")
 CAPEX_PREFIXOS = ("05.0",)                                           # 05.01 a 05.04
@@ -150,16 +153,10 @@ def cat_secundarias(t):
 
 
 def eh_transferencia(t):
-    if t.get("type") == 1:
-        return True
-    d = (t.get("ds_transaction") or "").upper()
-    if d.startswith("TRANSFERÊNCIA") or d.startswith("TRANSFERENCIA"):
-        return True
-    for c in (t.get("apportionments_plan_account") or []):
-        ds = (c.get("ds_category") or "")
-        if ds.startswith("99.01") or ds.lower().startswith("transfer"):
-            return True
-    return False
+    """Transferência entre contas = SOMENTE type == 1 (regra validada 13/13 meses em 18/11).
+    Não excluir por descrição nem por 99.01: nesta licença há perna de transferência lançada
+    em "Outros", e o filtro por descrição derrubaria lançamentos que não são transferência."""
+    return t.get("type") == 1
 
 
 def ok_caixa(t):
@@ -167,9 +164,11 @@ def ok_caixa(t):
 
 
 def valor_efetivo(t):
-    if t.get("situation") in (1, 2) and t.get("payment_in_cent") is not None:
-        return t["payment_in_cent"]
-    return t["value_in_cent"]
+    """Valor de caixa = value + fees + fines − discount.
+    É o que reproduz revenuesDone/expensesDone do balances. payment_in_cent NÃO fecha
+    (juros e multa vêm em fees/fines, e pagamento parcial aparece em [1] e [2])."""
+    return ((t.get("value_in_cent") or 0) + (t.get("fees_in_cent") or 0)
+            + (t.get("fines_in_cent") or 0) - (t.get("discount_in_cent") or 0))
 
 
 
@@ -628,26 +627,8 @@ def bloco_indicadores():
                  "contato com mais de um pagamento no mês conta uma vez. Ticket = soma das mensalidades "
                  "dividida pelo número de hóspedes.", sub))
 
-    if emp_13:
-        els.append(NextPageTemplate("retrato"))
-        els.append(PageBreak())
-        els.append(P("Empréstimos por contraparte (13 meses, caixa)", h2))
-        rr = [[P("<b>Contraparte</b>", cell), P("<b>Lançamentos</b>", cellc),
-               P("<b>Saiu</b>", cellr), P("<b>Voltou</b>", cellr), P("<b>Posição</b>", cellr)]]
-        tot = [0, 0, 0]
-        for nome, (saiu, voltou, n) in sorted(emp_13.items(), key=lambda x: x[1][2]):
-            rr.append([P(nome, cell), P(str(n), cellc), P_val(saiu, cellr),
-                       P_val(voltou, cellr) if voltou else P("—", cellr),
-                       P_val(saiu + voltou, cellrb)])
-            tot[0] += saiu; tot[1] += voltou; tot[2] += n
-        rr.append([P("<b>Total</b>", cellrb), P(f"<b>{tot[2]}</b>", cellc), P_val(tot[0], cellrb),
-                   P_val(tot[1], cellrb), P_val(tot[0] + tot[1], cellrb)])
-        t = tabela(rr, [6.6 * cm, 2.4 * cm, 3.2 * cm, 3.2 * cm, 3.2 * cm], fs=7.5)
-        t.setStyle(TableStyle([("BACKGROUND", (0, len(rr) - 1), (-1, len(rr) - 1), LARANJA_CLARO)]))
-        els.append(t)
-        els.append(P("Posição = saídas menos entradas no período: valor líquido a receber da contraparte. "
-                     "Unidade independente: estes empréstimos são com terceiros, não movimento entre casas "
-                     "do mesmo grupo.", sub))
+    # Empréstimos NÃO têm página própria (regra: empréstimo sem destaque). Os números
+    # aparecem dentro do bloco de variação do mês, como qualquer outra natureza.
     return els
 
 
@@ -953,15 +934,8 @@ aba("Proj 12m",
     [10, 18, 18, 18],
     titulo="CENTROVITA BRAÇO DO NORTE — Projeção de Fluxo de Caixa — Próximos 12 Meses")
 
-# --- empréstimos ---
-le = [("Contraparte", "Lançamentos", "Saiu", "Voltou", "Posição")]
-for nome, (saiu, voltou, n) in sorted(emp_13.items(), key=lambda x: x[1][2]):
-    le.append((nome, n, r_(saiu), r_(voltou) if voltou else None, r_(saiu + voltou)))
-le.append(("Total", sum(v[2] for v in emp_13.values()),
-           r_(sum(v[0] for v in emp_13.values())), r_(sum(v[1] for v in emp_13.values())),
-           r_(sum(v[0] + v[1] for v in emp_13.values()))))
-aba("Emprestimos", le, [40, 14, 16, 16, 16],
-    titulo="CENTROVITA BRAÇO DO NORTE — Empréstimos por Contraparte (13 meses, caixa)")
+# --- empréstimos: sem aba própria (sem destaque); os valores já aparecem em "Mes ant",
+#     "Comp 13m" e no Resumo como entradas/saídas de empréstimo. ---
 
 # --- a classificar ---
 lc = [("Data", "Descrição", "Conta", "Valor")]
