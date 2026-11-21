@@ -21,7 +21,7 @@
 #     Despesas Financeiras: 04.02 (9190541) + 04.04 (9190546)
 #     Resultado Financeiro: Res.Op + Aportes + Juros + Ent.Emp − Invest − Saí.Emp − Desp.Fin
 #     Inadimplência: receitas em aberto (sit 0) até o último dia do mês (Controlle a partir de set;
-#       fev-ago da planilha anexa) | Despesas em Aberto: idem despesas
+#       todos os meses pelo Controlle) | Despesas em Aberto: idem despesas
 #     Distribuição aos Sócios: 04.05 (9190545)
 # Envio: MENSAL dia 05 às 14:00 → vinicius@terceirizou.com.br (Resend).
 #   Regra (Vinícius 20/10): relatório do dia 05 traz dados até o mês ANTERIOR fechado
@@ -116,15 +116,16 @@ mens_orfaos = defaultdict(int)     # mês -> lançamentos de mensalidade SEM con
 for t in _tx:
     if t.get("situation") not in (1, 2):
         continue
-    if any((c.get("ds_category") or "").startswith("99.01") for c in (t.get("apportionments_plan_account") or [])):
+    # caixa: fora SOMENTE type == 1 (transferência entre contas), mesma regra do gerencial
+    if t.get("type") == 1:
         continue
     mes = int(bdate(t)[5:7])
     cats = t.get("apportionments_plan_account") or []
     cid = cats[0].get("id_category") if cats else None
-    v = t["value_in_cent"]
-    # valor efetivo (pago com ajuste): payment_in_cent quando existir
-    ve = t["payment_in_cent"] if t.get("payment_in_cent") is not None else v
-    if cid in REC_OP: por_mes[mes]["rec_op"] += v
+    # valor de caixa = value + fees + fines − discount (o que fecha com balances)
+    ve = ((t.get("value_in_cent") or 0) + (t.get("fees_in_cent") or 0)
+          + (t.get("fines_in_cent") or 0) - (t.get("discount_in_cent") or 0))
+    if cid in REC_OP: por_mes[mes]["rec_op"] += ve
     if cid in CAT_MENSAL:
         por_mes[mes]["mensal"] += ve
         # HÓSPEDE = contato que pagou mensalidade no mês (1 por contato, mesmo com vários pagamentos)
@@ -132,36 +133,34 @@ for t in _tx:
             mens_contatos[mes].add(t["id_contacts"])
         else:
             mens_orfaos[mes] += 1
-    if cid in DESP_OP: por_mes[mes]["desp_op"] += v
-    if cid in APORTES: por_mes[mes]["aportes"] += v
-    if cid in JUROS_APL: por_mes[mes]["juros_apl"] += v
-    if cid in ENT_EMP: por_mes[mes]["ent_emp"] += v
-    if cid in INVEST: por_mes[mes]["invest"] += v
-    if cid in SAI_EMP: por_mes[mes]["sai_emp"] += v
-    if cid in DESP_FIN: por_mes[mes]["desp_fin"] += v
-    if cid in DISTRIB: por_mes[mes]["distrib"] += v
+    if cid in DESP_OP: por_mes[mes]["desp_op"] += ve
+    if cid in APORTES: por_mes[mes]["aportes"] += ve
+    if cid in JUROS_APL: por_mes[mes]["juros_apl"] += ve
+    if cid in ENT_EMP: por_mes[mes]["ent_emp"] += ve
+    if cid in INVEST: por_mes[mes]["invest"] += ve
+    if cid in SAI_EMP: por_mes[mes]["sai_emp"] += ve
+    if cid in DESP_FIN: por_mes[mes]["desp_fin"] += ve
+    if cid in DISTRIB: por_mes[mes]["distrib"] += ve
 
 # ===== inadimplência e despesas em aberto por mês (Controlle: sit 0, venc <= fim do mês) =====
+# Separados pela NATUREZA do lançamento (activity_type), não pelo sinal do valor:
+# 1 = receita em aberto (inadimplência) · 0 = despesa em aberto. Mesma regra do gerencial.
 abertos = defaultdict(lambda: [0, 0])
 for mes in range(1, 13):
     fim = (date(ANO, mes, 28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
-    ab = [t for t in _tx if t.get("situation") == 0 and bdate(t) <= fim.isoformat()]
-    abertos[mes][0] = sum(t["value_in_cent"] for t in ab if t["value_in_cent"] > 0)
-    abertos[mes][1] = sum(t["value_in_cent"] for t in ab if t["value_in_cent"] < 0)
+    ab = [t for t in _tx if t.get("situation") == 0 and t.get("type") != 1
+          and bdate(t) <= fim.isoformat()]
+    # receita em aberto vem com valor positivo; despesa em aberto com valor negativo
+    abertos[mes][0] = sum(t["value_in_cent"] for t in ab if t.get("activity_type") == 1)
+    abertos[mes][1] = abs(sum(t["value_in_cent"] for t in ab if t.get("activity_type") == 0))
 
-# ===== indicadores manuais (inadimplência e despesas em aberto até ago) — planilha de ocupação =====
-# fonte: uploads/36dbf9fd (planilha anexa, fev-ago). Nº Hóspedes e Ticket Médio agora vêm do Controlle.
-MANUAL = {
-    2:  dict(inad=0.0, desp_ab=0.0),
-    3:  dict(inad=0.0, desp_ab=2500.0),
-    4:  dict(inad=0.0, desp_ab=5000.0),
-    5:  dict(inad=0.0, desp_ab=7500.0),
-    6:  dict(inad=0.0, desp_ab=10000.0),
-    7:  dict(inad=8722.23, desp_ab=12000.0),
-    8:  dict(inad=29270.23, desp_ab=12000.0),
-    9:  dict(inad=None, desp_ab=None),  # inad/desp_ab do Controlle
-}
-INAD_CTL_DE = 9  # a partir de setembro: Controlle
+# ===== inadimplência e despesas em aberto: TODOS os meses pelo Controlle =====
+# Até 20/11/2026 fev-ago vinham de valores fixos da planilha de ocupação (rampa de 2.500/mês
+# e inadimplência 8.722,23 em jul e 29.270,23 em ago). Retirado por decisão do Vinícius:
+# a linha passa a sair do Controlle nos 12 meses, com a mesma regra do gerencial.
+#   Inadimplência    = receitas (activity_type 1) em aberto, vencimento até o fim do mês
+#   Despesas em Aberto = despesas (activity_type 0) em aberto, vencimento até o fim do mês
+
 
 # ===== montar a tabela de indicadores (jan→dez do ano) =====
 linhas = []  # (label, [valores por mês], tipo) tipo: val | res
@@ -174,7 +173,6 @@ for mes in range(1, 13):
     fim_mes = (date(ANO, mes, 28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
     fechado = date.today() >= fim_mes
     d = por_mes.get(mes, defaultdict(int))
-    m = MANUAL.get(mes, {})
     if not fechado:
         # mês em andamento ou futuro: "—" em TODOS os indicadores (relatório do dia 05
         # mostra dados até o mês anterior fechado)
@@ -188,24 +186,23 @@ for mes in range(1, 13):
     soma_mens = d["mensal"] / 100
     hosp_row.append(hosp if hosp else None)
     ticket_row.append(round(soma_mens / hosp, 2) if hosp else None)
-    # inad/desp_ab: manual até ago; a partir de setembro Controlle
-    if mes < INAD_CTL_DE and mes in MANUAL:
-        inad_row.append(m["inad"])
-        despab_row.append(m["desp_ab"])
-    else:
-        inad_row.append(abertos[mes][0] / 100 if abertos[mes][0] else 0.0)
-        despab_row.append(abs(abertos[mes][1]) / 100 if abertos[mes][1] else 0.0)
+    # inad/desp_ab: Controlle em todos os meses, separados pela natureza do lançamento
+    inad_row.append(abertos[mes][0] / 100)
+    despab_row.append(abertos[mes][1] / 100)
     rec_row.append(d["rec_op"] / 100)
     desp_row.append(d["desp_op"] / 100)
-    resop_row.append((d["rec_op"] + d["desp_op"]) / 100)
+    # Resultado Operacional inclui juros de aplicação — mesma definição do gerencial
+    resop_row.append((d["rec_op"] + d["desp_op"] + d["juros_apl"]) / 100)
     apor_row.append(d["aportes"] / 100)
     juros_row.append(d["juros_apl"] / 100)
     entemp_row.append(d["ent_emp"] / 100)
     inv_row.append(d["invest"] / 100)
     saiemp_row.append(d["sai_emp"] / 100)
     despfin_row.append(d["desp_fin"] / 100)
-    resfin = (d["rec_op"] + d["desp_op"] + d["aportes"] + d["juros_apl"] + d["ent_emp"]
-              + d["invest"] + d["sai_emp"] + d["desp_fin"]) / 100
+    # Resultado Financeiro = variação do caixa: sair do Resultado Operacional (que já tem
+    # os juros) e somar apenas o que move caixa sem ser resultado.
+    resfin = ((d["rec_op"] + d["desp_op"] + d["juros_apl"] + d["aportes"] + d["ent_emp"]
+               + d["invest"] + d["sai_emp"] + d["desp_fin"]) / 100)
     resfin_row.append(resfin)
     distrib_row.append(d["distrib"] / 100)
 
@@ -352,7 +349,7 @@ for bi, (titulo, defs) in enumerate(BLOCOS):
     E.append(t)
     E.append(Spacer(1, 6))
 
-E.append(P("Nº Hóspedes: contatos distintos que pagaram mensalidade (01.01) no mês; contato com mais de um pagamento no mês conta uma única vez e lançamento de mensalidade sem contato vinculado conta um hóspede. Ticket Médio: receitas de mensalidade (01.01) do mês divididas pelo número de hóspedes. Todo o Controlle em regime de caixa. Inadimplência e Despesas em Aberto: fev–ago da planilha de ocupação; a partir de setembro, Controlle (receitas/despesas em aberto até o último dia do mês). Janeiro: casa em implantação (sem operação). Meses sem informação: em branco.", sub))
+E.append(P("Nº Hóspedes: contatos distintos que pagaram mensalidade (01.01) no mês; contato com mais de um pagamento no mês conta uma única vez e lançamento de mensalidade sem contato vinculado conta um hóspede. Ticket Médio: receitas de mensalidade (01.01) do mês divididas pelo número de hóspedes. Todo o Controlle em regime de caixa. Inadimplência e Despesas em Aberto: Controlle em todos os meses (receitas e despesas em aberto com vencimento até o último dia do mês). Janeiro: casa em implantação (sem operação). Meses sem informação: em branco.", sub))
 doc.build(E)
 print(f"OK: {ARQ_PDF}")
 
