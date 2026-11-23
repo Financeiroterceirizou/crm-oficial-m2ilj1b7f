@@ -66,7 +66,7 @@ fi
 
 if [ "$falhou" -eq 0 ] && { [ ! -s "$PDFI" ] || [ "${RETIFICAR:-0}" = "1" ]; }; then
   echo "--- gerar indicadores do ano ---"
-  if python3 "$DIR/indicadores_centrovita_bn.py" "$ANO"; then
+  if python3 "$DIR/indicadores_centrovita_bn.py" "$ANO" "$HOJE"; then
     echo "indicadores OK"
   else
     echo "AVISO: falha nos indicadores (ano $ANO) — o gerencial segue sozinho."
