@@ -105,8 +105,11 @@ DESP_FIN = {9190541, 9190546}
 DISTRIB = {9190545}
 
 # ===== ano do relatório =====
+# uso: indicadores_centrovita_bn.py [ANO] [DATA_REFERENCIA]
+# DATA_REFERENCIA dá o nome dos arquivos (mesmo dia do pacote gerencial). Sem ela, hoje.
 ANO = int(sys.argv[1]) if len(sys.argv) > 1 else date.today().year
-HOJE_LABEL = date.today().strftime("%d/%m/%Y")
+DATA_REF = date.fromisoformat(sys.argv[2]) if len(sys.argv) > 2 else date.today()
+HOJE_LABEL = DATA_REF.strftime("%d/%m/%Y")
 
 # ===== dados do Controlle (caixa) =====
 _tx = tx_list(f"{ANO}-01-01", f"{ANO}-12-31")
@@ -176,7 +179,7 @@ inv_row, saiemp_row, despfin_row = [], [], []
 resfin_row, inad_row, despab_row, distrib_row = [], [], [], []
 for mes in range(1, 13):
     fim_mes = (date(ANO, mes, 28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
-    fechado = date.today() >= fim_mes
+    fechado = DATA_REF >= fim_mes   # usa a data de referência, não o relógio
     d = por_mes.get(mes, defaultdict(int))
     if not fechado:
         # mês em andamento ou futuro: "—" em TODOS os indicadores (relatório do dia 05
@@ -269,7 +272,7 @@ cellrb = ParagraphStyle("cellrb", parent=cellb, alignment=2)
 cellc = ParagraphStyle("cellc", parent=cell, alignment=1)
 P = Paragraph
 
-ARQ_PDF = f"artifacts/{date.today().strftime('%y%m%d')}_Indicadores_Centrovita_BN_{ANO}.pdf"
+ARQ_PDF = f"artifacts/{DATA_REF.strftime('%y%m%d')}_Indicadores_Centrovita_BN_{ANO}.pdf"
 doc = SimpleDocTemplate(ARQ_PDF, pagesize=landscape(A4), leftMargin=1.2*cm, rightMargin=1.2*cm,
                         topMargin=1.1*cm, bottomMargin=1.3*cm,
                         title=f"Indicadores Gerenciais — Centrovita Braço do Norte {ANO}")
@@ -364,7 +367,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
-ARQ_XLSX = f"artifacts/{date.today().strftime('%y%m%d')}_Indicadores_Centrovita_BN_{ANO}.xlsx"
+ARQ_XLSX = f"artifacts/{DATA_REF.strftime('%y%m%d')}_Indicadores_Centrovita_BN_{ANO}.xlsx"
 wb = Workbook()
 ws = wb.active
 ws.title = f"Indicadores {ANO}"
