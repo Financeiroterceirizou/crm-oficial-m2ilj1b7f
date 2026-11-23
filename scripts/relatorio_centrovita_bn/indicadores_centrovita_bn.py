@@ -21,7 +21,7 @@
 #     Despesas Financeiras: 04.02 (9190541) + 04.04 (9190546)
 #     Resultado Financeiro: Res.Op + Aportes + Juros + Ent.Emp − Invest − Saí.Emp − Desp.Fin
 #     Inadimplência: receitas em aberto (sit 0) até o último dia do mês (Controlle a partir de set;
-#       todos os meses pelo Controlle) | Despesas em Aberto: idem despesas
+#       todos os meses pelo Controlle) | Despesas em Aberto: abr-set informadas; demais Controlle
 #     Distribuição aos Sócios: 04.05 (9190545)
 # Envio: MENSAL dia 05 às 14:00 → vinicius@terceirizou.com.br (Resend).
 #   Regra (Vinícius 20/10): relatório do dia 05 traz dados até o mês ANTERIOR fechado
@@ -154,12 +154,17 @@ for mes in range(1, 13):
     abertos[mes][0] = sum(t["value_in_cent"] for t in ab if t.get("activity_type") == 1)
     abertos[mes][1] = abs(sum(t["value_in_cent"] for t in ab if t.get("activity_type") == 0))
 
-# ===== inadimplência e despesas em aberto: TODOS os meses pelo Controlle =====
-# Até 20/11/2026 fev-ago vinham de valores fixos da planilha de ocupação (rampa de 2.500/mês
-# e inadimplência 8.722,23 em jul e 29.270,23 em ago). Retirado por decisão do Vinícius:
-# a linha passa a sair do Controlle nos 12 meses, com a mesma regra do gerencial.
-#   Inadimplência    = receitas (activity_type 1) em aberto, vencimento até o fim do mês
-#   Despesas em Aberto = despesas (activity_type 0) em aberto, vencimento até o fim do mês
+# ===== despesas em aberto: valores informados pelo Vinícius em abr–set =====
+# Decisão de 23/11/2026: nesses meses a linha usa o valor informado por ele; nos demais
+# (jan, fev, mar, out, nov, dez) segue pelo sistema. Inadimplência continua 100% Controlle.
+DESP_AB_MANUAL = {
+    4: 2500.00,
+    5: 5000.00,
+    6: 7500.00,
+    7: 10000.00,
+    8: 1000.00,
+    9: 3000.00,
+}
 
 
 # ===== montar a tabela de indicadores (jan→dez do ano) =====
@@ -186,9 +191,10 @@ for mes in range(1, 13):
     soma_mens = d["mensal"] / 100
     hosp_row.append(hosp if hosp else None)
     ticket_row.append(round(soma_mens / hosp, 2) if hosp else None)
-    # inad/desp_ab: Controlle em todos os meses, separados pela natureza do lançamento
+    # inadimplência: Controlle em todos os meses
     inad_row.append(abertos[mes][0] / 100)
-    despab_row.append(abertos[mes][1] / 100)
+    # despesas em aberto: valor informado por ele em abr–set; nos demais, Controlle
+    despab_row.append(DESP_AB_MANUAL.get(mes, abertos[mes][1] / 100))
     rec_row.append(d["rec_op"] / 100)
     desp_row.append(d["desp_op"] / 100)
     # Resultado Operacional inclui juros de aplicação — mesma definição do gerencial
@@ -349,7 +355,7 @@ for bi, (titulo, defs) in enumerate(BLOCOS):
     E.append(t)
     E.append(Spacer(1, 6))
 
-E.append(P("Nº Hóspedes: contatos distintos que pagaram mensalidade (01.01) no mês; contato com mais de um pagamento no mês conta uma única vez e lançamento de mensalidade sem contato vinculado conta um hóspede. Ticket Médio: receitas de mensalidade (01.01) do mês divididas pelo número de hóspedes. Todo o Controlle em regime de caixa. Inadimplência e Despesas em Aberto: Controlle em todos os meses (receitas e despesas em aberto com vencimento até o último dia do mês). Janeiro: casa em implantação (sem operação). Meses sem informação: em branco.", sub))
+E.append(P("Nº Hóspedes: contatos distintos que pagaram mensalidade (01.01) no mês; contato com mais de um pagamento no mês conta uma única vez e lançamento de mensalidade sem contato vinculado conta um hóspede. Ticket Médio: receitas de mensalidade (01.01) do mês divididas pelo número de hóspedes. Todo o Controlle em regime de caixa. Inadimplência: Controlle em todos os meses (receitas em aberto com vencimento até o último dia do mês). Despesas em Aberto: de abril a setembro, valor informado pela operação da unidade; nos demais meses, Controlle (despesas em aberto com vencimento até o último dia do mês). Janeiro: casa em implantação (sem operação). Meses sem informação: em branco.", sub))
 doc.build(E)
 print(f"OK: {ARQ_PDF}")
 
